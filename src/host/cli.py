@@ -1,5 +1,4 @@
 import os
-import sys
 import asyncio
 import json
 import typer
@@ -8,17 +7,18 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.prompt import Prompt
 
-# 加载 .env 环境变量
-load_dotenv()
-
 # Google GenAI
 import google.generativeai as genai
+from google.generativeai.types import Tool as GenAITool
 
 # 导入通用 MCP 客户端
 from src.host.client import MultiServerMCPClient
 
 app = typer.Typer()
 console = Console()
+
+# 加载 .env 环境变量
+load_dotenv()
 
 def load_config():
     """
@@ -48,7 +48,68 @@ def load_config():
     # Final Fallback
     return {"mcpServers": {}}
 
-async def chat_loop():
+async def run_task_for_eval(task: str, project: str = "eval_test") -> str:
+    """专为 Eval 设计的非交互式运行函数"""
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key: return "Error: No API Key"
+    genai.configure(api_key=api_key)
+
+    config = load_config()
+    mcp_client = MultiServerMCPClient()
+    await mcp_client.connect_to_config(config)
+
+    try:
+        active_tools = []
+        for name, session in mcp_client.sessions.items():
+            result = await session.list_tools()
+            for tool in result.tools:
+                tool_decl = {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema
+                }
+                active_tools.append(tool_decl)
+
+        persona = config.get("persona", {})
+        sys_prompt = f"You are {persona.get('name', 'Polymath')}. Answer the user request."
+        
+        model = genai.GenerativeModel("gemini-1.5-pro", tools=[genai.protos.Tool(function_declarations=active_tools)])
+        chat = model.start_chat(enable_automatic_function_calling=False)
+
+        # 发送任务
+        response = chat.send_message(task)
+        
+        # 简单的单轮工具调用循环 (Eval 模式通常不需要太深的多轮)
+        # 这里限制最大 5 次工具调用，防止死循环
+        for _ in range(5):
+            part = response.candidates[0].content.parts[0]
+            if part.function_call:
+                fc = part.function_call
+                # Eval 模式下，自动批准所有操作 (Auto-Approve)
+                # 注意：这在沙箱外运行非常危险，但在受控 Eval 环境是必须的
+                try:
+                    tool_result = await mcp_client.call_tool(fc.name, dict(fc.args))
+                    response = chat.send_message(
+                        genai.protos.Content(
+                            parts=[genai.protos.Part(
+                                function_response=genai.protos.FunctionResponse(
+                                    name=fc.name,
+                                    response={"result": tool_result}
+                                )
+                            )]
+                        )
+                    )
+                except Exception as e:
+                    return f"Tool Error: {e}"
+            else:
+                return response.text
+                
+        return "Error: Tool loop exceeded limit."
+
+    finally:
+        await mcp_client.cleanup()
+
+async def chat_loop(project: str = "default"):
     # 1. 环境检查
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
@@ -56,50 +117,21 @@ async def chat_loop():
         return
     genai.configure(api_key=api_key)
 
+    console.print(f"[bold yellow]Project: {project}[/bold yellow]")
+
     # 2. 初始化 MCP 客户端
     config = load_config()
     mcp_client = MultiServerMCPClient()
     await mcp_client.connect_to_config(config)
 
-    try:
-        # 3. 获取所有 Server 的工具并转换为 Gemini 格式
-        # 注意：目前 Google SDK 对于动态 FunctionDeclaration 的支持比较繁琐
-        # 为了演示稳定性，我们这里使用一种 "Tool Wrapping" 技巧
-        # 实际上 Gemini SDK 需要你传入可调用的 Python 函数。
-        # 所以我们动态生成 Python wrapper 函数。
-        
-        mcp_genai_tools = []
-        
-        # 这是一个黑魔法：我们需要动态生成 Python 函数，以便 Gemini SDK 可以 inspect 它们
-        # 但既然我们实现了自己的 Tool Call Loop，我们可以只把声明传给模型，自己执行。
-        # 遗憾的是，genai.GenerativeModel(tools=...) 强制验证 callable。
-        # 让我们换一种方式：使用 chat.send_message 时的 tool_config (如果支持)
-        # 或者，我们构建一个包含所有工具声明的 Tool 对象。
-        
-        # 简化策略：我们创建一个 "Universal Tool" 列表，其中每个函数都是一个 stub
-        # 实际上，对于 Python SDK，最简单的方法是定义一个 Map。
-        
-        active_tools = []
-        tool_function_map = {} # name -> callable stub
+    # 敏感工具列表
+    SENSITIVE_TOOLS = ["execute_python", "write_file", "save_note"]
 
+    try:
+        active_tools = []
         for name, session in mcp_client.sessions.items():
             result = await session.list_tools()
             for tool in result.tools:
-                # 创建闭包来捕获 tool_name
-                async def dynamic_tool_func(**kwargs):
-                    # 这个函数实际上不会被 SDK 自动调用，因为它是 async 的
-                    # 我们会在 loop 中手动调用 mcp_client.call_tool
-                    pass
-                
-                # 设置元数据以欺骗 SDK (如果需要)
-                dynamic_tool_func.__name__ = tool.name
-                dynamic_tool_func.__doc__ = tool.description
-                
-                # Gemini SDK 目前对动态工具支持一般。
-                # 在 Phase 4，我们采用 "手动函数调用循环" (Manual Function Calling Loop)
-                # 这比让 SDK 自动调用更稳健，尤其是在涉及 async MCP 时。
-                
-                # 构建给 Gemini 看的声明
                 tool_decl = {
                     "name": tool.name,
                     "description": tool.description,
@@ -114,9 +146,6 @@ async def chat_loop():
         You communicate via the Model Context Protocol (MCP).
         Always use tools when you need to read memory, see images, or search data.
         """
-        
-        # 注意：这里我们使用底层的 model.generate_content (REST 风格) 或者 tool_config
-        # 只要我们传入 tools 列表，Gemini 就会返回 FunctionCall part。
         
         model = genai.GenerativeModel("gemini-1.5-pro", tools=[genai.protos.Tool(function_declarations=active_tools)])
         chat = model.start_chat(history=[], enable_automatic_function_calling=False) # 关闭自动调用，我们要手动接管
@@ -169,30 +198,17 @@ async def chat_loop():
 
                         console.print(f"[dim]Result: {str(tool_result)[:100]}...[/dim]")
                             
-                            # 把结果喂回给模型
-                            response = chat.send_message(
-                                genai.protos.Content(
-                                    parts=[genai.protos.Part(
-                                        function_response=genai.protos.FunctionResponse(
-                                            name=tool_name,
-                                            response={"result": tool_result}
-                                        )
-                                    )]
-                                )
+                        # 把结果喂回给模型
+                        response = chat.send_message(
+                            genai.protos.Content(
+                                parts=[genai.protos.Part(
+                                    function_response=genai.protos.FunctionResponse(
+                                        name=tool_name,
+                                        response={"result": tool_result}
+                                    )
+                                )]
                             )
-                        except Exception as e:
-                            console.print(f"[red]Tool Error: {e}[/red]")
-                            # 将错误也喂回去，让 AI 知道失败了
-                            response = chat.send_message(
-                                genai.protos.Content(
-                                    parts=[genai.protos.Part(
-                                        function_response=genai.protos.FunctionResponse(
-                                            name=tool_name,
-                                            response={"error": str(e)}
-                                        )
-                                    )]
-                                )
-                            )
+                        )
                     else:
                         # 没有函数调用，说明是纯文本回复，打印并退出内层循环
                         console.print(f"\n[bold purple]Polymath:[/bold purple]\n{response.text}")

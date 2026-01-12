@@ -7,8 +7,7 @@ from rich.console import Console
 # 导入所有 Server 的逻辑 (In-Process for ADK Web Debugging)
 # 这样 ADK Web 可以直接 inspect 到这些函数
 from src.servers.memory import save_note, search_notes, update_user_persona, get_user_persona
-from src.servers.vision import ocr_image, describe_image
-from src.servers.web import search_internet
+from src.servers.web import search_internet, fetch_page
 from src.servers.computer import execute_python
 from src.servers.files import read_file, list_directory, write_file
 
@@ -59,12 +58,9 @@ class PolymathAgent:
     update_user_persona = tool(update_user_persona)
     get_user_persona = tool(get_user_persona)
     
-    # [Vision Tools]
-    ocr_image = tool(ocr_image)
-    describe_image = tool(describe_image)
-    
     # [Web Tools]
     search_internet = tool(search_internet)
+    fetch_page = tool(fetch_page)
 
     # [Computer Tools]
     execute_python = tool(execute_python)

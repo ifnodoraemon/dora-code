@@ -5,16 +5,6 @@
       "args": ["src/servers/memory.py"],
       "env": {}
     },
-    "vision": {
-      "command": "python3",
-      "args": ["src/servers/vision.py"],
-      "env": {
-        "VISION_PROVIDER": "google", 
-        "VISION_MODEL": "gemini-1.5-flash",
-        "GOOGLE_API_KEY": "${GOOGLE_API_KEY}",
-        "OPENAI_API_KEY": "${OPENAI_API_KEY}"
-      }
-    },
     "web": {
       "command": "python3",
       "args": ["src/servers/web.py"],

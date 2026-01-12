@@ -1,0 +1,17 @@
+[
+  {
+    "id": "gen-001",
+    "prompt": "Research the current state of 'Agentic RAG' in 2025 and write a 3-sentence summary.",
+    "rubric": "1. Must use 'search_internet' tool. 2. Must mention GraphRAG or Hybrid Search. 3. Summary must be concise."
+  },
+  {
+    "id": "code-002",
+    "prompt": "Write a Python script to calculate the factorial of a number and execute it for n=5.",
+    "rubric": "1. Must use 'execute_python' tool. 2. Must return the result 120. 3. Code must be correct."
+  },
+  {
+    "id": "mem-002",
+    "prompt": "My name is PolyUser. Save this fact to memory.",
+    "rubric": "1. Must use 'update_user_persona' or 'save_note' tool. 2. Must extract the name correctly."
+  }
+]
