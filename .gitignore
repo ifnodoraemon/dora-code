@@ -1,0 +1,22 @@
+# Environments
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# IDEs
+.vscode/
+.idea/
+
+# Polymath Data (Don't commit memory or secrets)
+.polymath/memory.json
+.polymath/chroma_db/
+.env
+
+# Outputs
+drafts/
+logs/
+
+# Mac
+.DS_Store
