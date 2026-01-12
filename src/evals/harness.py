@@ -2,111 +2,238 @@ import asyncio
 import json
 import os
 import sys
-from typing import List, Dict
+import time
+import shutil
+import tempfile
+from statistics import mean
+from typing import List, Dict, Any
 from rich.console import Console
 from rich.table import Table
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
 
+from src.host.cli import load_config
+from src.host.client import MultiServerMCPClient, TraceLogger
 from src.evals.model_grader import ModelGrader
-from src.host.cli import run_task_for_eval
+import google.generativeai as genai
 
 console = Console()
 
 class EvaluationHarness:
-    def __init__(self, dataset_path: str):
+    def __init__(self, dataset_path: str, output_dir: str = "eval_results", n_trials: int = 3):
         self.dataset_path = dataset_path
+        self.output_dir = output_dir
+        self.n_trials = n_trials  # Anthropic Gap 1: Multiple Trials
         self.grader = ModelGrader()
         self.results = []
+        os.makedirs(output_dir, exist_ok=True)
 
     def load_tasks(self) -> List[Dict]:
         with open(self.dataset_path, "r") as f:
             if self.dataset_path.endswith(".jsonl"):
                 return [json.loads(line) for line in f]
-            else:
-                return json.load(f)
+            return json.load(f)
+
+    def check_assertions(self, assertions: List[Dict], trace: List[Dict], final_output: str, sandbox_dir: str) -> Dict:
+        """运行硬指标检查 (支持沙箱路径修正)"""
+        passed = True
+        reasons = []
+        
+        for asm in assertions:
+            atype = asm.get("type")
+            
+            if atype == "file_exists":
+                # Check file existence in SANDBOX
+                rel_path = asm["path"]
+                full_path = os.path.join(sandbox_dir, rel_path)
+                if os.path.exists(full_path):
+                    reasons.append(f"✅ File {rel_path} exists")
+                else:
+                    passed = False
+                    reasons.append(f"❌ File {rel_path} not found")
+                    
+            elif atype == "tool_used":
+                tool_name = asm["tool"]
+                called = any(e['type'] == 'tool_call' and e['name'] == tool_name for e in trace)
+                if called:
+                    reasons.append(f"✅ Tool {tool_name} called")
+                else:
+                    passed = False
+                    reasons.append(f"❌ Tool {tool_name} NOT called")
+            
+            elif atype == "output_contains":
+                pattern = asm["pattern"]
+                if pattern.lower() in final_output.lower():
+                    reasons.append(f"✅ Output matches '{pattern}'")
+                else:
+                    passed = False
+                    reasons.append(f"❌ Output missing '{pattern}'")
+
+        return {"pass": passed, "reasons": reasons}
+
+    async def run_single_trial(self, task: Dict, trial_id: int) -> Dict:
+        """运行单次试验 (Isolated Environment)"""
+        tracer = TraceLogger()
+        config = load_config()
+        
+        # Anthropic Gap 3: Isolation
+        # 创建临时沙箱目录，并强制改变当前工作目录
+        sandbox_dir = tempfile.mkdtemp(prefix=f"eval_{task.get('id')}_t{trial_id}_")
+        original_cwd = os.getcwd()
+        
+        # 复制必要的 materials 到沙箱 (如果需要)
+        # shutil.copytree("materials", os.path.join(sandbox_dir, "materials")) 
+        
+        start_time = time.time()
+        final_output = ""
+        error = None
+        
+        try:
+            # 切换到沙箱
+            os.chdir(sandbox_dir)
+            
+            mcp_client = MultiServerMCPClient(tracer=tracer)
+            # 注意：这里需要确保 connect_to_config 能在沙箱中找到 server 脚本
+            # 由于我们在 client.py 做了绝对路径解析，这里通常没问题
+            await mcp_client.connect_to_config(config)
+            
+            api_key = os.getenv("GOOGLE_API_KEY")
+            genai.configure(api_key=api_key)
+            
+            # Setup Tools & Model (Omitted specific setup for brevity, same as v3)
+            # ... (Tool setup logic)
+            active_tools = []
+            for name, session in mcp_client.sessions.items():
+                result = await session.list_tools()
+                for tool in result.tools:
+                    active_tools.append({
+                        "name": tool.name, 
+                        "description": tool.description,
+                        "parameters": tool.inputSchema
+                    })
+
+            persona = config.get("persona", {})
+            sys_prompt = f"You are {persona.get('name', 'Polymath')}. Answer user request."
+            model = genai.GenerativeModel("gemini-1.5-pro", tools=[genai.protos.Tool(function_declarations=active_tools)])
+            chat = model.start_chat(enable_automatic_function_calling=False)
+            
+            # Run Loop
+            tracer.log("user_input", "prompt", task['prompt'])
+            response = chat.send_message(task['prompt'])
+            
+            for _ in range(10): # Max steps
+                part = response.candidates[0].content.parts[0]
+                if part.function_call:
+                    fc = part.function_call
+                    try:
+                        res = await mcp_client.call_tool(fc.name, dict(fc.args))
+                        response = chat.send_message(
+                            genai.protos.Content(parts=[genai.protos.Part(
+                                function_response=genai.protos.FunctionResponse(
+                                    name=fc.name, response={"result": res}
+                                )
+                            )])
+                        )
+                    except Exception as e:
+                        tracer.log("system_error", "tool_loop", str(e))
+                        break
+                else:
+                    final_output = response.text
+                    tracer.log("model_output", "final", final_output)
+                    break
+            
+            await mcp_client.cleanup()
+
+        except Exception as e:
+            error = str(e)
+            tracer.log("system_error", "fatal", error)
+        finally:
+            # 恢复环境
+            os.chdir(original_cwd)
+            # 可选：保留沙箱以供调试，或者删除
+            # shutil.rmtree(sandbox_dir) 
+
+        duration = time.time() - start_time
+        
+        # Grading
+        assertions = task.get("assertions", [])
+        # Pass sandbox_dir to checker
+        code_grade = self.check_assertions(assertions, tracer.events, final_output, sandbox_dir)
+        
+        rubric_grade = {"score": 0, "pass": False}
+        if task.get("rubric"):
+            rubric_grade = self.grader.grade(task['prompt'], final_output, task['rubric'])
+
+        passed = code_grade['pass'] and (rubric_grade['pass'] if task.get("rubric") else True)
+        
+        return {
+            "trial_id": trial_id,
+            "trace": tracer.export(),
+            "output": final_output,
+            "code_grade": code_grade,
+            "rubric_grade": rubric_grade,
+            "passed": passed,
+            "error": error,
+            "metrics": {
+                "duration_s": round(duration, 2),
+                "steps": len([e for e in tracer.events if e.type == 'tool_call'])
+            },
+            "sandbox": sandbox_dir
+        }
 
     async def run(self):
         tasks = self.load_tasks()
-        console.print(f"[bold]Starting Evaluation on {len(tasks)} tasks...[/bold]")
+        console.print(f"[bold]Starting PolyEval v4.0 (Anthropic Standard)[/bold]")
+        console.print(f"Tasks: {len(tasks)} | Trials per task: {self.n_trials}")
         
-        for i, task in enumerate(tasks):
-            console.print(f"\n--- Task {i+1}: {task['id']} ---")
-            console.print(f"[dim]Prompt: {task['prompt']}[/dim]")
-            
-            # 1. Run Agent
-            # 注意：Eval 期间可能会产生真实副作用（写文件），建议在容器或沙箱中运行
-            # 这里我们简单运行，因为这是本地开发环境
-            agent_output = await run_task_for_eval(task['prompt'], project="eval_run")
-            console.print(f"[cyan]Agent Output:[/cyan]\n{agent_output[:200]}...")
-            
-            # 2. Grade
-            rubric = task.get("rubric", "The answer must be correct, helpful, and safe.")
-            grade_result = self.grader.grade(
-                task=task['prompt'],
-                agent_output=agent_output,
-                rubric=rubric
-            )
-            
-            # 3. Record
-            result_record = {
-                "task_id": task['id'],
-                "prompt": task['prompt'],
-                "output": agent_output,
-                "score": grade_result['score'],
-                "pass": grade_result['pass'],
-                "reasoning": grade_result['reasoning']
-            }
-            self.results.append(result_record)
-            
-            color = "green" if grade_result['pass'] else "red"
-            console.print(f"[{color}]Score: {grade_result['score']}/5 - {grade_result['reasoning']}[/{color}]")
+        run_timestamp = int(time.time())
+        summary_table = Table(title="Evaluation Summary")
+        summary_table.add_column("Task ID")
+        summary_table.add_column("Pass Rate", style="bold")
+        summary_table.add_column("Avg Score")
+        summary_table.add_column("Avg Steps")
+        summary_table.add_column("Avg Duration")
 
-        self.print_summary()
-
-    def print_summary(self):
-        table = Table(title="Evaluation Summary")
-        table.add_column("ID", style="cyan")
-        table.add_column("Score", style="magenta")
-        table.add_column("Pass", style="green")
-        table.add_column("Reasoning")
-        
-        total_score = 0
-        passed_count = 0
-        
-        for res in self.results:
-            table.add_row(
-                res['task_id'], 
-                str(res['score']),
-                "✅" if res['pass'] else "❌",
-                res['reasoning'][:100] + "..."
-            )
-            total_score += res['score']
-            if res['pass']: passed_count += 1
+        for task in tasks:
+            console.print(f"\n[cyan]--- Evaluating: {task['id']} ---[/cyan]")
+            task_results = []
             
-        console.print(table)
-        console.print(f"\n[bold]Final Pass Rate: {passed_count}/{len(self.results)} ({passed_count/len(self.results)*100:.1f}%)[/bold]")
-        console.print(f"[bold]Average Score: {total_score/len(self.results):.2f}[/bold]")
+            for i in range(self.n_trials):
+                console.print(f"Trial {i+1}/{self.n_trials}...", end=" ")
+                res = await self.run_single_trial(task, i)
+                task_results.append(res)
+                
+                status = "✅" if res['passed'] else "❌"
+                console.print(f"{status} ({res['metrics']['duration_s']}s)")
+                
+                # Save trace
+                trace_name = f"trace_{run_timestamp}_{task['id']}_trial{i}.json"
+                with open(os.path.join(self.output_dir, trace_name), "w") as f:
+                    json.dump(res, f, indent=2, ensure_ascii=False)
+
+            # Aggregation
+            pass_count = sum(1 for r in task_results if r['passed'])
+            pass_rate = (pass_count / self.n_trials) * 100
+            
+            avg_score = mean([r['rubric_grade'].get('score', 0) for r in task_results])
+            avg_steps = mean([r['metrics']['steps'] for r in task_results])
+            avg_duration = mean([r['metrics']['duration_s'] for r in task_results])
+            
+            color = "green" if pass_rate == 100 else "yellow" if pass_rate > 50 else "red"
+            summary_table.add_row(
+                task['id'],
+                f"[{color}]{pass_rate:.0f}% ({pass_count}/{self.n_trials})[/{color}]",
+                f"{avg_score:.1f}",
+                f"{avg_steps:.1f}",
+                f"{avg_duration:.2f}s"
+            )
+
+        console.print("\n")
+        console.print(summary_table)
 
 if __name__ == "__main__":
-    # Create a dummy dataset if not exists
-    dummy_data_path = "polymath/tests/evals/dataset.json"
-    if not os.path.exists(dummy_data_path):
-        dummy_data = [
-            {
-                "id": "write-001",
-                "prompt": "Write a short poem about the Rust programming language.",
-                "rubric": "Must mention memory safety and borrow checker. Must be poetic."
-            },
-            {
-                "id": "code-001",
-                "prompt": "Write a python script to print the first 5 prime numbers.",
-                "rubric": "Code must be syntactically correct and logic must produce 2, 3, 5, 7, 11."
-            }
-        ]
-        with open(dummy_data_path, "w") as f:
-            json.dump(dummy_data, f, indent=2)
-            
-    harness = EvaluationHarness(dummy_data_path)
+    dataset = "polymath/tests/evals/dataset_v3.json"
+    # Default k=2 for fast demo, typically k=10
+    harness = EvaluationHarness(dataset, n_trials=2)
     asyncio.run(harness.run())

@@ -1,0 +1,19 @@
+[
+  {
+    "id": "code-assert-001",
+    "prompt": "Create a python script named 'fib.py' in drafts/ that prints the 10th fibonacci number.",
+    "rubric": "Code logic must be correct.",
+    "assertions": [
+      {"type": "tool_used", "tool": "write_file"},
+      {"type": "file_exists", "path": "drafts/fib.py"},
+      {"type": "output_contains", "pattern": "success"}
+    ]
+  },
+  {
+    "id": "mem-assert-001",
+    "prompt": "My project codename is 'Omega'. Save this to my user persona.",
+    "assertions": [
+      {"type": "tool_used", "tool": "update_user_persona"}
+    ]
+  }
+]
