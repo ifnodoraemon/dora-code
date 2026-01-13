@@ -5,6 +5,21 @@
       "args": ["src/servers/memory.py"],
       "env": {}
     },
+    "fs_read": {
+      "command": "python3",
+      "args": ["src/servers/fs_read.py"],
+      "env": {
+        "VISION_PROVIDER": "google", 
+        "VISION_MODEL": "gemini-1.5-flash",
+        "GOOGLE_API_KEY": "${GOOGLE_API_KEY}",
+        "OPENAI_API_KEY": "${OPENAI_API_KEY}"
+      }
+    },
+    "fs_write": {
+      "command": "python3",
+      "args": ["src/servers/fs_write.py"],
+      "env": {}
+    },
     "web": {
       "command": "python3",
       "args": ["src/servers/web.py"],
@@ -15,9 +30,9 @@
       "args": ["src/servers/computer.py"],
       "env": {}
     },
-    "filesystem": {
+    "task": {
       "command": "python3",
-      "args": ["src/servers/files.py"],
+      "args": ["src/servers/task.py"],
       "env": {}
     }
   },

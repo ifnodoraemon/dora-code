@@ -17,20 +17,24 @@ Instead of a monolithic script, Polymath is designed as a platform:
 polymath/
 ├── .polymath/          # Configuration & Data
 │   ├── config.json     # MCP Server registry & Persona config
-│   ├── memory.json     # User Persona storage
 │   └── chroma_db/      # Vector Database (Long-term Memory)
 ├── materials/          # Input sandbox
 ├── drafts/             # Output sandbox
 ├── src/
-│   ├── host/           # [The Brain]
-│   │   ├── cli.py      # Entry point, LLM Loop, HITL logic
-│   │   └── client.py   # MCP Client Implementation
-│   ├── servers/        # [The Limbs - MCP Servers]
-│   │   ├── memory.py   # RAG & Persistence
-│   │   ├── vision.py   # Multi-vendor OCR/Description
-│   │   ├── files.py    # Document Parsing (PDF/Docx) & FS operations
-│   │   ├── web.py      # Search Tools
-│   │   └── computer.py # Code Execution Environment
+│   ├── core/           # Core configurations and utilities
+│   ├── evals/          # Evaluation harness and datasets
+│   ├── host/           # [The Brain] - MCP Host implementation
+│   │   ├── cli.py      # Main entry point (Typer CLI)
+│   │   └── client.py   # MCP Client and LLM integration
+│   ├── servers/        # [The Limbs] - Specialized MCP Servers
+│   │   ├── computer.py # Code execution (Python)
+│   │   ├── fs_edit.py  # File editing
+│   │   ├── fs_ops.py   # File system operations
+│   │   ├── fs_read.py  # File reading (PDF, Docx, etc.)
+│   │   ├── fs_write.py # File writing and management
+│   │   ├── memory.py   # RAG and Long-term memory
+│   │   └── web.py      # Web search capabilities
+│   ├── services/       # Shared business logic/services
 │   └── agent.py        # Adapter for Google ADK Web UI
 └── pyproject.toml      # Dependency Management
 ```
@@ -45,9 +49,9 @@ polymath/
 1.  **Memory Server:**
     - Tech: ChromaDB + SentenceTransformers.
     - Features: `save_note`, `search_notes` (scoped by `collection_name`), `update_user_persona`.
-2.  **Vision Server:**
+2.  **Vision Service (Internal):**
     - Tech: Multi-vendor adapter (Gemini / OpenAI).
-    - Features: `ocr_image`, `describe_image`.
+    - Features: Image processing integrated into `read_file` (Filesystem Server).
 3.  **Filesystem Server:**
     - Tech: `pdfplumber`, `python-docx`, `openpyxl`.
     - Features: Format-aware `read_file`, sandboxed `write_file`.

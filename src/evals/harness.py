@@ -13,8 +13,9 @@ from rich.table import Table
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
 
-from src.host.cli import load_config
-from src.host.client import MultiServerMCPClient, TraceLogger
+from src.core.config import load_config
+from src.core.logger import TraceLogger
+from src.host.client import MultiServerMCPClient
 from src.evals.model_grader import ModelGrader
 import google.generativeai as genai
 

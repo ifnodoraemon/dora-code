@@ -11,7 +11,19 @@
 *   **代码执行 (Computer):** 内置 Python 解释器，可进行数据分析和绘图。
 *   **安全沙箱:** 文件操作限制在项目目录内，敏感操作需人工审批 (HITL)。
 
-## 🛠️ 安装
+## Features v0.4 (Multi-Mode Agent)
+- **Expert Modes:** Switch between specialized personas to get the best results.
+  - **Planner (Default):** Breaks down tasks and coordinates execution.
+  - **Coder (`/mode coder`):** Focuses on code quality, testing, and implementation.
+  - **Architect (`/mode architect`):** Focuses on system design and documentation.
+- **Code Intelligence:**
+  - **Smart Outline:** Uses AST parsing (`read_file_outline`).
+  - **Symbol Navigation:** Find definitions instantly (`find_symbol`).
+- **Project Memory:** `/init` to create `POLYMATH.md`.
+- **Task Management:** Built-in Todo list (`task` server).
+- **Transparency:** Visual Diffs & Chain of Thought visibility.
+
+## Installation
 
 1.  **克隆仓库:**
     ```bash

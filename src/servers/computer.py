@@ -2,9 +2,81 @@ import os
 import sys
 import subprocess
 import tempfile
+import requests
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("PolymathComputer")
+
+def _get_pypi_suggestions(query: str) -> str:
+    """Internal helper to get suggestions when a package is not found."""
+    try:
+        url = f"https://pypi.org/search/?q={query}"
+        response = requests.get(url, timeout=10)
+        if response.status_code != 200:
+            return ""
+        
+        import re
+        names = re.findall(r'<span class="package-snippet__name">(.*?)</span>', response.text)
+        descs = re.findall(r'<p class="package-snippet__description">(.*?)</p>', response.text)
+        
+        suggestions = []
+        for i in range(min(3, len(names))):
+            # Clean up tags if any
+            name = names[i].replace('"', '')
+            desc = descs[i].strip()
+            suggestions.append(f"- **{name}**: {desc}")
+        
+        if suggestions:
+            return "\n\nI couldn't find that exact package, but here are some similar ones on PyPI:\n" + "\n".join(suggestions)
+        return ""
+    except:
+        return ""
+
+@mcp.tool()
+def list_installed_packages() -> str:
+    """List all currently installed Python packages and their versions."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "list"],
+            capture_output=True,
+            text=True
+        )
+        return result.stdout
+    except Exception as e:
+        return f"Error listing packages: {str(e)}"
+
+@mcp.tool()
+def install_package(package_name: str) -> str:
+    """
+    Install a Python package using pip.
+    If the package name is incorrect, I will provide suggestions based on PyPI search.
+    """
+    print(f"Attempting to install: {package_name}")
+    try:
+        # First, check if package exists to provide better feedback
+        check_url = f"https://pypi.org/pypi/{package_name}/json"
+        check_resp = requests.get(check_url, timeout=5)
+        
+        if check_resp.status_code != 200:
+            error_msg = f"❌ Package '{package_name}' not found on PyPI."
+            suggestions = _get_pypi_suggestions(package_name)
+            return error_msg + suggestions + "\n\nPlease review the suggestions and try again with the correct name."
+
+        # Package exists, proceed with installation
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", package_name],
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+        
+        if result.returncode == 0:
+            return f"✅ Successfully installed {package_name}."
+        else:
+            return f"❌ Failed to install {package_name}.\nError: {result.stderr}"
+            
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 @mcp.tool()
 def execute_python(code: str) -> str:

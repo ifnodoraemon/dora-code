@@ -10,30 +10,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from google.generativeai.types import FunctionDeclaration
 
-@dataclass
-class TraceEvent:
-    type: str  # "tool_call", "tool_result", "model_think", "user_input"
-    name: str  # tool name or event name
-    data: Any
-    timestamp: float
-    duration_ms: Optional[float] = None
-
-class TraceLogger:
-    def __init__(self):
-        self.events: List[TraceEvent] = []
-
-    def log(self, type: str, name: str, data: Any, duration_ms: float = 0):
-        event = TraceEvent(
-            type=type,
-            name=name,
-            data=data,
-            timestamp=time.time(),
-            duration_ms=duration_ms
-        )
-        self.events.append(event)
-
-    def export(self) -> List[Dict]:
-        return [asdict(e) for e in self.events]
+from src.core.logger import TraceLogger
 
 class MultiServerMCPClient:
     def __init__(self, tracer: Optional[TraceLogger] = None):
@@ -59,30 +36,39 @@ class MultiServerMCPClient:
             resolved_args = []
             for arg in args:
                 if arg.endswith(".py"):
-                    # 1. 绝对路径
+                    # 1. 绝对路径 - 直接使用
                     if os.path.isabs(arg):
                         resolved_args.append(arg)
                         continue
                     
-                    # 2. 内置 Server (pkg_root + arg)
-                    # 假设 config 写 "src/servers/xxx.py"
-                    clean_arg = arg.replace("src/", "") if arg.startswith("src/") else arg
-                    pkg_path = os.path.join(pkg_root, clean_arg)
+                    # 2. 尝试相对于当前工作目录
+                    cwd_path = os.path.abspath(os.path.join(os.getcwd(), arg))
+                    if os.path.exists(cwd_path):
+                        resolved_args.append(cwd_path)
+                        continue
+
+                    # 3. 尝试相对于项目根目录 (pkg_root)
+                    # 假设 arg 像 "src/servers/fs_read.py" 或 "servers/fs_read.py"
+                    # pkg_root 指向 polymath/src 的上一级，即 polymath/
                     
-                    # 简单的启发式：尝试多种组合
+                    # 如果 arg 包含 'src/', 我们假设它是从项目根开始的
+                    # 如果不包含，可能是相对于 src/servers 的简写？(虽然 config 一般写全路径)
+                    
                     candidates = [
-                        arg,
-                        os.path.abspath(arg),
-                        pkg_path,
-                        os.path.join(pkg_root, "servers", os.path.basename(arg))
+                         os.path.join(pkg_root, arg), # polymath/src/servers/...
+                         os.path.join(pkg_root, "src", arg) if not arg.startswith("src") else None,
                     ]
                     
-                    final_path = arg
+                    found = False
                     for p in candidates:
-                        if os.path.exists(p):
-                            final_path = p
+                        if p and os.path.exists(p):
+                            resolved_args.append(p)
+                            found = True
                             break
-                    resolved_args.append(final_path)
+                    
+                    if not found:
+                        # Fallback: keep original relative path and hope execution context is right
+                        resolved_args.append(arg)
                 else:
                     resolved_args.append(arg)
 

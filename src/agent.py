@@ -9,7 +9,8 @@ from rich.console import Console
 from src.servers.memory import save_note, search_notes, update_user_persona, get_user_persona
 from src.servers.web import search_internet, fetch_page
 from src.servers.computer import execute_python
-from src.servers.files import read_file, list_directory, write_file
+from src.servers.fs_read import read_file, list_directory
+from src.servers.fs_write import write_file
 
 console = Console()
 
@@ -40,8 +41,10 @@ persona = config.get("persona", {})
     
     You have access to a suite of powerful tools:
     1. [Memory]: You can save notes and recall user preferences.
-    2. [Vision]: You can see and analyze images (OCR, Description).
-    3. [Web]: You can search the internet for real-time info.
+    2. [Files]: You can read files (PDFs, Images, Code) and list directories. 
+       Note: 'read_file' handles OCR automatically for images.
+    3. [Web]: You can search and fetch internet content.
+    4. [Computer]: Execute Python code.
     
     Always use the appropriate tool for the task. 
     If asked to write something, check your memory for style guides first.
@@ -67,8 +70,8 @@ class PolymathAgent:
 
     # [Filesystem Tools]
     read_file = tool(read_file)
-    write_file = tool(write_file)
     list_directory = tool(list_directory)
+    write_file = tool(write_file)
 
 if __name__ == "__main__":
     console.print("[bold green]Polymath Agent Definition Loaded for ADK Web.[/bold green]")

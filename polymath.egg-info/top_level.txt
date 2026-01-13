@@ -1,5 +1,7 @@
+build
 drafts
 final
 materials
 src
+tests
 venv
