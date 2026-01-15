@@ -112,7 +112,7 @@ class TaskManager:
         description: str = "",
         priority: TaskPriority = TaskPriority.MEDIUM,
         parent_id: Optional[str] = None,
-        tags: List[str] = None
+        tags: Optional[List[str]] = None
     ) -> Task:
         """Create a new task"""
         # Generate unique ID
@@ -124,7 +124,7 @@ class TaskManager:
             description=description,
             priority=priority,
             parent_id=parent_id,
-            tags=tags or []
+            tags=tags if tags is not None else []
         )
         
         self.tasks[task_id] = task

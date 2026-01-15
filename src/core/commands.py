@@ -25,9 +25,9 @@ class Command:
     description: str
     category: CommandCategory
     handler: Callable
-    aliases: List[str] = None
+    aliases: Optional[List[str]] = None
     args_description: str = ""
-    examples: List[str] = None
+    examples: Optional[List[str]] = None
     
     def __post_init__(self):
         if self.aliases is None:
