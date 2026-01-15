@@ -1,17 +1,27 @@
 import os
+import sys
 import asyncio
 import json
 import typer
 from dotenv import load_dotenv
+
+# 强制设置标准流编码，防止 UnicodeDecodeError
+if sys.stdin and hasattr(sys.stdin, 'reconfigure'):
+    sys.stdin.reconfigure(encoding='utf-8', errors='replace')
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.prompt import Prompt
 from rich.panel import Panel
 from rich.table import Table
 
-# Google GenAI
-import google.generativeai as genai
-from google.generativeai.types import Tool as GenAITool
+# Google GenAI (New SDK)
+from google import genai
+from google.genai import types
 
 # 导入通用 MCP 客户端
 from src.host.client import MultiServerMCPClient
@@ -19,6 +29,7 @@ from src.host.client import MultiServerMCPClient
 from src.core.config import load_config
 from src.core.diff import print_diff
 from src.core.prompts import get_system_prompt, PROMPTS
+from src.core.rules import load_all_instructions, format_instructions_for_prompt, create_default_agents_md
 
 app = typer.Typer()
 console = Console()
@@ -29,30 +40,46 @@ load_dotenv()
 # Global State for Mode
 CURRENT_MODE = "default"
 
-def init_chat_model(mode: str, tools: list, history: list = []):
-    """Initialize the Gemini model with a specific mode (system prompt)."""
+def init_chat_model(client: genai.Client, mode: str, tools: list, history: list = []):
+    """Initialize the Gemini chat with a specific mode (system prompt)."""
     config = load_config()
     persona = config.get("persona", {})
     
     # Get prompt for mode
     sys_instruction = get_system_prompt(mode, persona)
     
-    # Load Project Memory if exists
+    # Load Project Rules (AGENTS.md)
+    instructions = load_all_instructions(config)
+    if instructions:
+        sys_instruction += format_instructions_for_prompt(instructions)
+    
+    # Load Project Memory if exists (legacy support for POLYMATH.md)
     if os.path.exists("POLYMATH.md"):
         try:
             with open("POLYMATH.md", "r") as f:
                 memory_content = f.read()
-            sys_instruction += f"\n\n=== PROJECT MEMORY (POLYMATH.md) ===\n{memory_content}\n====================================\n"
+            sys_instruction += f"\n\n=== PROJECT MEMORY (POLYMATH.md - DEPRECATED) ===\n{memory_content}\n=== Use AGENTS.md instead ===\n"
         except Exception:
             pass
 
-    model = genai.GenerativeModel("gemini-1.5-pro", 
-                                 tools=[genai.protos.Tool(function_declarations=tools)],
-                                 system_instruction=sys_instruction)
+    # Create Chat with New SDK
+    # tools is a list of types.FunctionDeclaration
+    # We need to wrap them in types.Tool
+    tool_obj = types.Tool(function_declarations=tools)
     
-    return model.start_chat(history=history, enable_automatic_function_calling=False)
+    # GenerateContentConfig
+    gen_config = types.GenerateContentConfig(
+        tools=[tool_obj],
+        system_instruction=sys_instruction,
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+    )
+    
+    # Check if history needs processing (New SDK expects list of Content objects or dicts)
+    # We assume 'history' passed here is compatible or empty
+    chat = client.chats.create(model="gemini-3-pro-preview", config=gen_config, history=history)
+    return chat
 
-async def handle_slash_command(command: str, chat_session_ref: dict, mcp_client, active_tools) -> bool:
+async def handle_slash_command(command: str, chat_session_ref: dict, mcp_client, active_tools, client) -> bool:
     """
     Handle slash commands. 
     chat_session_ref is a dict {"session": chat, "history": history} to allow modification.
@@ -64,28 +91,32 @@ async def handle_slash_command(command: str, chat_session_ref: dict, mcp_client,
     if cmd == "/clear":
         console.print("[yellow]Clearing session history...[/yellow]")
         # Re-init with empty history
-        chat_session_ref["session"] = init_chat_model(CURRENT_MODE, active_tools, [])
+        chat_session_ref["session"] = init_chat_model(client, CURRENT_MODE, active_tools, [])
         return True
     
     elif cmd == "/init":
-        console.print("[cyan]Initializing project memory (POLYMATH.md)...[/cyan]")
-        content = """# Polymath Project Memory
-Use this file to store project conventions, architectural decisions, and important notes.
-Polymath will read this file to understand your coding style and preferences.
-
-## Tech Stack
-- Python 3.10+
-- Google GenAI SDK
-
-## Coding Style
-- Use 4 spaces for indentation
-- Type hints are required
-"""
-        with open("POLYMATH.md", "w") as f:
-            f.write(content)
-        console.print("[green]Created POLYMATH.md. Edit this file to guide the agent.[/green]")
-        # Re-init to load the new file
-        chat_session_ref["session"] = init_chat_model(CURRENT_MODE, active_tools, chat_session_ref["session"].history)
+        console.print("[cyan]Initializing project rules (AGENTS.md)...[/cyan]")
+        
+        # Create AGENTS.md if it doesn't exist
+        if not os.path.exists("AGENTS.md"):
+            from pathlib import Path
+            create_default_agents_md(Path.cwd())
+            console.print("[green]✓ Created AGENTS.md[/green]")
+        else:
+            console.print("[yellow]AGENTS.md already exists, skipping creation[/yellow]")
+        
+        # Create default config if it doesn't exist
+        config_dir = Path.cwd() / ".polymath"
+        config_dir.mkdir(exist_ok=True)
+        
+        console.print("[green]✓ Project initialized successfully![/green]")
+        console.print("\n[dim]Tip: Edit AGENTS.md to customize project rules[/dim]")
+        
+        # Re-init chat to load the new rules
+        hist = [] 
+        if hasattr(chat_session_ref["session"], "_history"):
+             hist = chat_session_ref["session"]._history
+        chat_session_ref["session"] = init_chat_model(client, CURRENT_MODE, active_tools, hist)
         return True
 
     elif cmd == "/mode":
@@ -102,8 +133,10 @@ Polymath will read this file to understand your coding style and preferences.
         CURRENT_MODE = new_mode
         
         # Preserve history but switch system prompt
-        current_history = chat_session_ref["session"].history
-        chat_session_ref["session"] = init_chat_model(new_mode, active_tools, current_history)
+        hist = []
+        if hasattr(chat_session_ref["session"], "_history"):
+            hist = chat_session_ref["session"]._history
+        chat_session_ref["session"] = init_chat_model(client, new_mode, active_tools, hist)
         return True
 
     elif cmd == "/help":
@@ -127,7 +160,13 @@ async def chat_loop(project: str = "default"):
     if not api_key:
         console.print("[red]错误: 未设置 GOOGLE_API_KEY[/red]")
         return
-    genai.configure(api_key=api_key)
+    
+    # Initialize New Client
+    try:
+        client = genai.Client(api_key=api_key)
+    except Exception as e:
+        console.print(f"[red]Failed to initialize Google GenAI Client: {e}[/red]")
+        return
 
     console.print(f"[bold yellow]Project: {project}[/bold yellow]")
 
@@ -141,25 +180,16 @@ async def chat_loop(project: str = "default"):
 
     try:
         # 3. 准备工具
-        active_tools = []
-        for name, session in mcp_client.sessions.items():
-            result = await session.list_tools()
-            for tool in result.tools:
-                tool_decl = {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.inputSchema
-                }
-                active_tools.append(tool_decl)
+        genai_tools = await mcp_client.get_genai_tools() # Returns list[types.FunctionDeclaration]
+        active_tools = genai_tools
 
         # 4. 初始化模型 (Initial Chat)
-        # Wrap in a dict to allow reference update in handle_slash_command
         chat_ref = {
-            "session": init_chat_model(CURRENT_MODE, active_tools, [])
+            "session": init_chat_model(client, CURRENT_MODE, active_tools, [])
         }
 
         console.print(Panel.fit(
-            f"[bold blue]Polymath v0.4 (Multi-Mode)[/bold blue]\n"
+            f"[bold blue]Polymath v0.4 (Multi-Mode + New SDK)[/bold blue]\n"
             f"[dim]Servers: {', '.join(mcp_client.sessions.keys())}[/dim]\n"
             f"[dim]Type /help for commands. Current Mode: {CURRENT_MODE}[/dim]",
             border_style="blue"
@@ -177,98 +207,102 @@ async def chat_loop(project: str = "default"):
             
             # 处理 Slash Commands
             if user_input.startswith("/"):
-                if await handle_slash_command(user_input, chat_ref, mcp_client, active_tools):
+                if await handle_slash_command(user_input, chat_ref, mcp_client, active_tools, client):
                     continue
 
             chat = chat_ref["session"]
 
             # 发送消息
-            with console.status(f"[bold {mode_color}]Thinking ({CURRENT_MODE})...[/bold {mode_color}]", spinner="dots"):
-
-                try:
+            response = None
+            try:
+                with console.status(f"[bold {mode_color}]Thinking ({CURRENT_MODE})...[/bold {mode_color}]", spinner="dots"):
                     response = chat.send_message(user_input)
-                except Exception as e:
-                    console.print(f"[red]API Error: {e}[/red]")
-                    continue
+            except Exception as e:
+                console.print(f"[red]API Error: {e}[/red]")
+                continue
+            
+            # 处理多轮对话 (Tool Loop)
+            while True:
+                if not response.candidates:
+                        console.print("[red]Error: Empty response from model.[/red]")
+                        break
+
+                # New SDK: response.candidates[0].content.parts
+                parts = response.candidates[0].content.parts
+                has_tool_call = False
+                tool_results = []
                 
-                # 处理多轮对话 (Tool Loop)
-                while True:
-                    # Gemini 的响应可能包含多个 Part (Text + FunctionCall)
-                    # 我们需要按顺序处理它们
-                    
-                    has_tool_call = False
-                    tool_results = []
-                    
-                    # 遍历所有 parts
-                    for part in response.candidates[0].content.parts:
+                for part in parts:
+                    # 1. 处理思考文本 (Text)
+                    if part.text:
+                        console.print(Panel(Markdown(part.text), title="[bold purple]Thought[/bold purple]", border_style="purple", expand=False))
                         
-                        # 1. 处理思考文本 (Text)
-                        if part.text:
-                            # 渲染思考过程
-                            console.print(Panel(Markdown(part.text), title="[bold purple]Thought[/bold purple]", border_style="purple", expand=False))
-                            
-                        # 2. 处理工具调用 (Function Call)
-                        if part.function_call:
-                            has_tool_call = True
-                            fc = part.function_call
-                            tool_name = fc.name
-                            args = dict(fc.args)
-                            
-                            # 注入当前项目上下文
-                            if tool_name in ["save_note", "search_notes"]:
-                                args["collection_name"] = project
+                    # 2. 处理工具调用 (Function Call)
+                    if part.function_call:
+                        has_tool_call = True
+                        fc = part.function_call
+                        tool_name = fc.name
+                        args = fc.args # New SDK args is usually a dict or object
+                        
+                        # Convert args to dict safely
+                        if hasattr(args, "items"): 
+                            args_dict = {k: v for k, v in args.items()}
+                        else:
+                            try:
+                                args_dict = dict(args)
+                            except:
+                                args_dict = {}
 
-                            # --- Transparency: Diff View ---
-                            if tool_name == "write_file" and "content" in args and "path" in args:
-                                console.print(f"\n[bold yellow]📝 Proposing changes to:[/bold yellow] {args['path']}")
-                                print_diff(args['path'], args['content'])
+                        # 注入当前项目上下文
+                        if tool_name in ["save_note", "search_notes"]:
+                            args_dict["collection_name"] = project
 
-                            # --- Security: Approval ---
-                            tool_result = None
-                            if tool_name in SENSITIVE_TOOLS:
-                                console.print(f"\n[bold red]⚠️  Sensitive Action:[/bold red] {tool_name}")
-                                if tool_name != "write_file":
-                                    console.print(f"[dim]Args: {json.dumps(args, indent=2, ensure_ascii=False)}[/dim]")
-                                
-                                confirm = Prompt.ask("Execute?", choices=["y", "n"], default="n")
-                                if confirm.lower() != "y":
-                                    tool_result = "User denied the operation."
-                                    console.print("[red]Cancelled.[/red]")
-                                else:
-                                    console.print(f"[cyan]Running {tool_name}...[/cyan]")
-                                    tool_result = await mcp_client.call_tool(tool_name, args)
+                        # --- Transparency: Diff View ---
+                        if tool_name == "write_file" and "content" in args_dict and "path" in args_dict:
+                            console.print(f"\n[bold yellow]📝 Proposing changes to:[/bold yellow] {args_dict['path']}")
+                            print_diff(args_dict['path'], args_dict['content'])
+
+                        # --- Security: Approval ---
+                        tool_result = None
+                        if tool_name in SENSITIVE_TOOLS:
+                            console.print(f"\n[bold red]⚠️  Sensitive Action:[/bold red] {tool_name}")
+                            if tool_name != "write_file":
+                                console.print(f"[dim]Args: {json.dumps(args_dict, indent=2, ensure_ascii=False)}[/dim]")
+                            
+                            confirm = Prompt.ask("Execute?", choices=["y", "n"], default="n")
+                            if confirm.lower() != "y":
+                                tool_result = "User denied the operation."
+                                console.print("[red]Cancelled.[/red]")
                             else:
                                 console.print(f"[cyan]Running {tool_name}...[/cyan]")
-                                tool_result = await mcp_client.call_tool(tool_name, args)
-                            
-                            tool_results.append({
-                                "name": tool_name,
-                                "response": {"result": tool_result} 
-                            })
-
-                    # 如果没有工具调用，说明对话结束 (Wait for user input)
-                    if not has_tool_call:
-                        # Stats
-                        turn_count += 1
-                        usage = response.usage_metadata
-                        if usage:
-                            console.print(f"\n[dim italic]Turn {turn_count} | Input: {usage.prompt_token_count} | Output: {usage.candidates_token_count}[/dim italic]")
-                        break
-                    
-                    # 如果有工具调用，将结果一次性发回给模型 (Gemini Client 支持 list of function_response 吗? 
-                    # 标准做法是发回一个新的 Content，包含多个 FunctionResponse Parts)
-                    
-                    response_parts = []
-                    for tr in tool_results:
-                        response_parts.append(genai.protos.Part(
-                            function_response=genai.protos.FunctionResponse(
-                                name=tr["name"],
-                                response=tr["response"]
-                            )
-                        ))
+                                tool_result = await mcp_client.call_tool(tool_name, args_dict)
+                        else:
+                            console.print(f"[cyan]Running {tool_name}...[/cyan]")
+                            tool_result = await mcp_client.call_tool(tool_name, args_dict)
                         
-                    with console.status("[bold cyan]Processing Results...[/bold cyan]", spinner="dots"):
-                        response = chat.send_message(genai.protos.Content(parts=response_parts))
+                        tool_results.append({
+                            "name": tool_name,
+                            "result": {"result": tool_result} 
+                        })
+
+                if not has_tool_call:
+                    turn_count += 1
+                    usage = response.usage_metadata
+                    if usage:
+                        console.print(f"\n[dim italic]Turn {turn_count} | Input: {usage.prompt_token_count} | Output: {usage.candidates_token_count}[/dim italic]")
+                    break
+                
+                # 发回结果 (New SDK Style)
+                # Use types.Part.from_function_response
+                response_parts = []
+                for tr in tool_results:
+                    response_parts.append(types.Part.from_function_response(
+                        name=tr["name"],
+                        response=tr["result"]
+                    ))
+                    
+                with console.status("[bold cyan]Processing Results...[/bold cyan]", spinner="dots"):
+                    response = chat.send_message(response_parts)
 
     finally:
         await mcp_client.cleanup()
@@ -285,14 +319,27 @@ def setup():
         console.print(f"[bold red]设置失败: {e}[/bold red]")
 
 @app.command()
+def tui(project: str = "default"):
+    """启动 Polymath TUI (Textual界面)"""
+    try:
+        from .tui import run_tui
+        console.print("[cyan]Launching Polymath TUI...[/cyan]")
+        run_tui()
+    except ImportError as e:
+        console.print(f"[red]Error: Textual not installed. Run: pip install textual[/red]")
+        console.print(f"[dim]{e}[/dim]")
+    except Exception as e:
+        console.print(f"[red]TUI Error: {e}[/red]")
+
+@app.command()
 def start(project: str = "default"):
-    """启动 Polymath 并进入特定项目环境"""
+    """启动 Polymath CLI（命令行界面）"""
     # 简单的依赖检查
     try:
         import mcp
-        import google.generativeai
+        import google.genai
     except ImportError:
-        console.print("[yellow]警告: 核心依赖似乎未安装。请运行 'pl setup' 进行初始化。[/yellow]")
+        console.print("[yellow]警告: 核心依赖似乎未安装。请运行 'pip install google-genai' 或 'pl setup'。[/yellow]")
         if not Prompt.ask("是否继续启动？", choices=["y", "n"], default="n") == "y":
             return
             

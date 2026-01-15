@@ -20,6 +20,16 @@
       "args": ["src/servers/fs_write.py"],
       "env": {}
     },
+    "fs_edit": {
+      "command": "python3",
+      "args": ["src/servers/fs_edit.py"],
+      "env": {}
+    },
+    "fs_ops": {
+      "command": "python3",
+      "args": ["src/servers/fs_ops.py"],
+      "env": {}
+    },
     "web": {
       "command": "python3",
       "args": ["src/servers/web.py"],

@@ -1,35 +1,73 @@
 import os
 import json
 from typing import Dict, Any, Optional
+from pathlib import Path
+from .schema import validate_config_file, get_default_config, PolymathConfig
+from .logger import get_logger
 
-def load_config(override_path: Optional[str] = None) -> Dict[str, Any]:
+logger = get_logger(__name__)
+
+
+def load_config(override_path: Optional[str] = None, validate: bool = True) -> Dict[str, Any]:
     """
-    Cascading config loading:
+    Cascading config loading with optional validation:
     1. Runtime override (if provided)
     2. Project specific: ./.polymath/config.json
     3. User global: ~/.polymath/config.json
     4. Package default: (Installed dir)/.polymath/config.json
-    """
-    if override_path and os.path.exists(override_path):
-        return json.load(open(override_path, "r"))
-
-    # 1. Project Level
-    cwd_config = os.path.join(os.getcwd(), ".polymath", "config.json")
-    if os.path.exists(cwd_config):
-        return json.load(open(cwd_config, "r"))
     
-    # 2. User Level
-    home_config = os.path.expanduser("~/.polymath/config.json")
-    if os.path.exists(home_config):
-        return json.load(open(home_config, "r"))
-
-    # 3. Package Default (Fallback)
-    # src/core/config.py -> src/core -> src -> polymath root
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    pkg_config = os.path.join(base_dir, ".polymath", "config.json")
-    
-    if os.path.exists(pkg_config):
-        return json.load(open(pkg_config, "r"))
+    Args:
+        override_path: Optional path to override config file
+        validate: Whether to validate configuration (default: True)
         
-    # Final Fallback
-    return {"mcpServers": {}}
+    Returns:
+        Configuration dictionary
+        
+    Raises:
+        ValueError: If validation is enabled and configuration is invalid
+    """
+    config_path = None
+    config_data = None
+    
+    # 1. Runtime override
+    if override_path and os.path.exists(override_path):
+        config_path = Path(override_path)
+        logger.info(f"Loading config from override: {config_path}")
+    # 2. Project Level
+    elif Path.cwd().joinpath(".polymath", "config.json").exists():
+        config_path = Path.cwd() / ".polymath" / "config.json"
+        logger.info(f"Loading config from project: {config_path}")
+    # 3. User Level
+    elif Path.home().joinpath(".polymath", "config.json").exists():
+        config_path = Path.home() / ".polymath" / "config.json"
+        logger.info(f"Loading config from user home: {config_path}")
+    # 4. Package Default
+    else:
+        base_dir = Path(__file__).parent.parent.parent
+        pkg_config = base_dir / ".polymath" / "config.json"
+        if pkg_config.exists():
+            config_path = pkg_config
+            logger.info(f"Loading config from package: {config_path}")
+        else:
+            logger.warning("No config file found, using defaults")
+            return get_default_config()
+    
+    # Load and optionally validate
+    try:
+        if validate:
+            validated_config = validate_config_file(config_path)
+            config_data = validated_config.model_dump(by_alias=True)
+            logger.info(f"Configuration validated successfully")
+        else:
+            with open(config_path, 'r') as f:
+                config_data = json.load(f)
+                logger.info(f"Configuration loaded (validation skipped)")
+        
+        return config_data
+        
+    except ValueError as e:
+        logger.error(f"Configuration validation failed: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Failed to load configuration: {e}")
+        return get_default_config()

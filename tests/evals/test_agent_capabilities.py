@@ -5,10 +5,11 @@ import json
 from pathlib import Path
 
 # Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.servers.files import validate_path, read_file
-from src.servers.memory import save_note, search_notes, collection
+from src.core.security import validate_path
+from src.servers.memory import save_note, search_notes
+from src.servers.fs_read import read_file
 
 # --------------------------
 # Security Evals (Red Teaming)

@@ -8,7 +8,7 @@ from contextlib import AsyncExitStack
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from google.generativeai.types import FunctionDeclaration
+from google.genai import types
 
 from src.core.logger import TraceLogger
 
@@ -96,7 +96,7 @@ class MultiServerMCPClient:
             result = await session.list_tools()
             for tool in result.tools:
                 # 兼容性处理：OpenAI/Gemini 的 Schema 转换
-                func_decl = FunctionDeclaration(
+                func_decl = types.FunctionDeclaration(
                     name=tool.name,
                     description=tool.description or "",
                     parameters=tool.inputSchema
