@@ -15,10 +15,11 @@ import hashlib
 import json
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -228,14 +229,22 @@ class ContextManager:
         if self.summaries:
             summary_text = self._format_summaries_for_context()
             # Add as a "fake" early exchange to provide context
-            history.append({
-                "role": "user",
-                "parts": [{"text": f"[Previous conversation context]\n{summary_text}"}]
-            })
-            history.append({
-                "role": "model",
-                "parts": [{"text": "I understand. I'll keep this context in mind as we continue our conversation."}]
-            })
+            history.append(
+                {
+                    "role": "user",
+                    "parts": [{"text": f"[Previous conversation context]\n{summary_text}"}],
+                }
+            )
+            history.append(
+                {
+                    "role": "model",
+                    "parts": [
+                        {
+                            "text": "I understand. I'll keep this context in mind as we continue our conversation."
+                        }
+                    ],
+                }
+            )
 
         # Add actual messages
         for msg in self.messages:
@@ -328,8 +337,7 @@ class ContextManager:
 
         # Calculate tokens summarized
         tokens_summarized = sum(
-            m.token_count or self._estimate_tokens(m.content)
-            for m in messages_to_summarize
+            m.token_count or self._estimate_tokens(m.content) for m in messages_to_summarize
         )
 
         # Create summary object
@@ -363,7 +371,15 @@ class ContextManager:
 
         # Extract key actions from assistant
         assistant_msgs = [m for m in messages if m.role == "assistant"]
-        action_keywords = ["created", "updated", "fixed", "implemented", "added", "removed", "changed"]
+        action_keywords = [
+            "created",
+            "updated",
+            "fixed",
+            "implemented",
+            "added",
+            "removed",
+            "changed",
+        ]
 
         actions = []
         for m in assistant_msgs:
@@ -484,13 +500,10 @@ class ContextManager:
             self._last_prompt_tokens = data.get("last_prompt_tokens", 0)
 
             self.messages = [Message.from_dict(m) for m in data.get("messages", [])]
-            self.summaries = [
-                ConversationSummary.from_dict(s) for s in data.get("summaries", [])
-            ]
+            self.summaries = [ConversationSummary.from_dict(s) for s in data.get("summaries", [])]
 
             logger.info(
-                f"Loaded context: {len(self.messages)} messages, "
-                f"{len(self.summaries)} summaries"
+                f"Loaded context: {len(self.messages)} messages, {len(self.summaries)} summaries"
             )
 
         except Exception as e:
@@ -529,6 +542,7 @@ def create_llm_summarizer(chat_fn: Callable[[str], str]) -> Callable[[list[Messa
     Returns:
         Summarizer function compatible with ContextManager
     """
+
     def summarize(messages: list[Message]) -> str:
         # Format conversation
         conversation_parts = []

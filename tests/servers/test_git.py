@@ -21,10 +21,10 @@ from src.servers.git import (
     git_status,
 )
 
-
 # ========================================
 # Fixtures
 # ========================================
+
 
 @pytest.fixture
 def git_repo():
@@ -71,22 +71,21 @@ def git_repo():
 
 @pytest.fixture
 def non_git_dir():
-    """Create a temporary directory that is NOT a git repo within project."""
-    # Save original working directory
-    original_cwd = os.getcwd()
+    """Create a temporary directory that is NOT a git repo (outside any git repo)."""
+    import tempfile
 
-    tmpdir = os.path.join(original_cwd, ".test_non_git_dir")
-    os.makedirs(tmpdir, exist_ok=True)
+    # Use system temp directory to ensure we're outside any git repo
+    tmpdir = tempfile.mkdtemp(prefix="test_non_git_")
     yield tmpdir
 
-    # Restore original working directory before cleanup
-    os.chdir(original_cwd)
+    # Cleanup
     shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 # ========================================
 # Repository Detection Tests
 # ========================================
+
 
 class TestRepositoryDetection:
     """Tests for git repository detection"""
@@ -108,6 +107,7 @@ class TestRepositoryDetection:
 # Git Status Tests
 # ========================================
 
+
 class TestGitStatus:
     """Tests for git status command"""
 
@@ -122,7 +122,7 @@ class TestGitStatus:
         test_file = os.path.join(git_repo, "test.txt")
         with open(test_file, "a") as f:
             f.write("New content\n")
-        
+
         result = git_status(git_repo)
         assert "modified" in result.lower() or "changes" in result.lower()
 
@@ -135,6 +135,7 @@ class TestGitStatus:
 # ========================================
 # Git Diff Tests
 # ========================================
+
 
 class TestGitDiff:
     """Tests for git diff command"""
@@ -149,7 +150,7 @@ class TestGitDiff:
         test_file = os.path.join(git_repo, "test.txt")
         with open(test_file, "a") as f:
             f.write("New line\n")
-        
+
         result = git_diff(git_repo)
         assert "New line" in result or "+" in result
 
@@ -158,9 +159,9 @@ class TestGitDiff:
         test_file = os.path.join(git_repo, "test.txt")
         with open(test_file, "a") as f:
             f.write("Staged change\n")
-        
+
         subprocess.run(["git", "add", "."], cwd=git_repo, capture_output=True)
-        
+
         result = git_diff(git_repo, staged=True)
         assert "Staged change" in result or "+" in result
 
@@ -168,6 +169,7 @@ class TestGitDiff:
 # ========================================
 # Git Log Tests
 # ========================================
+
 
 class TestGitLog:
     """Tests for git log command"""
@@ -193,6 +195,7 @@ class TestGitLog:
 # Git Branch Tests
 # ========================================
 
+
 class TestGitBranch:
     """Tests for git branch command"""
 
@@ -212,6 +215,7 @@ class TestGitBranch:
 # Git Add Tests
 # ========================================
 
+
 class TestGitAdd:
     """Tests for git add command"""
 
@@ -220,7 +224,7 @@ class TestGitAdd:
         new_file = os.path.join(git_repo, "new.txt")
         with open(new_file, "w") as f:
             f.write("New file content\n")
-        
+
         result = git_add("new.txt", path=git_repo)
         assert "staged" in result.lower() or "new.txt" in result
 
@@ -229,7 +233,7 @@ class TestGitAdd:
         new_file = os.path.join(git_repo, "another.txt")
         with open(new_file, "w") as f:
             f.write("Another file\n")
-        
+
         result = git_add(".", path=git_repo)
         assert "staged" in result.lower() or "." in result
 
@@ -237,6 +241,7 @@ class TestGitAdd:
 # ========================================
 # Git Stash Tests
 # ========================================
+
 
 class TestGitStash:
     """Tests for git stash command"""
@@ -253,7 +258,7 @@ class TestGitStash:
         test_file = os.path.join(git_repo, "test.txt")
         with open(test_file, "a") as f:
             f.write("Stash me\n")
-        
+
         # Stash it
         result = git_stash("push", path=git_repo, message="Test stash")
         # Either saved or no changes to stash
@@ -263,6 +268,7 @@ class TestGitStash:
 # ========================================
 # Error Handling Tests
 # ========================================
+
 
 class TestErrorHandling:
     """Tests for error handling"""

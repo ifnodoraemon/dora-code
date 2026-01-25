@@ -57,7 +57,9 @@ src/
 
 ### Environment Variables
 - `GOOGLE_API_KEY`: Required for Gemini API
-- `POLYMATH_MODEL`: Override default model (default: gemini-2.0-flash)
+- `POLYMATH_MODEL`: Override default model (default: gemini-3-flash-preview)
+- `POLYMATH_DAILY_BUDGET`: Daily cost limit in USD (optional)
+- `POLYMATH_SESSION_BUDGET`: Session cost limit in USD (optional)
 
 ## Usage
 

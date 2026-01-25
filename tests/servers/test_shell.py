@@ -7,8 +7,6 @@ Tests command execution, security controls, and background processes.
 import os
 import shutil
 
-import pytest
-
 from src.servers.shell import (
     _is_command_blocked,
     _is_command_sensitive,
@@ -17,10 +15,10 @@ from src.servers.shell import (
     get_environment_info,
 )
 
-
 # ========================================
 # Command Validation Tests
 # ========================================
+
 
 class TestCommandValidation:
     """Tests for command validation functions"""
@@ -62,6 +60,7 @@ class TestCommandValidation:
 # Output Truncation Tests
 # ========================================
 
+
 class TestOutputTruncation:
     """Tests for output truncation"""
 
@@ -89,6 +88,7 @@ class TestOutputTruncation:
 # ========================================
 # Command Execution Tests
 # ========================================
+
 
 class TestExecuteCommand:
     """Tests for command execution"""
@@ -145,6 +145,7 @@ class TestExecuteCommand:
 # Environment Info Tests
 # ========================================
 
+
 class TestEnvironmentInfo:
     """Tests for environment info retrieval"""
 
@@ -164,6 +165,7 @@ class TestEnvironmentInfo:
 # ========================================
 # Edge Cases
 # ========================================
+
 
 class TestEdgeCases:
     """Tests for edge cases"""

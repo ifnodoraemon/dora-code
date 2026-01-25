@@ -19,10 +19,10 @@ from src.servers.lint import (
     lint_python_ruff,
 )
 
-
 # ========================================
 # Fixtures
 # ========================================
+
 
 @pytest.fixture
 def test_files_dir():
@@ -59,7 +59,7 @@ def python_file_issues(test_files_dir):
     """Create a Python file with lint issues."""
     path = os.path.join(test_files_dir, "issues.py")
     with open(path, "w") as f:
-        f.write('''import os
+        f.write("""import os
 import sys
 import json  # unused
 
@@ -68,7 +68,7 @@ y = 2;  # unnecessary semicolon
 
 def bad_function(a,b,c):  # missing type hints
     return a+b+c
-''')
+""")
     yield path
 
 
@@ -111,6 +111,7 @@ def complex_function(a, b, c, d, e):
 # Tool Installation Tests
 # ========================================
 
+
 class TestToolInstallation:
     """Tests for tool installation checking"""
 
@@ -129,6 +130,7 @@ class TestToolInstallation:
 # ========================================
 # Command Execution Tests
 # ========================================
+
 
 class TestCommandExecution:
     """Tests for command execution"""
@@ -155,10 +157,8 @@ class TestCommandExecution:
 # Python Linting Tests
 # ========================================
 
-@pytest.mark.skipif(
-    not _check_tool_installed("ruff"),
-    reason="Ruff not installed"
-)
+
+@pytest.mark.skipif(not _check_tool_installed("ruff"), reason="Ruff not installed")
 class TestPythonLinting:
     """Tests for Python linting with Ruff"""
 
@@ -189,10 +189,8 @@ class TestPythonLinting:
 # Python Formatting Tests
 # ========================================
 
-@pytest.mark.skipif(
-    not _check_tool_installed("ruff"),
-    reason="Ruff not installed"
-)
+
+@pytest.mark.skipif(not _check_tool_installed("ruff"), reason="Ruff not installed")
 class TestPythonFormatting:
     """Tests for Python formatting with Ruff"""
 
@@ -206,13 +204,13 @@ class TestPythonFormatting:
         # Read original content
         with open(python_file_issues) as f:
             original = f.read()
-        
-        result = format_python_ruff(python_file_issues, check_only=True)
-        
+
+        format_python_ruff(python_file_issues, check_only=True)
+
         # File should not be modified
         with open(python_file_issues) as f:
             after = f.read()
-        
+
         assert original == after
 
 
@@ -220,10 +218,8 @@ class TestPythonFormatting:
 # Code Complexity Tests
 # ========================================
 
-@pytest.mark.skipif(
-    not _check_tool_installed("ruff"),
-    reason="Ruff not installed"
-)
+
+@pytest.mark.skipif(not _check_tool_installed("ruff"), reason="Ruff not installed")
 class TestCodeComplexity:
     """Tests for code complexity analysis"""
 
@@ -243,10 +239,8 @@ class TestCodeComplexity:
 # Security Check Tests
 # ========================================
 
-@pytest.mark.skipif(
-    not _check_tool_installed("ruff"),
-    reason="Ruff not installed"
-)
+
+@pytest.mark.skipif(not _check_tool_installed("ruff"), reason="Ruff not installed")
 class TestSecurityCheck:
     """Tests for security analysis"""
 
@@ -260,10 +254,8 @@ class TestSecurityCheck:
 # Lint Summary Tests
 # ========================================
 
-@pytest.mark.skipif(
-    not _check_tool_installed("ruff"),
-    reason="Ruff not installed"
-)
+
+@pytest.mark.skipif(not _check_tool_installed("ruff"), reason="Ruff not installed")
 class TestLintSummary:
     """Tests for lint summary"""
 

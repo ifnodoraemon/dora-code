@@ -273,8 +273,8 @@ def typecheck_python_mypy(
     # Parse output
     if stdout:
         lines = stdout.strip().split("\n")
-        error_count = len([l for l in lines if ": error:" in l])
-        warning_count = len([l for l in lines if ": warning:" in l or ": note:" in l])
+        error_count = len([line for line in lines if ": error:" in line])
+        warning_count = len([line for line in lines if ": warning:" in line or ": note:" in line])
 
         result = f"Found {error_count} error(s), {warning_count} warning(s)/note(s):\n\n{stdout}"
         return result
@@ -381,7 +381,7 @@ def lint_all(
             has_js = True
     else:
         # Check directory contents
-        for root, _, files in os.walk(resolved_path):
+        for _root, _, files in os.walk(resolved_path):
             for f in files:
                 if f.endswith(".py"):
                     has_python = True

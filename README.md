@@ -1,6 +1,16 @@
 # Polymath
 
-**Polymath** 是一个基于 **MCP (Model Context Protocol)** 架构的通用 AI 智能体，旨在成为你的全能数字副手。它不仅能写作，还能阅读代码、分析数据、识别图像，并拥有长期记忆。
+**Polymath** 是一个功能完整的 AI 编程助手，对标 Claude Code，支持 **Model Gateway** 多模型接入和丰富的开发功能。
+
+## ✨ 新特性 v0.7.0
+
+- **🌐 Model Gateway**: 统一的模型网关，支持 Google Gemini、OpenAI、Anthropic、Ollama
+- **🔄 任务中断恢复**: 自动保存任务状态，支持 Ctrl+C 后恢复
+- **🔌 插件系统**: 从 GitHub 安装插件扩展功能
+- **📊 成本追踪**: 实时 Token 用量和费用统计
+- **🎯 检查点系统**: 代码和对话的回滚能力
+- **🤖 子代理系统**: 动态创建专门化的 AI 代理
+- **🎨 主题系统**: 多种内置主题可选
 
 ## Architecture
 
@@ -124,12 +134,19 @@ pl start --project "MyProject"
 
 | Command | Description |
 |---------|-------------|
-| `/help` | Show all commands |
-| `/mode <name>` | Switch mode (plan/build/coder/architect) |
-| `/tasks` | View task list |
-| `/tasks-clear` | Clear all tasks |
-| `/debug` | Show debug info |
-| `/exit` | Exit Polymath |
+| `/help` | 显示所有命令 |
+| `/mode <name>` | 切换模式（plan/build）|
+| `/model [name]` | 切换/列出可用模型 |
+| `/checkpoints` | 列出检查点 |
+| `/rewind [id]` | 回滚到检查点 |
+| `/cost` | 显示费用统计 |
+| `/sessions` | 列出会话 |
+| `/resume <id>` | 恢复会话 |
+| `/plugins` | 列出插件 |
+| `/theme [name]` | 切换主题 |
+| `/doctor` | 运行健康检查 |
+| `/exit` | 退出 |
+| `!<cmd>` | 执行 Shell 命令 |
 
 ## MCP Servers
 
@@ -224,6 +241,24 @@ ruff check src/ tests/
 ruff format src/ tests/
 ```
 
+See [docs/development.md](docs/development.md) for detailed development guide.
+
+## Documentation
+
+- [API Reference](docs/api.md) - Complete API documentation
+- [Development Guide](docs/development.md) - How to extend Polymath
+- [Contributing](CONTRIBUTING.md) - Contribution guidelines
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+- [Model Context Protocol](https://modelcontextprotocol.io) - The foundation
+- [Google Gemini](https://ai.google.dev) - LLM provider
+- [ChromaDB](https://www.trychroma.com) - Vector database
+- [Rich](https://rich.readthedocs.io) - Beautiful terminal output
 See [docs/development.md](docs/development.md) for detailed development guide.
 
 ## Documentation

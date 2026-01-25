@@ -542,7 +542,7 @@ def find_similar_code(
     """
     try:
         resolved_file = validate_path(file_path)
-        resolved_search = validate_path(search_path)
+        validate_path(search_path)
     except (PermissionError, ValueError) as e:
         return f"Error: {e}"
 

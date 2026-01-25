@@ -148,11 +148,23 @@ class ToolRegistry:
             "required": required,
         }
 
-    def get_genai_tools(self) -> list[types.FunctionDeclaration]:
-        """Get tools as GenAI FunctionDeclarations."""
+    def get_genai_tools(
+        self, tool_names: list[str] | None = None
+    ) -> list[types.FunctionDeclaration]:
+        """
+        Get tools as GenAI FunctionDeclarations.
+
+        Args:
+            tool_names: Optional list of tool names to include.
+                       If None, returns all tools.
+        """
         declarations = []
 
         for tool in self._tools.values():
+            # 如果指定了工具名称列表，只返回列表中的工具
+            if tool_names is not None and tool.name not in tool_names:
+                continue
+
             decl = types.FunctionDeclaration(
                 name=tool.name,
                 description=tool.description,
@@ -345,9 +357,15 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> str:
     return await get_default_registry().call_tool(name, arguments)
 
 
-def get_genai_tools() -> list[types.FunctionDeclaration]:
-    """Get all tools as GenAI FunctionDeclarations."""
-    return get_default_registry().get_genai_tools()
+def get_genai_tools(tool_names: list[str] | None = None) -> list[types.FunctionDeclaration]:
+    """
+    Get tools as GenAI FunctionDeclarations.
+
+    Args:
+        tool_names: Optional list of tool names to include.
+                   If None, returns all tools.
+    """
+    return get_default_registry().get_genai_tools(tool_names)
 
 
 def is_sensitive_tool(name: str) -> bool:

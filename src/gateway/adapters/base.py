@@ -1,0 +1,121 @@
+"""
+Base Adapter Interface
+
+All provider adapters must implement this interface.
+"""
+
+import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any, AsyncIterator
+
+from ..schema import (
+    ChatRequest,
+    ChatResponse,
+    ModelInfo,
+    StreamChunk,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AdapterConfig:
+    """Configuration for an adapter."""
+    api_key: str | None = None
+    api_base: str | None = None
+    timeout: float = 60.0
+    max_retries: int = 3
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+class BaseAdapter(ABC):
+    """
+    Base class for all provider adapters.
+
+    Each adapter is responsible for:
+    1. Translating unified ChatRequest to provider-specific format
+    2. Making the API call
+    3. Translating provider response to unified ChatResponse
+    4. Handling streaming responses
+    """
+
+    provider_name: str = "base"
+
+    def __init__(self, config: AdapterConfig):
+        self.config = config
+        self._client: Any = None
+
+    @abstractmethod
+    async def initialize(self) -> None:
+        """Initialize the provider client."""
+        pass
+
+    @abstractmethod
+    async def chat(self, request: ChatRequest) -> ChatResponse:
+        """
+        Send a chat request and get a response.
+
+        Args:
+            request: Unified chat request
+
+        Returns:
+            Unified chat response
+        """
+        pass
+
+    @abstractmethod
+    async def chat_stream(
+        self, request: ChatRequest
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        Send a chat request and stream the response.
+
+        Args:
+            request: Unified chat request
+
+        Yields:
+            Stream chunks
+        """
+        pass
+
+    @abstractmethod
+    def get_models(self) -> list[ModelInfo]:
+        """
+        Get list of available models for this provider.
+
+        Returns:
+            List of model info
+        """
+        pass
+
+    def supports_model(self, model_id: str) -> bool:
+        """Check if this adapter supports a model."""
+        models = self.get_models()
+        for model in models:
+            if model.id == model_id or model_id in model.aliases:
+                return True
+        return False
+
+    def resolve_model(self, model_id: str) -> str | None:
+        """Resolve model ID or alias to actual model ID."""
+        models = self.get_models()
+        for model in models:
+            if model.id == model_id:
+                return model.id
+            if model_id in model.aliases:
+                return model.id
+        return None
+
+    async def health_check(self) -> bool:
+        """Check if the adapter is healthy."""
+        try:
+            # Try to list models or make a simple request
+            models = self.get_models()
+            return len(models) > 0
+        except Exception as e:
+            logger.error(f"Health check failed for {self.provider_name}: {e}")
+            return False
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(provider={self.provider_name})"
