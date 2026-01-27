@@ -118,8 +118,8 @@ src/
 
 ```bash
 # Clone
-git clone https://github.com/polymath-ai/polymath.git
-cd polymath
+git clone https://github.com/doraemon-code/doraemon.git
+cd doraemon
 
 # Install
 pip install -e .
@@ -212,13 +212,13 @@ polymath/
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GOOGLE_API_KEY` | Gemini API key | Required |
-| `POLYMATH_MODEL` | LLM model | `gemini-2.0-flash` |
-| `POLYMATH_LOG_LEVEL` | Log level | `INFO` |
-| `POLYMATH_MAX_MEMORY_MB` | Code execution memory | `512` |
+| `DORAEMON_MODEL` | LLM model | `gemini-3-pro-preview` |
+| `DORAEMON_LOG_LEVEL` | Log level | `INFO` |
+| `DORAEMON_MAX_MEMORY_MB` | Code execution memory | `512` |
 
 ### Config File
 
-`.polymath/config.json`:
+`.doraemon/config.json`:
 
 ```json
 {
@@ -229,7 +229,7 @@ polymath/
     }
   },
   "persona": {
-    "name": "Polymath",
+    "name": "Doraemon Code",
     "role": "AI Assistant"
   },
   "sensitive_tools": [

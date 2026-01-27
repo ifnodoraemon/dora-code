@@ -1,4 +1,4 @@
-# Polymath Development Guide
+# Doraemon Code Development Guide
 
 This guide covers how to extend and develop for the Polymath AI agent.
 
@@ -26,7 +26,7 @@ This guide covers how to extend and develop for the Polymath AI agent.
 ```bash
 # Clone the repository
 git clone <repo-url>
-cd polymath
+cd doraemon
 
 # Create virtual environment
 python -m venv venv
@@ -127,7 +127,7 @@ Create `src/servers/my_server.py`:
 """
 My Custom MCP Server
 
-Provides custom functionality for Polymath.
+Provides custom functionality for Doraemon Code.
 """
 
 import logging
@@ -138,7 +138,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create MCP server instance
-mcp = FastMCP("PolymathMyServer")
+mcp = FastMCP("DoraemonMyServer")
 
 
 @mcp.tool()
@@ -177,7 +177,7 @@ if __name__ == "__main__":
 
 ### Step 2: Register in Configuration
 
-Add to `.polymath/config.json`:
+Add to `.doraemon/config.json`:
 
 ```json
 {
@@ -294,7 +294,7 @@ ctx.set("key", v) # Set context value
 ### Define Custom Metrics
 
 ```python
-from src.core.metrics import get_metrics, PolymathMetrics
+from src.core.metrics import get_metrics, DoraemonMetrics
 
 class MyFeatureMetrics:
     def __init__(self):
@@ -471,7 +471,7 @@ def my_function(param1: str, param2: int) -> bool:
 
 ```python
 # Use specific exceptions
-from src.core.errors import PolymathException, TransientError
+from src.core.errors import DoraemonException, TransientError
 
 # Provide context
 raise ConfigurationError(
@@ -507,8 +507,8 @@ with logger.operation("process_batch", batch_size=100):
 ### Enable Debug Logging
 
 ```bash
-export POLYMATH_LOG_LEVEL=DEBUG
-polymath start
+export DORAEMON_LOG_LEVEL=DEBUG
+dora start
 ```
 
 ### Use the Debug Command
@@ -526,14 +526,14 @@ Shows:
 ### Trace Tool Calls
 
 Tool calls are automatically logged with timing information.
-Check `~/.polymath/logs/polymath.log` for detailed traces.
+Check `~/.doraemon/logs/doraemon.log` for detailed traces.
 
 ### Common Issues
 
 1. **Server not connecting**: Check if the server script exists and is executable
 2. **Tool not found**: Verify the server registered the tool correctly
 3. **Path errors**: Ensure paths are relative to the workspace root
-4. **Memory errors**: Reduce `POLYMATH_MAX_MEMORY_MB` for constrained environments
+4. **Memory errors**: Reduce `DORAEMON_MAX_MEMORY_MB` for constrained environments
 
 ---
 

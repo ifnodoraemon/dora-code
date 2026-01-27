@@ -23,7 +23,7 @@ class TestClientConfig:
         with patch.dict(os.environ, {
             "GOOGLE_API_KEY": "test_google_key",
             "OPENAI_API_KEY": "test_openai_key",
-            "POLYMATH_MODEL": "gemini-2.5-flash",
+            "DORAEMON_MODEL": "gemini-2.5-flash",
         }, clear=True):
             config = ClientConfig.from_env()
 
@@ -35,8 +35,8 @@ class TestClientConfig:
     def test_from_env_gateway_mode(self):
         """Test config from environment in gateway mode."""
         with patch.dict(os.environ, {
-            "POLYMATH_GATEWAY_URL": "http://localhost:8000",
-            "POLYMATH_API_KEY": "test_gateway_key",
+            "DORAEMON_GATEWAY_URL": "http://localhost:8000",
+            "DORAEMON_API_KEY": "test_gateway_key",
         }, clear=True):
             config = ClientConfig.from_env()
 
@@ -121,7 +121,7 @@ class TestModelClient:
     def test_get_mode_gateway(self):
         """Test mode detection for gateway mode."""
         with patch.dict(os.environ, {
-            "POLYMATH_GATEWAY_URL": "http://localhost:8000",
+            "DORAEMON_GATEWAY_URL": "http://localhost:8000",
         }, clear=True):
             mode = ModelClient.get_mode()
             assert mode == ClientMode.GATEWAY

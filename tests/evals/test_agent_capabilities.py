@@ -48,7 +48,7 @@ def test_security_allowed_path():
 def test_memory_ingestion_and_retrieval():
     """Eval: Saved notes should be retrievable by semantic search."""
     # 1. Save a unique fact
-    unique_fact = "Polymath agent was created in 2025 by a visionary developer."
+    unique_fact = "Doraemon agent was created in 2025 by a visionary developer."
     save_note("History", unique_fact, collection_name="test_eval")
 
     # 2. Retrieve using semantic query (not exact match)

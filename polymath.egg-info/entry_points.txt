@@ -1,3 +1,0 @@
-[console_scripts]
-pl = src.host.cli:entry_point
-polymath = src.host.cli:entry_point

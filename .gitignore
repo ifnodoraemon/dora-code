@@ -51,10 +51,10 @@ htmlcov/
 *.cover
 *.log
 
-# Polymath specific
-.polymath/chroma_db/
-.polymath/memory.json
-.polymath/tasks.json
+# Doraemon Code specific
+.doraemon/chroma_db/
+.doraemon/memory.json
+.doraemon/tasks.json
 
 # Environment variables (contains API keys)
 .env

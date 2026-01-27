@@ -39,8 +39,8 @@ class ErrorInfo:
     context: dict = field(default_factory=dict)
 
 
-class PolymathException(Exception):
-    """Base exception for Polymath errors"""
+class DoraemonException(Exception):
+    """Base exception for Doraemon errors"""
 
     def __init__(
         self,
@@ -54,14 +54,14 @@ class PolymathException(Exception):
         self.context = context or {}
 
 
-class ConfigurationError(PolymathException):
+class ConfigurationError(DoraemonException):
     """Configuration-related errors"""
 
     def __init__(self, message: str, context: dict | None = None):
         super().__init__(message, ErrorCategory.CONFIGURATION, context)
 
 
-class TransientError(PolymathException):
+class TransientError(DoraemonException):
     """Transient errors that can be retried"""
 
     def __init__(self, message: str, retry_after: float = 1.0, context: dict | None = None):
@@ -69,7 +69,7 @@ class TransientError(PolymathException):
         self.retry_after = retry_after
 
 
-class RateLimitError(PolymathException):
+class RateLimitError(DoraemonException):
     """Rate limiting errors"""
 
     def __init__(self, message: str, retry_after: float = 60.0, context: dict | None = None):
@@ -357,8 +357,8 @@ class ErrorHandler:
 
     def categorize(self, exception: Exception) -> ErrorCategory:
         """Categorize an exception"""
-        # Check if it's a PolymathException with category
-        if isinstance(exception, PolymathException):
+        # Check if it's a DoraemonException with category
+        if isinstance(exception, DoraemonException):
             return exception.category
 
         # Check error mappings

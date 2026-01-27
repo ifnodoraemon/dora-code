@@ -223,7 +223,7 @@ with metrics.timer("operation_duration", operation="fetch"):
     do_something()
 ```
 
-#### Polymath Metrics
+#### Doraemon Metrics
 
 ```python
 from src.core.metrics import get_polymath_metrics
@@ -270,7 +270,7 @@ Structured error handling with retry and circuit breaker patterns.
 
 ```python
 from src.core.errors import (
-    PolymathException,
+    DoraemonException,
     ConfigurationError,
     TransientError,
     RateLimitError,
@@ -278,7 +278,7 @@ from src.core.errors import (
 )
 
 # Base exception
-raise PolymathException("Something went wrong", ErrorCategory.UNKNOWN)
+raise DoraemonException("Something went wrong", ErrorCategory.UNKNOWN)
 
 # Configuration error
 raise ConfigurationError("Missing required config", {"key": "database.host"})
@@ -668,15 +668,15 @@ See `src.core.user_errors` for user-friendly error messages.
 |----------|-------------|---------|
 | `GOOGLE_API_KEY` | Google Gemini API key | Required |
 | `OPENAI_API_KEY` | OpenAI API key | Optional |
-| `POLYMATH_MODEL` | LLM model name | `gemini-2.0-flash` |
-| `POLYMATH_LOG_LEVEL` | Log level (DEBUG/INFO/WARNING/ERROR) | `INFO` |
-| `POLYMATH_LOG_FILE` | Enable file logging | `false` |
-| `POLYMATH_MAX_MEMORY_MB` | Code execution memory limit | `512` |
-| `POLYMATH_MAX_CPU_TIME` | Code execution CPU time limit | `30` |
+| `DORAEMON_MODEL` | LLM model name | `gemini-3-pro-preview` |
+| `DORAEMON_LOG_LEVEL` | Log level (DEBUG/INFO/WARNING/ERROR) | `INFO` |
+| `DORAEMON_LOG_FILE` | Enable file logging | `false` |
+| `DORAEMON_MAX_MEMORY_MB` | Code execution memory limit | `512` |
+| `DORAEMON_MAX_CPU_TIME` | Code execution CPU time limit | `30` |
 
 ### Config File
 
-Location: `.polymath/config.json`
+Location: `.doraemon/config.json`
 
 ```json
 {

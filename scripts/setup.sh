@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Polymath Setup Script
+# Doraemon Code Setup Script
 # This script automates the installation of dependencies and environment setup.
 
 set -e
 
-echo "🚀 Initializing Polymath environment..."
+echo "🚀 Initializing Doraemon Code environment..."
 
 # 1. Check Python version
 if ! command -v python3 &> /dev/null; then
@@ -29,13 +29,13 @@ pip install --upgrade pip
 pip install -e ".[dev]"
 
 # 4. Initialize configuration directory
-if [ ! -d ".polymath" ]; then
-    echo "Creating .polymath directory..."
-    mkdir -p .polymath
+if [ ! -d ".doraemon" ]; then
+    echo "Creating .doraemon directory..."
+    mkdir -p .doraemon
 fi
 
 # 5. Create basic folders
 mkdir -p materials drafts
 
-echo "✅ Setup complete! You can now run Polymath using 'pl start' or 'polymath start'."
+echo "✅ Setup complete! You can now run Doraemon Code using 'dora start'."
 echo "To activate the environment manually, run: source venv/bin/activate"

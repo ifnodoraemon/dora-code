@@ -1,1 +1,1 @@
-"""Integration tests for Polymath."""
+"""Integration tests for Doraemon Code."""

@@ -25,8 +25,8 @@ async def example_gateway_mode():
     Gateway Mode Example
 
     User only needs to configure:
-      - POLYMATH_GATEWAY_URL
-      - POLYMATH_API_KEY
+      - DORAEMON_GATEWAY_URL
+      - DORAEMON_API_KEY
 
     The gateway handles all provider routing internally.
     """
@@ -34,8 +34,8 @@ async def example_gateway_mode():
 
     # Option 1: Auto-detect from environment
     # Set these in .env:
-    #   POLYMATH_GATEWAY_URL=http://localhost:8000
-    #   POLYMATH_API_KEY=your-key
+    #   DORAEMON_GATEWAY_URL=http://localhost:8000
+    #   DORAEMON_API_KEY=your-key
     client = await ModelClient.create()
 
     # Option 2: Explicit configuration

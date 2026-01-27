@@ -16,7 +16,7 @@ from src.core.errors import (
     ConfigurationError,
     ErrorCategory,
     ErrorHandler,
-    PolymathException,
+    DoraemonException,
     RateLimitError,
     RetryConfig,
     RetryPolicy,
@@ -32,12 +32,12 @@ class _CircuitBreakerError(Exception):
     pass
 
 
-class TestPolymathExceptions:
+class TestDoraemonExceptions:
     """Tests for custom exception classes"""
 
-    def test_polymath_exception(self):
-        """Test base PolymathException"""
-        exc = PolymathException("Test error", ErrorCategory.NETWORK, {"key": "value"})
+    def test_doraemon_exception(self):
+        """Test base DoraemonException"""
+        exc = DoraemonException("Test error", ErrorCategory.NETWORK, {"key": "value"})
 
         assert str(exc) == "Test error"
         assert exc.category == ErrorCategory.NETWORK
@@ -325,8 +325,8 @@ class TestCircuitBreaker:
 class TestErrorHandler:
     """Tests for ErrorHandler class"""
 
-    def test_categorize_polymath_exception(self):
-        """Test categorization of PolymathException"""
+    def test_categorize_doraemon_exception(self):
+        """Test categorization of DoraemonException"""
         handler = ErrorHandler()
 
         transient = TransientError("temp")

@@ -148,10 +148,10 @@ print(result)
 def greet(name):
     return f"Hello, {name}!"
 
-print(greet("Polymath"))
+print(greet("Doraemon Code"))
 """
         result = execute_python(code)
-        assert "Hello, Polymath!" in result
+        assert "Hello, Doraemon Code!" in result
 
     def test_execute_class_definition(self):
         """Test executing class definition."""
