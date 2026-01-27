@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 # Suppress noisy HTTP logs
 logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("google.generativeai").setLevel(logging.WARNING)
+logging.getLogger("google.genai").setLevel(logging.WARNING)
 
 class RemoteEmbeddingFunction(EmbeddingFunction):
     """
@@ -25,9 +25,8 @@ class RemoteEmbeddingFunction(EmbeddingFunction):
             self.provider = "google"
             self.api_key = os.getenv("GOOGLE_API_KEY")
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=self.api_key)
-                self.client = genai
+                from google import genai
+                self.client = genai.Client(api_key=self.api_key)
             except ImportError as e:
                 logger.warning(f"google-genai package not found or failed to load: {e}. Install it to use Google embeddings.")
                 self.provider = "none"
@@ -47,15 +46,15 @@ class RemoteEmbeddingFunction(EmbeddingFunction):
         if self.provider == "google":
             try:
                 # Batch embedding support for Gemini
-                # Note: text-embedding-004 is deprecated as of Jan 2026. Using text-embedding-005 by default.
-                model = os.getenv("GOOGLE_EMBEDDING_MODEL", "models/text-embedding-005")
+                model = os.getenv("GOOGLE_EMBEDDING_MODEL", "text-embedding-005")
                 embeddings = []
                 for text in input:
-                    result = self.client.embed_content(
+                    result = self.client.models.embed_content(
                         model=model,
-                        content=text,
+                        contents=text,
                     )
-                    embeddings.append(result['embedding'])
+                    # New SDK returns embeddings[0].values
+                    embeddings.append(result.embeddings[0].values)
                 return embeddings
             except Exception as e:
                 logger.error(f"Google embedding error: {e}")

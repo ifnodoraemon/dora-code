@@ -449,8 +449,13 @@ async def chat_loop(
                     break
 
                 tool_steps += 1
+                
+                # Debug: Log response state
+                logger.debug(f"Tool step {tool_steps}: content={bool(response.content)}, tool_calls={bool(response.tool_calls)}, thought={bool(response.thought)}")
+                
                 if not response.content and not response.tool_calls:
                     console.print("[red]Empty response[/red]")
+                    logger.warning(f"Empty response received. Raw: {response.raw if hasattr(response, 'raw') else 'N/A'}")
                     break
 
                 has_tool_call = response.has_tool_calls
@@ -554,12 +559,26 @@ async def chat_loop(
                         if tool_name in sensitive_tools:
                             console.print(f"\n[bold red]⚠️ Sensitive:[/bold red] {tool_name}")
                             if tool_name != "write_file":
-                                # Pretty print content if present
-                                if "content" in args and isinstance(args["content"], str):
-                                    display_args = args.copy()
-                                    content = display_args.pop("content")
-                                    console.print(f"[dim]{json.dumps(display_args, indent=2, ensure_ascii=False)}[/dim]")
-                                    console.print(Panel(Markdown(content), title="[bold]Content Preview[/bold]", border_style="dim"))
+                                # Pretty print content/code if present
+                                display_args = args.copy()
+                                rendered_field = None
+                                
+                                # Check for content field (save_note, etc.)
+                                if "content" in display_args and isinstance(display_args["content"], str):
+                                    rendered_field = ("Content Preview", display_args.pop("content"), "markdown")
+                                # Check for code field (execute_python)
+                                elif "code" in display_args and isinstance(display_args["code"], str):
+                                    rendered_field = ("Code Preview", display_args.pop("code"), "python")
+                                
+                                if rendered_field:
+                                    title, field_content, lang = rendered_field
+                                    if display_args:
+                                        console.print(f"[dim]{json.dumps(display_args, indent=2, ensure_ascii=False)}[/dim]")
+                                    # Render as markdown code block for code, or plain markdown for content
+                                    if lang == "python":
+                                        console.print(Panel(Markdown(f"```python\n{field_content}\n```"), title=f"[bold]{title}[/bold]", border_style="dim"))
+                                    else:
+                                        console.print(Panel(Markdown(field_content), title=f"[bold]{title}[/bold]", border_style="dim"))
                                 else:
                                     console.print(f"[dim]{json.dumps(args, indent=2, ensure_ascii=False)}[/dim]")
 
@@ -609,6 +628,10 @@ async def chat_loop(
 
                 # No more tool calls - done with this turn
                 if not has_tool_call:
+                    # Debug: Log final state
+                    logger.info(f"Turn complete: accumulated_text={len(accumulated_text)} chars, content={bool(response.content)}")
+                    if not accumulated_text and not response.content:
+                        console.print("[yellow]⚠️ No text response generated.[/yellow]")
                     turn_count += 1
                     usage = response.usage
 
