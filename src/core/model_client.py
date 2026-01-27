@@ -921,7 +921,7 @@ class ModelClient:
     @staticmethod
     def get_mode() -> ClientMode:
         """Get current mode based on environment."""
-        if os.getenv("POLYMATH_GATEWAY_URL"):
+        if os.getenv("DORAEMON_GATEWAY_URL"):
             return ClientMode.GATEWAY
         return ClientMode.DIRECT
 
@@ -933,8 +933,8 @@ class ModelClient:
         if mode == ClientMode.GATEWAY:
             return {
                 "mode": "gateway",
-                "gateway_url": os.getenv("POLYMATH_GATEWAY_URL"),
-                "has_key": bool(os.getenv("POLYMATH_API_KEY")),
+                "gateway_url": os.getenv("DORAEMON_GATEWAY_URL"),
+                "has_key": bool(os.getenv("DORAEMON_API_KEY")),
             }
         else:
             return {

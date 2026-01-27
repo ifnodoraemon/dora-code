@@ -41,7 +41,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        Polymath CLI                                  │
-│          只需配置: POLYMATH_GATEWAY_URL + POLYMATH_API_KEY           │
+│          只需配置: DORAEMON_GATEWAY_URL + DORAEMON_API_KEY           │
 └─────────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
@@ -82,7 +82,7 @@ export ANTHROPIC_API_KEY="your-anthropic-key"
 export OLLAMA_ENABLED="true"
 
 # 可选：设置 Gateway 自己的 API Key
-export POLYMATH_GATEWAY_KEY="your-gateway-key"
+export DORAEMON_GATEWAY_KEY="your-gateway-key"
 ```
 
 ### 3. 启动 Gateway Server
@@ -191,7 +191,7 @@ Gateway 根据模型 ID 前缀自动路由：
 | `ANTHROPIC_API_KEY` | Anthropic API Key | - |
 | `OLLAMA_ENABLED` | 启用 Ollama | true |
 | `OLLAMA_API_BASE` | Ollama 地址 | http://localhost:11434 |
-| `POLYMATH_GATEWAY_KEY` | Gateway API Key | - |
+| `DORAEMON_GATEWAY_KEY` | Gateway API Key | - |
 | `GATEWAY_HOST` | 监听地址 | 0.0.0.0 |
 | `GATEWAY_PORT` | 监听端口 | 8000 |
 
@@ -199,9 +199,9 @@ Gateway 根据模型 ID 前缀自动路由：
 
 | 变量 | 描述 | 默认值 |
 |------|------|--------|
-| `POLYMATH_GATEWAY_URL` | Gateway 地址 | http://localhost:8000 |
-| `POLYMATH_API_KEY` | Gateway API Key | - |
-| `POLYMATH_GATEWAY_TIMEOUT` | 请求超时(秒) | 120 |
+| `DORAEMON_GATEWAY_URL` | Gateway 地址 | http://localhost:8000 |
+| `DORAEMON_API_KEY` | Gateway API Key | - |
+| `DORAEMON_GATEWAY_TIMEOUT` | 请求超时(秒) | 120 |
 
 ## 扩展
 
