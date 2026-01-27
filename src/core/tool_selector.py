@@ -39,11 +39,15 @@ WRITE_TOOLS = [
 
 # 辅助工具 - 按需使用
 AUX_TOOLS = [
-    "web_search",      # 网络搜索
-    "fetch_url",       # 获取网页
-    "save_note",       # 保存笔记
-    "search_notes",    # 搜索笔记
-    "switch_mode",     # 切换模式 (plan/build)
+    "web_search",          # 网络搜索
+    "browse_page",         # 网页浏览 (Playwright)
+    "take_screenshot",     # 网页截图
+    "github_list_issues",  # GitHub Issues
+    "github_create_issue", # GitHub Create Issue
+    "fetch_url",           # 获取网页
+    "save_note",           # 保存笔记
+    "search_notes",        # 搜索笔记
+    "switch_mode",         # 切换模式 (plan/build)
 ]
 
 # 高级工具 - 特殊场景

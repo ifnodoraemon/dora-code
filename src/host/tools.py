@@ -425,6 +425,23 @@ def _create_default_registry() -> ToolRegistry:
         logger.warning(f"Failed to import system tools: {e}")
 
     logger.info(f"Tool registry initialized with {len(registry.get_tool_names())} tools")
+    
+    try:
+        # Browser Tools
+        from src.servers.browser import browse_page, take_screenshot
+        
+        registry.register(browse_page, name="browse_page", sensitive=False, timeout=_get_timeout("browse_page", 60.0))
+        registry.register(take_screenshot, name="take_screenshot", sensitive=False, timeout=_get_timeout("take_screenshot", 60.0))
+        
+        # GitHub Tools
+        from src.servers.github import github_list_issues, github_create_issue
+        
+        registry.register(github_list_issues, name="github_list_issues", sensitive=False, timeout=_get_timeout("github_list_issues", 30.0))
+        registry.register(github_create_issue, name="github_create_issue", sensitive=True, timeout=_get_timeout("github_create_issue", 60.0))
+
+    except ImportError as e:
+        logger.warning(f"Failed to import browser/github tools: {e}")
+        
     return registry
 
 

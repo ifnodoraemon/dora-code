@@ -58,6 +58,8 @@ dependencies = [
     "ddgs>=9.10.0",
     "trafilatura>=1.6.0",
     "requests>=2.31.0",
+    "playwright>=1.40.0",
+    "PyGithub>=2.1.1",
     
     # File Watching
     "watchdog>=3.0.0",              # File system monitoring
