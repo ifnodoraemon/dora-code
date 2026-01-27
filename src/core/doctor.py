@@ -270,7 +270,7 @@ class Doctor:
         """Check project configuration."""
         config_paths = [
             self.project_dir / ".polymath" / "config.json",
-            self.project_dir / "AGENTS.md",
+            self.project_dir / "DORAEMON.md",
             self.project_dir / ".env",
         ]
 
@@ -289,7 +289,7 @@ class Doctor:
                 status=CheckStatus.WARNING,
                 message="No configuration found",
                 details="Project may need initialization",
-                fix_suggestion="Create .polymath/ directory and AGENTS.md",
+                fix_suggestion="Run /init to create DORAEMON.md",
             )
 
         status = CheckStatus.OK if not missing else CheckStatus.WARNING

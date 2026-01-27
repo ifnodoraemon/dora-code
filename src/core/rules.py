@@ -13,7 +13,7 @@ from .logger import get_logger
 logger = get_logger(__name__)
 
 # The rules file name
-RULES_FILE = "POLYMATH.md"
+RULES_FILE = "DORAEMON.md"
 
 
 def load_project_rules(project_dir: Path | None = None) -> str | None:
@@ -187,7 +187,7 @@ def create_default_rules(project_dir: Path | None = None) -> Path:
 
     default_content = """# Project Rules
 
-This file contains project-specific rules and conventions for Polymath.
+This file contains project-specific rules and conventions for Doraemon Code.
 
 ## Project Overview
 <!-- Brief description of what this project does -->

@@ -100,6 +100,9 @@ class CommandHandler:
         if cmd == "help":
             self._show_help()
             
+        elif cmd == "init":
+            self._handle_init()
+            
         elif cmd == "mode":
             if cmd_args:
                 new_mode = cmd_args[0].lower()
@@ -216,10 +219,42 @@ class CommandHandler:
             
         return result
     
+    def _handle_init(self):
+        """Initialize project with DORAEMON.md."""
+        fname = "DORAEMON.md"
+        path = Path.cwd() / fname
+        if path.exists():
+            console.print(f"[yellow]{fname} already exists.[/yellow]")
+            return
+
+        content = """# Doraemon Code Project Rules
+
+Project specific rules for Doraemon Code.
+
+## Tech Stack
+- Language: Python 3.10+
+- Framework: FastAPI
+
+## Code Style
+- 4 space indentation
+- Type hints required
+
+## Directory Structure
+- src/: Source code
+- tests/: Tests
+"""
+        try:
+            path.write_text(content, encoding="utf-8")
+            console.print(f"[green]Initialized project. Created {fname}[/green]")
+            console.print("[dim]Edit this file to define project-specific rules.[/dim]")
+        except Exception as e:
+            console.print(f"[red]Failed to create {fname}: {e}[/red]")
+
     def _show_help(self):
         """Show help text."""
         console.print("""
 [bold]Commands:[/bold]
+  /init           - Initialize project (create DORAEMON.md)
   /mode <name>    - Switch mode (plan/build)
   /model [name]   - Switch/list AI models
   /context        - Show context/memory statistics

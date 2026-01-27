@@ -83,7 +83,7 @@ def build_system_prompt(mode: str, skills_content: str = "") -> str:
     # Build system prompt
     system_prompt = get_system_prompt(mode, persona)
 
-    # Add project rules (AGENTS.md)
+    # Add project rules (DORAEMON.md)
     instructions = load_all_instructions(config)
     if instructions:
         system_prompt += format_instructions_for_prompt(instructions)
