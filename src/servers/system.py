@@ -26,7 +26,7 @@ def switch_mode(mode: str) -> str:
     """
     if mode not in ["plan", "build"]:
         return f"Error: Invalid mode '{mode}'. Use 'plan' or 'build'."
-    
+
     # This tool is special: the actual mode switching happens in the CLI loop
     # by inspecting the tool call. This function just returns a confirmation.
     logger.info(f"Agent requested switch to mode: {mode}")

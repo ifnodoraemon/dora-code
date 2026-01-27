@@ -1,4 +1,5 @@
 import logging
+
 import trafilatura
 from ddgs import DDGS
 from mcp.server.fastmcp import FastMCP

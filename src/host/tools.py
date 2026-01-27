@@ -32,7 +32,6 @@ from typing import Any
 
 from google.genai import types
 
-from google.genai import types
 from src.core.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -45,7 +44,6 @@ class ToolDefinition:
     name: str
     description: str
     function: Callable
-    parameters: dict[str, Any]
     parameters: dict[str, Any]
     sensitive: bool = False  # Requires HITL approval
     timeout: float = 60.0    # Default timeout in seconds
@@ -264,7 +262,7 @@ def get_default_registry() -> ToolRegistry:
 def _create_default_registry() -> ToolRegistry:
     """Create and populate the default tool registry."""
     registry = ToolRegistry()
-    
+
     # Load configuration
     try:
         config = load_config(validate=False)
@@ -283,6 +281,7 @@ def _create_default_registry() -> ToolRegistry:
     try:
         # Filesystem Tools (Unified)
         from src.servers.filesystem import (
+            edit_file,
             find_symbol,
             glob_files,
             grep_search,
@@ -290,7 +289,6 @@ def _create_default_registry() -> ToolRegistry:
             read_file,
             read_file_outline,
             write_file,
-            edit_file,
         )
 
         registry.register(read_file, sensitive=False, timeout=_get_timeout("read_file", 60.0))
@@ -299,7 +297,7 @@ def _create_default_registry() -> ToolRegistry:
         registry.register(glob_files, sensitive=False, timeout=_get_timeout("glob_files", 60.0))
         registry.register(grep_search, sensitive=False, timeout=_get_timeout("grep_search", 120.0))  # Grep can be slow
         registry.register(find_symbol, sensitive=False, timeout=_get_timeout("find_symbol", 60.0))
-        
+
         registry.register(write_file, sensitive=True, timeout=_get_timeout("write_file", 60.0))
         registry.register(edit_file, sensitive=True, timeout=_get_timeout("edit_file", 120.0))  # Edits might involve processing
     except ImportError as e:
@@ -366,12 +364,12 @@ def _create_default_registry() -> ToolRegistry:
     try:
         # LSP Tools
         from src.servers.lsp import (
-            lsp_diagnostics,
             lsp_completions,
+            lsp_definition,
+            lsp_diagnostics,
             lsp_hover,
             lsp_references,
             lsp_rename,
-            lsp_definition,
         )
 
         registry.register(lsp_diagnostics, sensitive=False, timeout=_get_timeout("lsp_diagnostics", 120.0))
@@ -386,14 +384,14 @@ def _create_default_registry() -> ToolRegistry:
     try:
         # Linting Tools
         from src.servers.lint import (
-            lint_python_ruff,
-            format_python_ruff,
-            typecheck_python_mypy,
-            lint_javascript_eslint,
-            lint_all,
-            code_complexity,
             check_security,
+            code_complexity,
+            format_python_ruff,
             get_lint_summary,
+            lint_all,
+            lint_javascript_eslint,
+            lint_python_ruff,
+            typecheck_python_mypy,
         )
 
         registry.register(lint_python_ruff, sensitive=False, timeout=_get_timeout("lint_python_ruff", 60.0))
@@ -409,7 +407,7 @@ def _create_default_registry() -> ToolRegistry:
 
     try:
         # Semantic Search Tools
-        from src.servers.semantic_search import semantic_search, index_codebase
+        from src.servers.semantic_search import index_codebase, semantic_search
 
         registry.register(semantic_search, sensitive=False, timeout=_get_timeout("semantic_search", 120.0))
         registry.register(index_codebase, sensitive=False, timeout=_get_timeout("index_codebase", 300.0))
@@ -425,23 +423,28 @@ def _create_default_registry() -> ToolRegistry:
         logger.warning(f"Failed to import system tools: {e}")
 
     logger.info(f"Tool registry initialized with {len(registry.get_tool_names())} tools")
-    
+
     try:
         # Browser Tools
         from src.servers.browser import browse_page, take_screenshot
-        
+
         registry.register(browse_page, name="browse_page", sensitive=False, timeout=_get_timeout("browse_page", 60.0))
         registry.register(take_screenshot, name="take_screenshot", sensitive=False, timeout=_get_timeout("take_screenshot", 60.0))
-        
+
         # GitHub Tools
-        from src.servers.github import github_list_issues, github_create_issue
-        
+        from src.servers.github import github_create_issue, github_list_issues
+
         registry.register(github_list_issues, name="github_list_issues", sensitive=False, timeout=_get_timeout("github_list_issues", 30.0))
         registry.register(github_create_issue, name="github_create_issue", sensitive=True, timeout=_get_timeout("github_create_issue", 60.0))
 
         # Database Tools
-        from src.servers.database import db_read_query, db_write_query, db_list_tables, db_describe_table
-        
+        from src.servers.database import (
+            db_describe_table,
+            db_list_tables,
+            db_read_query,
+            db_write_query,
+        )
+
         registry.register(db_read_query, name="db_read_query", sensitive=False, timeout=_get_timeout("db_read_query", 60.0))
         registry.register(db_write_query, name="db_write_query", sensitive=True, timeout=_get_timeout("db_write_query", 60.0))
         registry.register(db_list_tables, name="db_list_tables", sensitive=False, timeout=_get_timeout("db_list_tables", 30.0))
@@ -449,7 +452,7 @@ def _create_default_registry() -> ToolRegistry:
 
     except ImportError as e:
         logger.warning(f"Failed to import browser/github/database tools: {e}")
-        
+
     return registry
 
 

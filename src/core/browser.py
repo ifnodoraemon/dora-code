@@ -90,7 +90,7 @@ class BrowserManager:
 
         # Check if Playwright is installed
         try:
-            import playwright
+            import playwright  # noqa: F401
             self._available = True
         except ImportError:
             logger.warning(

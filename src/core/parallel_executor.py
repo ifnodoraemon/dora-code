@@ -205,7 +205,7 @@ class DependencyAnalyzer:
         call_map = {call.id: call for call in calls}
 
         stages = []
-        remaining = set(call.id for call in calls)
+        remaining = {call.id for call in calls}
 
         while remaining:
             # Find all nodes with no remaining dependencies

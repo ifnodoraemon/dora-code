@@ -1,6 +1,5 @@
 import logging
 import os
-from typing import Any, List
 
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 
@@ -19,7 +18,7 @@ class RemoteEmbeddingFunction(EmbeddingFunction):
     def __init__(self):
         self.provider = "none"
         self.api_key = None
-        
+
         # Check for Google API Key
         if os.getenv("GOOGLE_API_KEY"):
             self.provider = "google"
@@ -30,7 +29,7 @@ class RemoteEmbeddingFunction(EmbeddingFunction):
             except ImportError as e:
                 logger.warning(f"google-genai package not found or failed to load: {e}. Install it to use Google embeddings.")
                 self.provider = "none"
-                
+
         # Check for OpenAI API Key (fallback or preference)
         elif os.getenv("OPENAI_API_KEY"):
             self.provider = "openai"
@@ -43,38 +42,35 @@ class RemoteEmbeddingFunction(EmbeddingFunction):
                 self.provider = "none"
 
     def __call__(self, input: Documents) -> Embeddings:
+        from typing import cast
         if self.provider == "google":
             try:
                 # Batch embedding support for Gemini
-                model = os.getenv("GOOGLE_EMBEDDING_MODEL", "text-embedding-005")
+                embed_model = os.getenv("GOOGLE_EMBEDDING_MODEL", "text-embedding-004")
                 embeddings = []
                 for text in input:
                     result = self.client.models.embed_content(
-                        model=model,
+                        model=embed_model,
                         contents=text,
                     )
                     # New SDK returns embeddings[0].values
                     embeddings.append(result.embeddings[0].values)
-                return embeddings
+                return cast(Embeddings, embeddings)
             except Exception as e:
                 logger.error(f"Google embedding error: {e}")
-                return [[] for _ in input]  # Return empty on failure
-                
+                return cast(Embeddings, [[0.0] * 768 for _ in input])
+
         elif self.provider == "openai":
             try:
                 response = self.client.embeddings.create(
                     input=input,
                     model="text-embedding-3-small"
                 )
-                return [data.embedding for data in response.data]
+                return cast(Embeddings, [data.embedding for data in response.data])
             except Exception as e:
                 logger.error(f"OpenAI embedding error: {e}")
-                return [[] for _ in input]
+                return cast(Embeddings, [[0.0] * 1536 for _ in input])
 
         else:
             logger.warning("No remote embedding provider configured. Memory search will not work correctly.")
-            # Return dummy embeddings for functionality without crashing
-            # Dimension must match what Chroma expects if it was already created.
-            # 768 is common for Google, 1536 for OpenAI.
-            # We'll use 768 as a safe default for now, but really this shouldn't happen if configured.
-            return [[0.0] * 768 for _ in input]
+            return cast(Embeddings, [[0.0] * 768 for _ in input])

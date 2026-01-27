@@ -207,7 +207,7 @@ class OpenAIAdapter(BaseAdapter):
 
     def _convert_message(self, msg: ChatMessage) -> dict:
         """Convert unified message to OpenAI format."""
-        result = {"role": msg.role if isinstance(msg.role, str) else msg.role.value}
+        result: dict[str, Any] = {"role": msg.role if isinstance(msg.role, str) else msg.role.value}
 
         if msg.content is not None:
             result["content"] = msg.content

@@ -17,10 +17,10 @@ async def list_tools(mode: str = "build"):
     """List available tools for a mode."""
     selector = ToolSelector()
     registry = get_default_registry()
-    
+
     tool_names = selector.get_tools_for_mode(mode)
     genai_tools = registry.get_genai_tools(tool_names)
-    
+
     tools = []
     for tool in genai_tools:
         if hasattr(tool, "name"):
@@ -33,5 +33,5 @@ async def list_tools(mode: str = "build"):
                 "name": tool.get("name", ""),
                 "description": tool.get("description", ""),
             })
-            
+
     return {"tools": tools}

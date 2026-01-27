@@ -12,7 +12,6 @@ This enables smarter planning mode in Doraemon.
 """
 
 import hashlib
-import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -167,15 +166,15 @@ class ExecutionPlan:
     def to_markdown(self) -> str:
         """Convert plan to markdown format."""
         lines = [
-            f"# Execution Plan",
-            f"",
+            "# Execution Plan",
+            "",
             f"**Goal:** {self.goal}",
-            f"",
-            f"**Estimates:**",
+            "",
+            "**Estimates:**",
             f"- Total Time: ~{self.total_estimated_minutes} minutes",
             f"- Overall Complexity: {self.total_complexity}/5",
             f"- High Risk Tasks: {self.high_risk_count}",
-            f"",
+            "",
             "---",
             "",
             "## Tasks",
@@ -199,9 +198,9 @@ class ExecutionPlan:
             }.get(task.priority, "")
 
             lines.append(f"### {i}. {status_icon} {task.title} {priority_badge}")
-            lines.append(f"")
+            lines.append("")
             lines.append(f"{task.description}")
-            lines.append(f"")
+            lines.append("")
             lines.append(f"- **Complexity:** {task.complexity}/5")
             lines.append(f"- **Est. Time:** {task.estimated_minutes} min")
 
@@ -219,12 +218,12 @@ class ExecutionPlan:
                     lines.append(f"  - ⚠️ {factor}")
 
             if task.checkpoint_recommended:
-                lines.append(f"- **💾 Checkpoint recommended**")
+                lines.append("- **💾 Checkpoint recommended**")
 
             # Subtasks
             if task.subtasks:
-                lines.append(f"")
-                lines.append(f"**Subtasks:**")
+                lines.append("")
+                lines.append("**Subtasks:**")
                 for st in task.subtasks:
                     st_icon = "✅" if st.status == TaskStatus.COMPLETED else "⬜"
                     lines.append(f"  - {st_icon} {st.title}")
@@ -287,7 +286,7 @@ class TaskPlanner:
         context = context or {}
 
         # Analyze goal complexity
-        goal_complexity = self._estimate_complexity(goal)
+        self._estimate_complexity(goal)
 
         # Decompose into tasks based on goal type
         tasks = self._decompose_goal(goal, context)

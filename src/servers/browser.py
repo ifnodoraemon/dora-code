@@ -1,9 +1,8 @@
 
 import logging
-import asyncio
-from typing import Optional
+
 from mcp.server.fastmcp import FastMCP
-from playwright.async_api import async_playwright, Page, Browser
+from playwright.async_api import Browser, async_playwright
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -12,7 +11,7 @@ logger = logging.getLogger(__name__)
 mcp = FastMCP("DoraemonBrowser")
 
 # Global browser instance
-_browser: Optional[Browser] = None
+_browser: Browser | None = None
 _playwright = None
 
 async def get_browser():
@@ -36,18 +35,18 @@ async def browse_page(url: str) -> str:
             await page.goto(url, timeout=30000)
             # Wait for some content to load
             await page.wait_for_load_state("domcontentloaded")
-            
+
             # Simple text extraction
-            # For better results, one might use readability.js or similar, 
+            # For better results, one might use readability.js or similar,
             # but for now, innerText of body is a good start.
             text = await page.evaluate("document.body.innerText")
             title = await page.title()
-            
+
             return f"Title: {title}\nURL: {url}\n\n{text[:10000]}..." # Limit output size
-            
+
         finally:
             await page.close()
-            
+
     except Exception as e:
         logger.error(f"Browser error for {url}: {e}")
         return f"Error: {str(e)}"

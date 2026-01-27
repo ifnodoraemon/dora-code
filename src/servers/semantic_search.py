@@ -8,10 +8,9 @@ Uses Google Gemini or OpenAI for embeddings, avoiding local heavy models.
 import hashlib
 import logging
 import os
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
 import chromadb
 from mcp.server.fastmcp import FastMCP
@@ -126,7 +125,7 @@ def _chunk_file(file_path: str, config: SearchConfig = DEFAULT_CONFIG) -> list[C
     language = _get_language(file_path)
     total_lines = len(lines)
     chunks = []
-    
+
     start = 0
     while start < total_lines:
         end = min(start + config.chunk_size, total_lines)
@@ -157,12 +156,12 @@ def _should_include_file(file_path: str, config: SearchConfig = DEFAULT_CONFIG) 
     for exclude in config.exclude_dirs:
         if exclude in path.parts:
             return False
-            
+
     import fnmatch
     for pattern in config.include_patterns:
         if fnmatch.fnmatch(path.name, pattern):
             return True
-            
+
     return False
 
 
@@ -178,7 +177,6 @@ def semantic_search(
 ) -> str:
     """
     Search code using natural language (Vector Search).
-    
     Uses remote embeddings to find semantically similar code in the indexed codebase.
     Requires running 'index_codebase' first.
     """
@@ -200,39 +198,43 @@ def semantic_search(
         results = collection.query(
             query_texts=[query],
             n_results=max_results,
-            # We could add a 'where_document' filter for path if needed, 
-            # but usually semantic search is global. 
+            # We could add a 'where_document' filter for path if needed,
+            # but usually semantic search is global.
             # Filtering by metadata path would require storing path splits in metadata.
         )
-        
-        if not results["documents"] or not results["documents"][0]:
+
+        docs = results.get("documents")
+        metas = results.get("metadatas")
+        distances = results.get("distances")
+
+        if not docs or not docs[0] or not metas or not metas[0] or not distances or not distances[0]:
             return f"No relevant results found for: {query}"
-            
-        output_lines = [f'Found {len(results["documents"][0])} relevant result(s) for: "{query}"\n']
-        
-        for i, (doc, meta, score) in enumerate(zip(results["documents"][0], results["metadatas"][0], results["distances"][0]), 1):
-            file_path = meta.get("file_path", "unknown")
-            
+
+        output_lines = [f'Found {len(docs[0])} relevant result(s) for: "{query}"\n']
+
+        for i, (doc, meta, score) in enumerate(zip(docs[0], metas[0], distances[0], strict=True), 1):
+            file_path = str(meta.get("file_path", "unknown"))
+
             # Simple path filtering
             if rel_search_path != "." and not file_path.startswith(rel_search_path):
                 continue
-                
+
             line_range = f"{meta.get('start_line')}-{meta.get('end_line')}"
-            
+
             # Score in Chroma is distance (lower is better), but usually we want similarity.
             # Convert to a readable string or just show as is.
             output_lines.append(f"{'─' * 60}")
             output_lines.append(f"[{i}] {file_path}:{line_range} (distance: {score:.4f})")
-            
+
             preview_lines = doc.split("\n")[:10]
             preview = "\n".join(f"    {line}" for line in preview_lines)
             if len(doc.split("\n")) > 10:
                 preview += "\n    ..."
             output_lines.append(preview)
             output_lines.append("")
-            
+
         return "\n".join(output_lines)
-        
+
     except Exception as e:
         return f"Search failed: {e}"
 
@@ -241,13 +243,12 @@ def semantic_search(
 def index_codebase(path: str = ".") -> str:
     """
     Build the semantic search index for a codebase.
-    
     Scans files, chunks them, and uploads embeddings to the local vector DB.
     WARNING: This consumes API credits for embeddings (Google/OpenAI).
     """
     if not HAS_DB or collection is None:
         return "Error: Database not initialized."
-        
+
     try:
         resolved_path = validate_path(path)
     except Exception as e:
@@ -272,53 +273,53 @@ def index_codebase(path: str = ".") -> str:
     all_chunks = []
     for file_path in files_to_index:
         # Use relative path for storage
-        rel_path = os.path.relpath(file_path, os.getcwd()) 
+        rel_path = os.path.relpath(file_path, os.getcwd())
         chunks = _chunk_file(file_path)
         for chunk in chunks:
             # We update the chunk object to store rel_path for the DB
-            chunk.file_path = rel_path 
+            chunk.file_path = rel_path
             all_chunks.append(chunk)
 
     if not all_chunks:
         return "No code chunks generated."
-        
+
     # Clear existing index? Or upsert?
     # For simplicity, we'll upsert. But stale chunks might remain.
     # Ideally: collection.delete() might be needed for a clean rebuild.
     # But let's just upsert for now.
-    
+
     # Process in batches to respect API limits
-    BATCH_SIZE = 50 
+    BATCH_SIZE = 50
     total_added = 0
-    
+
     import time
-    
+
     logger.info(f"Indexing {len(all_chunks)} chunks...")
-    
+
     for i in range(0, len(all_chunks), BATCH_SIZE):
         batch = all_chunks[i : i + BATCH_SIZE]
-        
+
         ids = [c.id for c in batch]
         documents = [c.content for c in batch]
-        metadatas = [{
+        metadatas: list[dict[str, Any]] = [{
             "file_path": c.file_path,
             "start_line": c.start_line,
             "end_line": c.end_line,
             "language": c.language
         } for c in batch]
-        
+
         try:
             collection.upsert(
                 ids=ids,
                 documents=documents,
-                metadatas=metadatas
+                metadatas=metadatas # type: ignore
             )
             total_added += len(batch)
             # Small sleep to be nice to rate limits
-            time.sleep(0.5) 
+            time.sleep(0.5)
         except Exception as e:
             logger.error(f"Failed to index batch {i}: {e}")
-            
+
     return f"Indexed {total_added} chunks from {len(files_to_index)} files."
 
 

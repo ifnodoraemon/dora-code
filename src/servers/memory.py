@@ -1,12 +1,12 @@
+import json
 import logging
 import os
-import json
-from typing import Any, List
-from src.services.embeddings import RemoteEmbeddingFunction
+from typing import Any
 
 import chromadb
-from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 from mcp.server.fastmcp import FastMCP
+
+from src.services.embeddings import RemoteEmbeddingFunction
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -32,7 +32,7 @@ os.makedirs(".doraemon", exist_ok=True)
 embedding_fn = RemoteEmbeddingFunction()
 client = chromadb.PersistentClient(path=PERSIST_DIR)
 
-# Note: If the collection was created with a different dimension (e.g. 384 from MiniLM), 
+# Note: If the collection was created with a different dimension (e.g. 384 from MiniLM),
 # switching to OpenAI (1536) or Gemini (768) will cause errors.
 # We handle this by using a dynamic collection name based on the provider.
 PROVIDER = embedding_fn.provider
@@ -40,7 +40,7 @@ COLLECTION_NAME = f"doraemon_notes_{PROVIDER}"
 
 try:
     collection = client.get_or_create_collection(
-        name=COLLECTION_NAME, 
+        name=COLLECTION_NAME,
         embedding_function=embedding_fn
     )
 except Exception as e:
@@ -55,23 +55,23 @@ def save_note(
     """Save a note to the long-term memory (Vector DB)."""
     if collection is None:
         return "Memory system is not initialized."
-        
+
     if tags is None:
         tags = []
-        
+
     try:
-        # We use a single shared collection for now with metadata filtering if needed, 
+        # We use a single shared collection for now with metadata filtering if needed,
         # or we could create potential sub-collections.
         # To keep it simple and avoid model dimension mismatches across collections, we use the main one.
-        
+
         note_id = f"{collection_name}_{title}_{hash(content)}"
-        
+
         # Add metadata for filtering
-        metadatas = [{"title": title, "tags": ",".join(tags), "project": collection_name}]
-        
+        metadatas: list[dict[str, Any]] = [{"title": title, "tags": ",".join(tags), "project": collection_name}]
+
         collection.add(
             documents=[content],
-            metadatas=metadatas,
+            metadatas=metadatas, # type: ignore
             ids=[note_id]
         )
         logger.info(f"Saved note '{title}' to project '{collection_name}'")
@@ -95,11 +95,14 @@ def search_notes(query: str, collection_name: str = "default", n_results: int = 
             where={"project": collection_name}
         )
 
-        if not results["documents"] or not results["documents"][0]:
+        docs = results.get("documents")
+        metas = results.get("metadatas")
+
+        if not docs or not docs[0] or not metas or not metas[0]:
             return f"项目 {collection_name} 中未找到相关笔记。"
 
         output = []
-        for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
+        for doc, meta in zip(docs[0], metas[0], strict=True):
             output.append(f"[标题: {meta.get('title', 'Untitled')}]\n{doc}")
 
         return "\n---\n".join(output)

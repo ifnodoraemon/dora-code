@@ -24,7 +24,7 @@ async def list_sessions(project: str = "default", limit: int = 50):
     """List recent sessions."""
     mgr = SessionManager()
     sessions = mgr.list_sessions(project=project, limit=limit)
-    
+
     return [
         SessionResponse(
             id=s.id,
@@ -43,9 +43,9 @@ async def get_session(session_id: str):
     session = mgr.resume_session(session_id)
     if not session:
         return {"error": "Session not found"}
-    
+
     return {
         "id": session.metadata.id,
         "name": session.metadata.name,
-        "messages": [m for m in session.messages]
+        "messages": list(session.messages)
     }

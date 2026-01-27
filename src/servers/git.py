@@ -86,7 +86,7 @@ def _is_git_repo(path: str = ".") -> bool:
 def _validate_git_ref(ref: str) -> tuple[bool, str]:
     """
     Validate git reference (branch/tag name) is safe.
-    
+
     Returns:
         Tuple of (is_valid, error_message)
     """

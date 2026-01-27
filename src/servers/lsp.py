@@ -18,10 +18,7 @@ import logging
 import os
 import re
 import subprocess
-import tempfile
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -543,7 +540,7 @@ async def lsp_references(path: str, symbol: str) -> str:
         # Limit results
         if len(lines) > 50:
             lines = lines[:50]
-            lines.append(f"... (showing first 50 of many)")
+            lines.append("... (showing first 50 of many)")
 
         return f"References to '{symbol}':\n\n" + "\n".join(lines)
 
@@ -666,7 +663,7 @@ async def lsp_definition(path: str, symbol: str) -> str:
                 timeout=30,
             )
 
-            lines = [l for l in result.stdout.strip().split("\n") if l]
+            lines = [line for line in result.stdout.strip().split("\n") if line]
             if lines:
                 # Return first match (most likely the definition)
                 return f"Definition of '{symbol}':\n\n{lines[0]}"

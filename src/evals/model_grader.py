@@ -58,9 +58,10 @@ class ModelGrader:
 
         try:
             # Use new SDK API - contents must be a list
+            from google.genai import types
             response = self.client.models.generate_content(
                 model=self.model_name,
-                contents=[prompt],
+                contents=[types.Content(parts=[types.Part(text=prompt)])],
             )
             # Extract JSON from response - safely handle empty response
             if not response or not hasattr(response, 'text') or not response.text:

@@ -15,10 +15,10 @@ import asyncio
 import logging
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 from google import genai
 from google.genai import types
@@ -419,10 +419,13 @@ class SubagentManager:
             turns_used += 1
 
             while turns_used < config.max_turns:
-                if not response.candidates:
+                if not response.candidates or not response.candidates[0].content:
                     break
 
                 parts = response.candidates[0].content.parts
+                if not parts:
+                    break
+
                 has_tool_call = False
                 tool_results = []
 
@@ -438,7 +441,20 @@ class SubagentManager:
                         has_tool_call = True
                         fc = part.function_call
                         tool_name = fc.name
-                        args = dict(fc.args.items()) if hasattr(fc.args, "items") else {}
+                        # Handle fc.args which might be a list or dict depending on SDK version
+                        args = {}
+                        if hasattr(fc, "args") and fc.args:
+                            if hasattr(fc.args, "items"):
+                                args = dict(fc.args.items())
+                            elif isinstance(fc.args, dict):
+                                args = fc.args
+                            else:
+                                # Fallback for other potential types
+                                try:
+                                    args = dict(fc.args) # type: ignore
+                                except (TypeError, ValueError):
+                                    logger.warning(f"Could not convert fc.args to dict: {type(fc.args)}")
+                                    args = {}
 
                         # Execute tool
                         try:
@@ -460,15 +476,15 @@ class SubagentManager:
                     break
 
                 # Send tool results
-                response_parts = [
+                response_parts: Sequence[types.Part] = [
                     types.Part.from_function_response(
-                        name=tr["name"], response=tr["result"]
+                        name=str(tr["name"]), response=cast(dict[str, Any], tr["result"])
                     )
                     for tr in tool_results
                 ]
 
                 response = await asyncio.wait_for(
-                    asyncio.to_thread(chat.send_message, response_parts),
+                    asyncio.to_thread(chat.send_message, list(response_parts)), # type: ignore
                     timeout=config.timeout,
                 )
                 turns_used += 1
@@ -541,7 +557,7 @@ class SubagentManager:
         final_results = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                agent_name = tasks[i][0]
+                agent_name = str(tasks[i][0])
                 final_results.append(
                     SubagentResult(
                         agent_id="",
@@ -554,7 +570,10 @@ class SubagentManager:
                         error=str(result),
                     )
                 )
-            else:
+            elif isinstance(result, SubagentResult):
                 final_results.append(result)
+            else:
+                # Should not happen but for type safety
+                logger.error(f"Unexpected result type from spawn: {type(result)}")
 
         return final_results

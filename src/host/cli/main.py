@@ -26,8 +26,6 @@ import sys
 from pathlib import Path
 
 import typer
-
-logger = logging.getLogger(__name__)
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.markdown import Markdown
@@ -36,34 +34,28 @@ from rich.prompt import Prompt
 from rich.table import Table
 
 from src.core.background_tasks import get_task_manager
-
-# New feature imports
 from src.core.checkpoint import CheckpointConfig, CheckpointManager
 from src.core.command_history import BashModeExecutor, CommandHistory
-
-# Direct imports (no DI container needed)
 from src.core.config import load_config
 from src.core.context_manager import ContextConfig, ContextManager
 from src.core.cost_tracker import BudgetConfig, CostTracker
 from src.core.diff import print_diff
 from src.core.hooks import HookEvent, HookManager
-from src.core.input_mode import InputManager, InputMode
-
-# Unified Model Client (supports Gateway and Direct modes)
 from src.core.model_client import (
     ClientMode,
     Message,
     ModelClient,
     ToolDefinition,
-    ChatResponse,
 )
 from src.core.prompts import get_system_prompt
 from src.core.rules import format_instructions_for_prompt, load_all_instructions
 from src.core.session import SessionManager
 from src.core.skills import SkillManager
 from src.core.tool_selector import ToolSelector
-from src.host.cli.commands import CommandHandler, MODE_COLORS
+from src.host.cli.commands import MODE_COLORS, CommandHandler
 from src.host.tools import get_default_registry
+
+logger = logging.getLogger(__name__)
 
 # Fix encoding
 for stream in [sys.stdin, sys.stdout, sys.stderr]:
@@ -372,7 +364,7 @@ async def chat_loop(
                     active_skills_content=active_skills_content,
                     build_system_prompt=build_system_prompt,
                     convert_tools_to_definitions=convert_tools_to_definitions,
-                    sensitive_tools=sensitive_tools,
+                    sensitive_tools=set(sensitive_tools),
                 )
 
                 # Update state from command result
@@ -433,14 +425,14 @@ async def chat_loop(
                 conversation_history.pop()
                 checkpoint_mgr.discard_checkpoint()
                 continue
-            
+
             # Process response (tool loop)
             accumulated_text = ""
             files_modified = []
             tool_steps = 0
             MAX_TOOL_STEPS = 15  # Prevent infinite tool loops
             previous_tool_calls = []  # Specific for loop detection
-            
+
             while True:
                 if tool_steps >= MAX_TOOL_STEPS:
                     console.print(f"[red]⚠️ Max tool steps ({MAX_TOOL_STEPS}) reached. Stopping to prevent infinite loop.[/red]")
@@ -449,10 +441,10 @@ async def chat_loop(
                     break
 
                 tool_steps += 1
-                
+
                 # Debug: Log response state
                 logger.debug(f"Tool step {tool_steps}: content={bool(response.content)}, tool_calls={bool(response.tool_calls)}, thought={bool(response.thought)}")
-                
+
                 if not response.content and not response.tool_calls:
                     console.print("[red]Empty response[/red]")
                     logger.warning(f"Empty response received. Raw: {response.raw if hasattr(response, 'raw') else 'N/A'}")
@@ -509,7 +501,7 @@ async def chat_loop(
                         # Loop Detection
                         current_call_signature = f"{tool_name}:{args_str_normalized}"
                         previous_tool_calls.append(current_call_signature)
-                        
+
                         # Check last 3 calls
                         if len(previous_tool_calls) >= 3:
                             last_three = previous_tool_calls[-3:]
@@ -562,14 +554,14 @@ async def chat_loop(
                                 # Pretty print content/code if present
                                 display_args = args.copy()
                                 rendered_field = None
-                                
+
                                 # Check for content field (save_note, etc.)
                                 if "content" in display_args and isinstance(display_args["content"], str):
                                     rendered_field = ("Content Preview", display_args.pop("content"), "markdown")
                                 # Check for code field (execute_python)
                                 elif "code" in display_args and isinstance(display_args["code"], str):
                                     rendered_field = ("Code Preview", display_args.pop("code"), "python")
-                                
+
                                 if rendered_field:
                                     title, field_content, lang = rendered_field
                                     if display_args:

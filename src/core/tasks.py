@@ -92,7 +92,7 @@ class TaskManager:
         try:
             with open(self.storage_path, encoding="utf-8") as f:
                 data = json.load(f)
-                
+
                 # Handle list format (legacy)
                 if isinstance(data, list):
                     for item in data:
@@ -101,7 +101,7 @@ class TaskManager:
                             item["status"] = "pending"
                         elif item.get("status") == "done":
                             item["status"] = "completed"
-                        
+
                         task = Task.from_dict(item)
                         self._tasks[task.id] = task
                 # Handle dict format (new)
@@ -183,7 +183,7 @@ class TaskManager:
         if task_id not in self._tasks:
             return False
         task = self._tasks[task_id]
-        
+
         # Remove from parent's subtasks list
         if task.parent_id and task.parent_id in self._tasks:
             if task_id in self._tasks[task.parent_id].subtasks:

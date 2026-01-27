@@ -78,6 +78,8 @@ class BaseAdapter(ABC):
         Yields:
             Stream chunks
         """
+        if False:
+            yield StreamChunk(id="", model="")
         pass
 
     @abstractmethod

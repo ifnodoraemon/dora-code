@@ -29,7 +29,7 @@ import logging
 import os
 import uuid
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -202,18 +202,18 @@ class BaseModelClient(ABC):
     @abstractmethod
     async def chat(
         self,
-        messages: list[Message | dict],
-        tools: list[ToolDefinition | dict] | None = None,
+        messages: Sequence[Message | dict],
+        tools: Sequence[ToolDefinition | dict] | None = None,
         **kwargs,
     ) -> ChatResponse:
         """Send a chat request."""
         pass
 
     @abstractmethod
-    async def chat_stream(
+    def chat_stream(
         self,
-        messages: list[Message | dict],
-        tools: list[ToolDefinition | dict] | None = None,
+        messages: Sequence[Message | dict],
+        tools: Sequence[ToolDefinition | dict] | None = None,
         **kwargs,
     ) -> AsyncIterator[StreamChunk]:
         """Send a streaming chat request."""
@@ -222,6 +222,11 @@ class BaseModelClient(ABC):
     @abstractmethod
     async def list_models(self) -> list[dict]:
         """List available models."""
+        pass
+
+    @abstractmethod
+    async def connect(self) -> None:
+        """Connect to the model provider/gateway."""
         pass
 
     @abstractmethod
@@ -235,7 +240,8 @@ class GatewayModelClient(BaseModelClient):
 
     def __init__(self, config: ClientConfig):
         self.config = config
-        self._client = None
+        from httpx import AsyncClient
+        self._client: AsyncClient | None = None
 
     async def connect(self) -> None:
         """Initialize HTTP client."""
@@ -244,6 +250,9 @@ class GatewayModelClient(BaseModelClient):
         headers = {}
         if self.config.gateway_key:
             headers["Authorization"] = f"Bearer {self.config.gateway_key}"
+
+        if not self.config.gateway_url:
+            raise ValueError("Gateway URL must be set for Gateway mode")
 
         self._client = httpx.AsyncClient(
             base_url=self.config.gateway_url,
@@ -254,8 +263,8 @@ class GatewayModelClient(BaseModelClient):
 
     async def chat(
         self,
-        messages: list[Message | dict],
-        tools: list[ToolDefinition | dict] | None = None,
+        messages: Sequence[Message | dict],
+        tools: Sequence[ToolDefinition | dict] | None = None,
         **kwargs,
     ) -> ChatResponse:
         if not self._client:
@@ -289,6 +298,10 @@ class GatewayModelClient(BaseModelClient):
         if self.config.max_tokens:
             payload["max_tokens"] = self.config.max_tokens
 
+        if self._client is None:
+            await self.connect()
+        assert self._client is not None
+
         response = await self._client.post("/v1/chat/completions", json=payload)
         response.raise_for_status()
         data = response.json()
@@ -316,12 +329,16 @@ class GatewayModelClient(BaseModelClient):
 
     async def chat_stream(
         self,
-        messages: list[Message | dict],
-        tools: list[ToolDefinition | dict] | None = None,
+        messages: Sequence[Message | dict],
+        tools: Sequence[ToolDefinition | dict] | None = None,
         **kwargs,
     ) -> AsyncIterator[StreamChunk]:
         if not self._client:
             await self.connect()
+
+        # Check for client existence for mypy
+        if self._client is None:
+            raise RuntimeError("Client not connected")
 
         msg_list = [m.to_dict() if isinstance(m, Message) else m for m in messages]
         tool_list = None
@@ -359,7 +376,7 @@ class GatewayModelClient(BaseModelClient):
                     # Or maybe we need to update _chat_google in DIRECT mode?
                     # The code above (lines 342-365) is inside GatewayModelClient implementation for OpenAI compatible API.
                     # If Gateway supports thought, it should be in delta.
-                    
+
                     yield StreamChunk(
                         content=delta.get("content"),
                         thought=delta.get("thought"), # Add thought
@@ -371,8 +388,9 @@ class GatewayModelClient(BaseModelClient):
                     continue
 
     async def list_models(self) -> list[dict]:
-        if not self._client:
+        if self._client is None:
             await self.connect()
+        assert self._client is not None
         response = await self._client.get("/v1/models")
         response.raise_for_status()
         return response.json().get("data", [])
@@ -461,8 +479,8 @@ class DirectModelClient(BaseModelClient):
 
     async def chat(
         self,
-        messages: list[Message | dict],
-        tools: list[ToolDefinition | dict] | None = None,
+        messages: Sequence[Message | dict],
+        tools: Sequence[ToolDefinition | dict] | None = None,
         **kwargs,
     ) -> ChatResponse:
         if not self._providers:
@@ -482,8 +500,8 @@ class DirectModelClient(BaseModelClient):
 
     async def _chat_google(
         self,
-        messages: list[Message | dict],
-        tools: list[ToolDefinition | dict] | None = None,
+        messages: Sequence[Message | dict],
+        tools: Sequence[ToolDefinition | dict] | None = None,
         **kwargs,
     ) -> ChatResponse:
         """Chat with Google Gemini."""
@@ -522,15 +540,15 @@ class DirectModelClient(BaseModelClient):
                     except json.JSONDecodeError:
                         logger.warning(f"Failed to parse tool arguments: {args_str}")
                         args = {}
-                    
+
                     fc_obj = types.FunctionCall(
                         name=func.get("name"),
                         args=args,
                     )
-                    
+
                     # SDK Part constructor handles thought_signature
                     thought_sig = tc.get("thought_signature") or func.get("thought_signature")
-                    
+
                     parts.append(types.Part(
                         function_call=fc_obj,
                         thought_signature=thought_sig
@@ -631,11 +649,11 @@ class DirectModelClient(BaseModelClient):
                     tc_dict["thought_signature"] = part.thought_signature
                 elif isinstance(part, dict) and part.get("thought_signature"):
                     tc_dict["thought_signature"] = part.get("thought_signature")
-                
+
                 tool_calls.append(tc_dict)
         if texts:
             content = "".join(texts)
-        
+
         thought = "".join(thoughts) if thoughts else None
 
         if tool_calls:
@@ -660,8 +678,8 @@ class DirectModelClient(BaseModelClient):
 
     async def _chat_openai(
         self,
-        messages: list[Message | dict],
-        tools: list[ToolDefinition | dict] | None = None,
+        messages: Sequence[Message | dict],
+        tools: Sequence[ToolDefinition | dict] | None = None,
         **kwargs,
     ) -> ChatResponse:
         """Chat with OpenAI."""
@@ -729,8 +747,8 @@ class DirectModelClient(BaseModelClient):
 
     async def _chat_anthropic(
         self,
-        messages: list[Message | dict],
-        tools: list[ToolDefinition | dict] | None = None,
+        messages: Sequence[Message | dict],
+        tools: Sequence[ToolDefinition | dict] | None = None,
         **kwargs,
     ) -> ChatResponse:
         """Chat with Anthropic Claude."""
@@ -834,8 +852,8 @@ class DirectModelClient(BaseModelClient):
 
     async def _chat_ollama(
         self,
-        messages: list[Message | dict],
-        tools: list[ToolDefinition | dict] | None = None,
+        messages: Sequence[Message | dict],
+        tools: Sequence[ToolDefinition | dict] | None = None,
         **kwargs,
     ) -> ChatResponse:
         """Chat with Ollama."""
@@ -877,13 +895,15 @@ class DirectModelClient(BaseModelClient):
 
     async def chat_stream(
         self,
-        messages: list[Message | dict],
-        tools: list[ToolDefinition | dict] | None = None,
+        messages: Sequence[Message | dict],
+        tools: Sequence[ToolDefinition | dict] | None = None,
         **kwargs,
     ) -> AsyncIterator[StreamChunk]:
         """Streaming chat - currently only implemented for gateway mode."""
         # For simplicity, fall back to non-streaming for direct mode
         response = await self.chat(messages, tools, **kwargs)
+        if False:
+            yield StreamChunk()  # Ensure it's an async generator
         yield StreamChunk(
             content=response.content,
             tool_calls=response.tool_calls,
@@ -945,7 +965,7 @@ class ModelClient:
             config = ClientConfig.from_env()
 
         if config.mode == ClientMode.GATEWAY:
-            client = GatewayModelClient(config)
+            client: BaseModelClient = GatewayModelClient(config)
         else:
             client = DirectModelClient(config)
 

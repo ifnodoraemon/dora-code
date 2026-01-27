@@ -5,7 +5,6 @@ Main FastAPI application for the Web UI.
 """
 
 import logging
-import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -54,7 +53,7 @@ if static_dir.exists():
 def start_server(host: str = "127.0.0.1", port: int = 8000, reload: bool = False):
     """Start the Web UI server."""
     import uvicorn
-    
+
     logger.info(f"Starting Doraemon Code Web UI at http://{host}:{port}")
     uvicorn.run(
         "src.webui.server:app",

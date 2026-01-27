@@ -54,7 +54,7 @@ class GoogleAdapter(VisionAdapter):
                 contents=[
                     types.Content(
                         parts=[
-                            types.Part.from_text(prompt),
+                            types.Part(text=prompt),
                             types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                         ]
                     )

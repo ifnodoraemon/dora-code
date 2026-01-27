@@ -8,12 +8,10 @@ Provides capabilities to CREATE and EDIT Office documents:
 """
 
 import os
-from typing import List, Dict, Any, Optional
-import json
+from typing import Any
 
 try:
     import docx
-    from docx.shared import Pt
 except ImportError:
     docx = None
 
@@ -24,12 +22,11 @@ except ImportError:
 
 try:
     from pptx import Presentation
-    from pptx.util import Inches, Pt as PptPt
 except ImportError:
     Presentation = None
 
 
-def create_docx(path: str, content: str, title: Optional[str] = None) -> str:
+def create_docx(path: str, content: str, title: str | None = None) -> str:
     """
     Create a Microsoft Word document.
 
@@ -46,7 +43,7 @@ def create_docx(path: str, content: str, title: Optional[str] = None) -> str:
 
     try:
         doc = docx.Document()
-        
+
         if title:
             doc.add_heading(title, 0)
 
@@ -60,7 +57,7 @@ def create_docx(path: str, content: str, title: Optional[str] = None) -> str:
         return f"Error creating DOCX: {e}"
 
 
-def create_xlsx(path: str, data: List[List[Any]], sheet_name: str = "Sheet1") -> str:
+def create_xlsx(path: str, data: list[list[Any]], sheet_name: str = "Sheet1") -> str:
     """
     Create an Excel spreadsheet.
 
@@ -89,7 +86,7 @@ def create_xlsx(path: str, data: List[List[Any]], sheet_name: str = "Sheet1") ->
         return f"Error creating XLSX: {e}"
 
 
-def add_sheet_xlsx(path: str, data: List[List[Any]], sheet_name: str) -> str:
+def add_sheet_xlsx(path: str, data: list[list[Any]], sheet_name: str) -> str:
     """
     Add a new sheet to an existing Excel file.
 
@@ -111,18 +108,18 @@ def add_sheet_xlsx(path: str, data: List[List[Any]], sheet_name: str) -> str:
         wb = openpyxl.load_workbook(path)
         if sheet_name in wb.sheetnames:
             return f"Error: Sheet '{sheet_name}' already exists."
-        
+
         ws = wb.create_sheet(sheet_name)
         for row in data:
             ws.append(row)
-            
+
         wb.save(path)
         return f"Successfully added sheet '{sheet_name}' to {path}"
     except Exception as e:
         return f"Error modifying XLSX: {e}"
 
 
-def create_pptx(path: str, slides_data: List[Dict[str, str]]) -> str:
+def create_pptx(path: str, slides_data: list[dict[str, str]]) -> str:
     """
     Create a PowerPoint presentation.
 

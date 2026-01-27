@@ -7,11 +7,11 @@ Provides tools for creating and editing Microsoft Office documents.
 import json
 import logging
 import os
-from typing import List, Any
 
 from mcp.server.fastmcp import FastMCP
-from src.services import office
+
 from src.core.security import validate_path
+from src.services import office
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -33,10 +33,10 @@ def create_word_document(path: str, content: str, title: str = "") -> str:
         valid_path = validate_path(path)
         if not valid_path.endswith(".docx"):
             return "Error: Path must end with .docx"
-            
+
         # Ensure directory exists
         os.makedirs(os.path.dirname(valid_path), exist_ok=True)
-        
+
         return office.create_docx(valid_path, content, title if title else None)
     except Exception as e:
         logger.error(f"Error creating Word doc: {e}")
@@ -50,7 +50,7 @@ def create_excel_sheet(path: str, data: str, sheet_name: str = "Sheet1") -> str:
 
     Args:
         path: Output file path (must end in .xlsx)
-        data: JSON string representing a list of lists (rows). 
+        data: JSON string representing a list of lists (rows).
               Example: '[["Name", "Age"], ["Alice", 30], ["Bob", 25]]'
         sheet_name: Name of the sheet
     """

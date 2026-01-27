@@ -19,9 +19,6 @@ from textual.containers import Container, ScrollableContainer, Vertical
 from textual.reactive import reactive
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
-# Load environment
-load_dotenv()
-
 # Import ModelClient for AI integration
 from src.core.model_client import (
     Message,
@@ -30,27 +27,30 @@ from src.core.model_client import (
 from src.core.prompts import get_system_prompt
 from src.host.tools import get_default_registry
 
+# Load environment
+load_dotenv()
+
 
 class ChatArea(ScrollableContainer):
     """Main chat area showing conversation."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.log = RichLog(highlight=True, markup=True)
+        self.chat_log = RichLog(highlight=True, markup=True)
 
     def compose(self) -> ComposeResult:
-        yield self.log
+        yield self.chat_log
 
     def add_message(self, role: str, content: str):
         """Add a message to the chat."""
         if role == "user":
-            self.log.write(f"[bold cyan]You:[/bold cyan] {content}")
+            self.chat_log.write(f"[bold cyan]You:[/bold cyan] {content}")
         elif role == "assistant":
             # Render as Markdown
             md = Markdown(content)
-            self.log.write(md)
+            self.chat_log.write(md)
         elif role == "system":
-            self.log.write(f"[dim]{content}[/dim]")
+            self.chat_log.write(f"[dim]{content}[/dim]")
 
 
 class Sidebar(Vertical):
@@ -275,9 +275,10 @@ class DoraemonTUI(App):
             chat.add_message("assistant", help_text)
 
         elif command == "/clear":
-            chat.log.clear()
+            chat_area = self.query_one("#chat_area", ChatArea)
+            chat_area.chat_log.clear()
             self.conversation_history.clear()
-            chat.add_message("system", "Chat and history cleared")
+            chat_area.add_message("system", "Chat and history cleared")
 
         elif command.startswith("/mode"):
             parts = command.split()
@@ -318,10 +319,10 @@ class DoraemonTUI(App):
 
     def action_clear(self):
         """Clear chat area."""
-        chat = self.query_one("#chat-area", ChatArea)
-        chat.log.clear()
+        chat_area = self.query_one("#chat-area", ChatArea)
+        chat_area.chat_log.clear()
         self.conversation_history.clear()
-        chat.add_message("system", "Chat and history cleared")
+        chat_area.add_message("system", "Chat and history cleared")
 
     async def on_unmount(self) -> None:
         """Cleanup on app exit."""

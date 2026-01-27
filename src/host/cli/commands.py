@@ -5,7 +5,6 @@ Handles all /command processing in the Doraemon CLI.
 Extracted from cli.py for better maintainability.
 """
 
-import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -13,13 +12,13 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
+from src.core.doctor import Doctor
+from src.core.input_mode import InputManager, InputMode
+from src.core.model_manager import ModelManager
 from src.core.plugins import PluginManager
 from src.core.themes import ThemeManager
-from src.core.input_mode import InputManager, InputMode
 from src.core.thinking import ThinkingManager
-from src.core.doctor import Doctor
 from src.core.workspace import WorkspaceManager
-from src.core.model_manager import ModelManager
 
 console = Console()
 
@@ -32,7 +31,7 @@ MODE_COLORS = {
 
 class CommandHandler:
     """Handle slash commands in the CLI."""
-    
+
     def __init__(
         self,
         ctx,
@@ -60,7 +59,7 @@ class CommandHandler:
         self.hook_mgr = hook_mgr
         self.model_name = model_name
         self.project = project
-        
+
     async def handle(
         self,
         cmd: str,
@@ -76,12 +75,12 @@ class CommandHandler:
     ) -> dict[str, Any]:
         """
         Handle a slash command.
-        
+
         Returns:
             dict with keys:
             - handled: bool - whether command was handled
             - mode: str - updated mode
-            - tool_names: list - updated tool names  
+            - tool_names: list - updated tool names
             - tool_definitions: list - updated tool definitions
             - system_prompt: str | None - updated system prompt if changed
             - active_skills_content: str - updated skills content
@@ -96,13 +95,13 @@ class CommandHandler:
             "active_skills_content": active_skills_content,
             "conversation_history": conversation_history,
         }
-        
+
         if cmd == "help":
             self._show_help()
-            
+
         elif cmd == "init":
             self._handle_init()
-            
+
         elif cmd == "mode":
             if cmd_args:
                 new_mode = cmd_args[0].lower()
@@ -121,18 +120,18 @@ class CommandHandler:
                     console.print(f"[red]Unknown mode: {new_mode}[/red]")
             else:
                 console.print(f"Current mode: {mode}")
-                
+
         elif cmd == "context":
             self._show_context(mode, tool_names)
-            
+
         elif cmd == "skills":
             self._show_skills()
-            
+
         elif cmd == "clear":
             self.ctx.clear(keep_summaries=True)
             result["conversation_history"] = []
             console.print("[green]Conversation cleared (summaries preserved)[/green]")
-            
+
         elif cmd == "reset":
             self.ctx.reset()
             result["active_skills_content"] = ""
@@ -144,81 +143,81 @@ class CommandHandler:
             result["system_prompt"] = build_system_prompt("build", "")
             result["conversation_history"] = []
             console.print("[green]Full reset complete[/green]")
-            
+
         elif cmd == "tools":
             self._show_tools(mode, tool_names, sensitive_tools)
-            
+
         elif cmd == "debug":
             self._show_debug(mode, tool_names)
-            
+
         elif cmd == "sessions":
             self._show_sessions()
-            
+
         elif cmd == "resume":
             self._resume_session(cmd_args)
-            
+
         elif cmd == "rename":
             self._rename_session(cmd_args)
-            
+
         elif cmd == "export":
             self._export_session(cmd_args)
-            
+
         elif cmd == "fork":
             self._fork_session()
-            
+
         elif cmd == "checkpoints":
             self._show_checkpoints()
-            
+
         elif cmd == "rewind":
             self._rewind_checkpoint(cmd_args)
-            
+
         elif cmd == "tasks":
             self._show_tasks()
-            
+
         elif cmd == "task":
             self._show_task_output(cmd_args)
-            
+
         elif cmd == "cost":
             self._show_cost()
-            
+
         elif cmd == "agents":
             self._show_agents()
-            
+
         elif cmd == "history":
             self._show_history()
-            
+
         elif cmd == "model":
             self._handle_model(cmd_args)
-            
+
         elif cmd == "plugins":
             self._show_plugins()
-            
+
         elif cmd == "plugin":
             self._handle_plugin(cmd_args)
-            
+
         elif cmd == "theme":
             self._handle_theme(cmd_args)
-            
+
         elif cmd == "vim":
             self._toggle_vim()
-            
+
         elif cmd == "thinking":
             self._toggle_thinking()
-            
+
         elif cmd == "doctor":
             self._run_doctor()
-            
+
         elif cmd == "workspace":
             self._show_workspace()
-            
+
         elif cmd == "add-dir":
             self._add_directory(cmd_args)
-            
+
         else:
             console.print(f"[yellow]Unknown command: {cmd}[/yellow]")
-            
+
         return result
-    
+
     def _handle_init(self):
         """Initialize project with DORAEMON.md."""
         fname = "DORAEMON.md"
@@ -305,7 +304,7 @@ Project specific rules for Doraemon Code.
   plan   - Analyze requirements, investigate code, create plans (read-only)
   build  - Implement solutions, write code, execute tasks
 """)
-    
+
     def _show_context(self, mode: str, tool_names: list):
         """Show context statistics."""
         stats = self.ctx.get_context_stats()
@@ -327,7 +326,7 @@ Project specific rules for Doraemon Code.
         if stats["needs_summary"]:
             table.add_row("Status", "[yellow]Summary needed[/yellow]")
         console.print(table)
-        
+
     def _show_skills(self):
         """Show skills information."""
         console.print("[bold]Skills System[/bold]")
@@ -338,12 +337,12 @@ Project specific rules for Doraemon Code.
             console.print("  [dim]No skills currently active[/dim]")
         console.print("\n[dim]Skills are loaded automatically based on conversation context.[/dim]")
         console.print("[dim]Put SKILL.md files in .doraemon/skills/<name>/ to add custom skills.[/dim]")
-        
+
     def _show_tools(self, mode: str, tool_names: list, sensitive_tools: set):
         """Show available tools."""
         categories = self.tool_selector.get_tool_categories()
         console.print(f"[bold]Tools (mode: {mode})[/bold]")
-        
+
         for cat_name, cat_tools in categories.items():
             if not cat_tools:
                 continue
@@ -353,9 +352,9 @@ Project specific rules for Doraemon Code.
                 marker = "🔒" if name in sensitive_tools else "  "
                 status = "[green]✓[/green]" if in_current else "[dim]○[/dim]"
                 console.print(f"  {status}{marker} {name}")
-        
+
         console.print(f"\n[dim]Current mode has {len(tool_names)} tools[/dim]")
-        
+
     def _show_debug(self, mode: str, tool_names: list):
         """Show debug information."""
         console.print(f"Mode: {mode}")
@@ -366,7 +365,7 @@ Project specific rules for Doraemon Code.
         console.print(f"Context: {stats['messages']} msgs, {stats['summaries']} summaries")
         console.print(f"Checkpoints: {len(self.checkpoint_mgr.checkpoints)}")
         console.print(f"Background Tasks: {self.task_mgr.get_running_count()} running")
-        
+
     def _show_sessions(self):
         """List recent sessions."""
         sessions = self.session_mgr.list_sessions(project=self.project, limit=10)
@@ -382,7 +381,7 @@ Project specific rules for Doraemon Code.
             console.print(table)
         else:
             console.print("[dim]No sessions found[/dim]")
-            
+
     def _resume_session(self, cmd_args: list):
         """Resume a session."""
         if cmd_args:
@@ -393,7 +392,7 @@ Project specific rules for Doraemon Code.
                 console.print(f"[red]Session not found: {cmd_args[0]}[/red]")
         else:
             console.print("[yellow]Usage: /resume <session_id or name>[/yellow]")
-            
+
     def _rename_session(self, cmd_args: list):
         """Rename current session."""
         if cmd_args:
@@ -402,7 +401,7 @@ Project specific rules for Doraemon Code.
             console.print(f"[green]Session renamed to: {new_name}[/green]")
         else:
             console.print("[yellow]Usage: /rename <new_name>[/yellow]")
-            
+
     def _export_session(self, cmd_args: list):
         """Export session."""
         try:
@@ -411,7 +410,7 @@ Project specific rules for Doraemon Code.
             console.print(f"[green]Exported to: {path}[/green]")
         except Exception as e:
             console.print(f"[red]Export failed: {e}[/red]")
-            
+
     def _fork_session(self):
         """Fork current session."""
         try:
@@ -422,7 +421,7 @@ Project specific rules for Doraemon Code.
                 console.print("[red]Fork failed[/red]")
         except Exception as e:
             console.print(f"[red]Fork failed: {e}[/red]")
-            
+
     def _show_checkpoints(self):
         """List checkpoints."""
         cps = self.checkpoint_mgr.list_checkpoints(limit=10)
@@ -442,7 +441,7 @@ Project specific rules for Doraemon Code.
             console.print(table)
         else:
             console.print("[dim]No checkpoints yet[/dim]")
-            
+
     def _rewind_checkpoint(self, cmd_args: list):
         """Rewind to checkpoint."""
         try:
@@ -450,7 +449,7 @@ Project specific rules for Doraemon Code.
                 result = self.checkpoint_mgr.rewind(cmd_args[0], mode="code")
             else:
                 result = self.checkpoint_mgr.rewind_last(mode="code")
-            
+
             if result:
                 console.print(f"[green]Rewound: {len(result['restored_files'])} files restored[/green]")
                 if result["failed_files"]:
@@ -459,7 +458,7 @@ Project specific rules for Doraemon Code.
                 console.print("[yellow]No checkpoint to rewind to[/yellow]")
         except Exception as e:
             console.print(f"[red]Rewind failed: {e}[/red]")
-            
+
     def _show_tasks(self):
         """List background tasks."""
         tasks = self.task_mgr.list_tasks(limit=10)
@@ -487,7 +486,7 @@ Project specific rules for Doraemon Code.
             console.print(table)
         else:
             console.print("[dim]No tasks[/dim]")
-            
+
     def _show_task_output(self, cmd_args: list):
         """Show task output."""
         from rich.panel import Panel
@@ -499,7 +498,7 @@ Project specific rules for Doraemon Code.
                 console.print(f"[red]Task not found: {cmd_args[0]}[/red]")
         else:
             console.print("[yellow]Usage: /task <task_id>[/yellow]")
-            
+
     def _show_cost(self):
         """Show cost statistics."""
         summary = self.cost_tracker.get_cost_summary()
@@ -507,21 +506,21 @@ Project specific rules for Doraemon Code.
         table.add_column("Metric", style="cyan")
         table.add_column("Session", style="green")
         table.add_column("Today", style="yellow")
-        
+
         session = summary["session"]
         today = summary["today"]
-        
+
         table.add_row("Tokens", f"{session['total_tokens']:,}", f"{today['total_tokens']:,}")
         table.add_row("  Input", f"{session['total_input_tokens']:,}", f"{today['total_input_tokens']:,}")
         table.add_row("  Output", f"{session['total_output_tokens']:,}", f"{today['total_output_tokens']:,}")
         table.add_row("Cost (USD)", f"${session['total_cost_usd']:.4f}", f"${today['total_cost_usd']:.4f}")
         table.add_row("Requests", str(session['request_count']), str(today['request_count']))
-        
+
         console.print(table)
-        
+
         if summary["budget"]["warning"]:
             console.print(f"\n[yellow]⚠️ {summary['budget']['warning']}[/yellow]")
-            
+
     def _show_agents(self):
         """Show available subagents."""
         try:
@@ -531,7 +530,7 @@ Project specific rules for Doraemon Code.
                 console.print(f"  [cyan]{name}[/cyan]: {config.description}")
         except Exception as e:
             console.print(f"[red]Error loading agents: {e}[/red]")
-            
+
     def _show_history(self):
         """Show command history."""
         recent = self.cmd_history.get_recent(20)
@@ -541,7 +540,7 @@ Project specific rules for Doraemon Code.
                 console.print(f"  {i}. {cmd[:60]}{'...' if len(cmd) > 60 else ''}")
         else:
             console.print("[dim]No history[/dim]")
-            
+
     def _handle_model(self, cmd_args: list):
         """Handle model switching."""
         model_mgr = ModelManager(default_model=self.model_name)
@@ -555,7 +554,7 @@ Project specific rules for Doraemon Code.
                 console.print(model_mgr.format_model_list())
         else:
             console.print(model_mgr.format_model_list())
-            
+
     def _show_plugins(self):
         """Show installed plugins."""
         plugin_mgr = PluginManager(project_dir=Path.cwd())
@@ -566,7 +565,7 @@ Project specific rules for Doraemon Code.
             console.print(f"  {status} {p['name']} v{p['version']} ({p['scope']})")
         if not summary['plugins']:
             console.print("[dim]No plugins installed[/dim]")
-            
+
     def _handle_plugin(self, cmd_args: list):
         """Handle plugin management."""
         plugin_mgr = PluginManager(project_dir=Path.cwd())
@@ -596,7 +595,7 @@ Project specific rules for Doraemon Code.
                     console.print(f"[red]Uninstall failed: {target}[/red]")
         else:
             console.print("[yellow]Usage: /plugin <install|enable|disable|uninstall> <name>[/yellow]")
-            
+
     def _handle_theme(self, cmd_args: list):
         """Handle theme switching."""
         theme_mgr = ThemeManager()
@@ -608,7 +607,7 @@ Project specific rules for Doraemon Code.
                 console.print(f"[red]Theme not found: {theme_name}[/red]")
         else:
             console.print(theme_mgr.format_theme_list())
-            
+
     def _toggle_vim(self):
         """Toggle vim mode."""
         input_mgr = InputManager()
@@ -616,27 +615,27 @@ Project specific rules for Doraemon Code.
         console.print(f"[green]Input mode: {new_mode.value}[/green]")
         if new_mode == InputMode.VI:
             console.print("[dim]Press Esc for normal mode, i for insert mode[/dim]")
-            
+
     def _toggle_thinking(self):
         """Toggle extended thinking mode."""
         thinking_mgr = ThinkingManager()
         new_mode = thinking_mgr.toggle_mode()
         indicator = thinking_mgr.get_mode_indicator()
         console.print(f"[green]Thinking mode: {new_mode.value} {indicator}[/green]")
-        
+
     def _run_doctor(self):
         """Run health checks."""
         doctor = Doctor(project_dir=Path.cwd())
         console.print("[bold]Running health checks...[/bold]")
         results = doctor.run_all_checks()
         console.print(doctor.format_results(results))
-        
+
     def _show_workspace(self):
         """Show workspace directories."""
         workspace_mgr = WorkspaceManager(primary_dir=Path.cwd())
         console.print("[bold]Workspace Directories:[/bold]")
         console.print(workspace_mgr.get_summary())
-        
+
     def _add_directory(self, cmd_args: list):
         """Add a directory to workspace."""
         workspace_mgr = WorkspaceManager(primary_dir=Path.cwd())

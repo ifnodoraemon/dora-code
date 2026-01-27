@@ -286,6 +286,7 @@ async def chat_completions(
 
 async def stream_response(request: ChatRequest):
     """Generate SSE stream for chat completion."""
+    assert router is not None
     async for chunk in router.chat_stream(request):
         if isinstance(chunk, ErrorResponse):
             yield f"data: {json.dumps(chunk.to_dict())}\n\n"

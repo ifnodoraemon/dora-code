@@ -6,7 +6,7 @@ Handles chat interactions with SSE streaming.
 
 import json
 import logging
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -39,7 +39,7 @@ def get_tools_for_mode(mode: str = "build"):
     registry = get_default_registry()
     tool_names = selector.get_tools_for_mode(mode)
     genai_tools = registry.get_genai_tools(tool_names)
-    
+
     # Convert to ToolDefinition
     definitions = []
     for tool in genai_tools:
@@ -66,20 +66,20 @@ async def chat_endpoint(request: ChatRequest):
     try:
         client = await get_model_client()
         tools = get_tools_for_mode("build")
-        
+
         # Initialize context (simplified)
         ctx_config = ContextConfig(auto_save=True)
         ctx = ContextManager(project=request.project, config=ctx_config)
-        
+
         # Add user message
         ctx.add_user_message(request.message)
-        
+
         # Prepare messages
         messages = [
             Message(role="system", content="You are Doraemon Code, an intelligent AI assistant."),
             Message(role="user", content=request.message)
         ]
-        
+
         # Generator for SSE
         async def event_generator() -> AsyncGenerator[str, None]:
             try:
@@ -91,9 +91,9 @@ async def chat_endpoint(request: ChatRequest):
                         "finish_reason": chunk.finish_reason
                     }
                     yield f"data: {json.dumps(data)}\n\n"
-                
+
                 yield "data: [DONE]\n\n"
-                
+
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
                 err_data = {"error": str(e)}
@@ -105,4 +105,4 @@ async def chat_endpoint(request: ChatRequest):
 
     except Exception as e:
         logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

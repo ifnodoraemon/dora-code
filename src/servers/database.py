@@ -1,11 +1,10 @@
 
+import json
 import logging
 import sqlite3
-import os
-import json
-from typing import List, Dict, Any, Optional
 
 from mcp.server.fastmcp import FastMCP
+
 from src.core.security import validate_path
 
 # Setup logging
@@ -19,7 +18,7 @@ def _get_connection(db_path: str) -> sqlite3.Connection:
     """Get a connection to the SQLite database."""
     # Security check: ensure path is valid
     valid_path = validate_path(db_path)
-    
+
     conn = sqlite3.connect(valid_path)
     conn.row_factory = sqlite3.Row
     return conn
@@ -49,10 +48,10 @@ def db_read_query(query: str, db_path: str) -> str:
 
         # Convert rows to dicts
         results = [dict(row) for row in rows]
-        
+
         if not results:
             return "No results found."
-            
+
         return json.dumps(results, indent=2, default=str)
 
     except Exception as e:
@@ -96,7 +95,7 @@ def db_list_tables(db_path: str) -> str:
         db_path: Path to the SQLite database file
     """
     query = "SELECT name FROM sqlite_master WHERE type='table';"
-    return db_read_query(query, db_path)
+    return str(db_read_query(query, db_path))
 
 
 @mcp.tool()
@@ -115,16 +114,16 @@ def db_describe_table(table_name: str, db_path: str) -> str:
         cursor.execute(query)
         rows = cursor.fetchall()
         conn.close()
-        
+
         if not rows:
             return f"Table '{table_name}' not found or empty schema."
-            
+
         # Format output nicely
         output = [f"Schema for {table_name}:"]
         for row in rows:
             # cid, name, type, notnull, dflt_value, pk
             output.append(f"- {row['name']} ({row['type']}) {'PK' if row['pk'] else ''}")
-            
+
         return "\n".join(output)
     except Exception as e:
         return f"Error describing table: {e}"

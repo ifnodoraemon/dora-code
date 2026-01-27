@@ -58,7 +58,7 @@ class Message:
             metadata=data.get("metadata", {}),
         )
 
-    def to_api_format(self) -> dict[str, str]:
+    def to_api_format(self) -> dict[str, Any]:
         """Convert to API message format."""
         # Normalize role: Gemini uses "model" instead of "assistant"
         role = "model" if self.role == "assistant" else self.role
@@ -179,6 +179,14 @@ class ContextManager:
     def add_user_message(self, content: str) -> Message:
         """Add a user message."""
         msg = Message(role="user", content=content)
+        self.messages.append(msg)
+        self.total_messages_ever += 1
+        self._auto_save()
+        return msg
+
+    def add_system_message(self, content: str) -> Message:
+        """Add a system message."""
+        msg = Message(role="system", content=content)
         self.messages.append(msg)
         self.total_messages_ever += 1
         self._auto_save()

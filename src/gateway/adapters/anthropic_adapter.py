@@ -238,7 +238,7 @@ class AnthropicAdapter(BaseAdapter):
                 ],
             }
 
-        content = []
+        content: list[dict[str, Any]] = []
 
         if msg.content:
             content.append({"type": "text", "text": msg.content})

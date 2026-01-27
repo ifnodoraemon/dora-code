@@ -30,10 +30,6 @@ try:
         DirCreatedEvent,
         DirDeletedEvent,
         DirMovedEvent,
-        FileCreatedEvent,
-        FileDeletedEvent,
-        FileModifiedEvent,
-        FileMovedEvent,
         FileSystemEventHandler,
     )
     from watchdog.observers import Observer

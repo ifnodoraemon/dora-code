@@ -1,16 +1,17 @@
 """Tests for the Gateway server."""
 
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 
 # Note: These tests require fastapi and httpx
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient
 
 from src.gateway.schema import (
     ChatMessage as Message,
+)
+from src.gateway.schema import (
     ChatRequest,
     ChatResponse,
     ModelInfo,
@@ -164,7 +165,7 @@ class TestGatewayRouter:
         # Router needs config and initialization to list models
         router = ModelRouter(config={})
         models = router.list_models()
-        
+
         # Without initialization, no models should be returned
         assert models == []
 

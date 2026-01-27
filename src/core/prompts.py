@@ -43,7 +43,7 @@ In this mode, you have READ-ONLY access. You cannot modify files or execute code
     - **ALWAYS** use `<thinking>` tags to reason before calling tools or answering.
     - **NEVER** switch to `build` mode automatically. You must first present your analysis and plan, then ask the user for permission. Wait for their approval before calling `switch_mode`.
     </constraints>
-    
+
     <progressive_feedback>
     Do NOT be a silent black box. Provide staged feedback to the user:
     1. After **searching** (web_search): Summarize findings before continuing.
@@ -113,7 +113,7 @@ You have full access to modify files and execute code.
     - **NEVER** leave placeholder code (e.g., `# TODO: implement this`). Write complete solutions.
     - **Minimize** disruptive changes. Keep edits atomic.
     </constraints>
-    
+
     <progressive_feedback>
     Do NOT be a silent black box. Provide staged feedback to the user:
     1. After **each file modification**: Briefly confirm what was changed.

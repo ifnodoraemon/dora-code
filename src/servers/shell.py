@@ -245,11 +245,11 @@ def execute_command(
             bufsize=1,  # Line buffered
             universal_newlines=True,
         )
-        
+
         # Use a thread to read output to avoid blocking/buffering issues with select
         import queue
-        output_queue = queue.Queue()
-        
+        output_queue: queue.Queue = queue.Queue()
+
         def reader_thread():
             try:
                 for line in iter(process.stdout.readline, ''):
@@ -263,22 +263,20 @@ def execute_command(
 
         output_lines = []
         last_activity_time = time.time()
-        
+
         while True:
             # Check if process has finished
             return_code = process.poll()
-            
+
             # Read all available output from queue
-            has_new_output = False
             while True:
                 try:
                     line = output_queue.get_nowait()
                     output_lines.append(line)
                     last_activity_time = time.time()
-                    has_new_output = True
                 except queue.Empty:
                     break
-            
+
             if return_code is not None and not t.is_alive() and output_queue.empty():
                 # Process finished and thread finished
                 break
@@ -298,7 +296,7 @@ def execute_command(
             output += f"\n\n[Exit code: {return_code}]"
 
         output = _truncate_output(output)
-        
+
         if not output.strip():
             return f"Command completed successfully (exit code: {return_code})"
 

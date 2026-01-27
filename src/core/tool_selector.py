@@ -76,7 +76,7 @@ class ToolConfig:
 class ToolSelector:
     """
     简化的工具选择器
-    
+
     按模式分配工具，不做动态搜索
     """
 
@@ -93,10 +93,10 @@ class ToolSelector:
     def get_tools_for_mode(self, mode: str) -> list[str]:
         """
         根据模式获取可用工具
-        
+
         Args:
             mode: "plan" 或 "build"
-            
+
         Returns:
             工具名称列表
         """
@@ -113,7 +113,7 @@ class ToolSelector:
     def register_mcp_tools(self, tool_names: list[str]) -> None:
         """
         注册 MCP 扩展工具
-        
+
         Args:
             tool_names: MCP 工具名称列表
         """
@@ -125,7 +125,7 @@ class ToolSelector:
     def unregister_mcp_tools(self, tool_names: list[str] | None = None) -> None:
         """
         注销 MCP 扩展工具
-        
+
         Args:
             tool_names: 要注销的工具，None 表示全部注销
         """

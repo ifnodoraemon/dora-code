@@ -171,13 +171,13 @@ class GoogleAdapter(BaseAdapter):
         """Get available Google models."""
         return GOOGLE_MODELS
 
-    def _convert_messages(self, messages: list[ChatMessage]) -> tuple[list[dict], str | None]:
+    def _convert_messages(self, messages: list[ChatMessage]) -> tuple[list[dict[str, Any]], str | None]:
         """Convert unified messages to Gemini format.
-        
+
         Returns:
             Tuple of (contents, system_instruction)
         """
-        contents = []
+        contents: list[dict[str, Any]] = []
         system_instruction = None
 
         for msg in messages:
@@ -191,7 +191,7 @@ class GoogleAdapter(BaseAdapter):
             # Map roles
             gemini_role = "user" if role == "user" else "model"
 
-            parts = []
+            parts: list[dict[str, Any]] = []
 
             # Text content
             if msg.content:
@@ -225,22 +225,22 @@ class GoogleAdapter(BaseAdapter):
         """Build Gemini generation config."""
         from google.genai import types
 
-        config_dict = {
+        config_kwargs: dict[str, Any] = {
             "temperature": request.temperature,
         }
 
         if request.max_tokens:
-            config_dict["max_output_tokens"] = request.max_tokens
+            config_kwargs["max_output_tokens"] = request.max_tokens
 
         if request.stop:
-            config_dict["stop_sequences"] = request.stop
+            config_kwargs["stop_sequences"] = request.stop
 
         if request.top_p is not None:
-            config_dict["top_p"] = request.top_p
+            config_kwargs["top_p"] = request.top_p
 
         # Add system instruction if present
         if system_instruction:
-            config_dict["system_instruction"] = system_instruction
+            config_kwargs["system_instruction"] = system_instruction
 
         # Add tools if present
         if request.tools:
@@ -250,15 +250,15 @@ class GoogleAdapter(BaseAdapter):
                     types.FunctionDeclaration(
                         name=tool.name,
                         description=tool.description,
-                        parameters=tool.parameters,
+                        parameters=tool.parameters, # type: ignore
                     )
                 )
-            config_dict["tools"] = [types.Tool(function_declarations=function_declarations)]
-            config_dict["automatic_function_calling"] = types.AutomaticFunctionCallingConfig(
+            config_kwargs["tools"] = [types.Tool(function_declarations=function_declarations)]
+            config_kwargs["automatic_function_calling"] = types.AutomaticFunctionCallingConfig(
                 disable=True
             )
 
-        return types.GenerateContentConfig(**config_dict)
+        return types.GenerateContentConfig(**config_kwargs)
 
     def _convert_response(self, response: Any, model: str) -> ChatResponse:
         """Convert Gemini response to unified format."""
@@ -297,8 +297,10 @@ class GoogleAdapter(BaseAdapter):
             # Finish reason
             if tool_calls:
                 finish_reason = FinishReason.TOOL_CALLS
-            elif hasattr(candidate, "finish_reason"):
+            elif hasattr(candidate, "finish_reason") and candidate.finish_reason:
                 finish_reason = self._convert_finish_reason(candidate.finish_reason)
+            else:
+                finish_reason = FinishReason.STOP
 
         # Usage
         usage = None
