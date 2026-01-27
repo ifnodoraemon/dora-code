@@ -1,6 +1,6 @@
-# Polymath
+# 🤖 Doraemon Code
 
-**Polymath** 是一个功能完整的 AI 编程助手，对标 Claude Code，支持 **Model Gateway** 多模型接入和丰富的开发功能。
+**Doraemon Code** 是一个功能完整的 AI 编程助手，对标 Claude Code，支持 **Web UI**、**Model Gateway** 多模型接入和丰富的开发功能。
 
 ## ✨ 新特性 v0.7.0
 
@@ -12,16 +12,33 @@
 - **🤖 子代理系统**: 动态创建专门化的 AI 代理
 - **🎨 主题系统**: 多种内置主题可选
 
-## Architecture
+- **Polyglot**: Writes and understands Python, JavaScript, Go, Rust, etc.
 
-```mermaid
-flowchart TB
-    subgraph Host [Host Layer]
-        CLI[CLI Interface]
-        Client[MCP Client]
-        DI[DI Container]
-        Events[Event Bus]
-    end
+## 🏗️ Architecture
+
+Doraemon Code follows a modular **Host-Server** architecture:
+
+- **Host (Brain)**: Manages context, LLM interaction, and tool orchestration.
+- **Servers (Limbs)**: specialized modules for capabilities:
+  - `fs`: Unified filesystem operations
+  - `lsp`: Code intelligence (LSP)
+  - `git`: Version control & worktrees
+  - `webui`: Modern web interface
+
+## 📂 Directory Structure
+
+```
+src/
+├── core/           # Core logic (context, planning, subagents)
+├── host/           # CLI implementation
+│   └── cli/        # Modular CLI commands
+├── servers/        # Capability servers
+├── services/       # Shared services
+└── webui/          # Web Interface (React + FastAPI)
+```
+
+## 🚀 Getting Started
+
     
     subgraph Core [Core Infrastructure]
         Config[Configuration]

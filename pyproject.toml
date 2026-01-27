@@ -3,16 +3,16 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "polymath"
-version = "0.7.0"
-description = "An extensible AI coding agent with Model Gateway support"
+name = "doraemon-code"
+version = "0.8.0"
+description = "Doraemon Code - Your AI Coding Assistant with Web UI"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "Polymath Contributors"}
+    {name = "Doraemon Code Contributors"}
 ]
-keywords = ["ai", "assistant", "mcp", "code-assistant"]
+keywords = ["ai", "assistant", "mcp", "code-assistant", "doraemon"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -22,6 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
+
 
 dependencies = [
     # MCP Protocol
@@ -85,13 +86,13 @@ all = [
 ]
 
 [project.scripts]
-polymath = "src.host.cli:entry_point"
-pl = "src.host.cli:entry_point"
+doraemon = "src.host.cli:entry_point"
+dora = "src.host.cli:entry_point"
 
 [project.urls]
-Homepage = "https://github.com/polymath-ai/polymath"
-Repository = "https://github.com/polymath-ai/polymath"
-"Bug Tracker" = "https://github.com/polymath-ai/polymath/issues"
+Homepage = "https://github.com/doraemon-code/doraemon-code"
+Repository = "https://github.com/doraemon-code/doraemon-code"
+"Bug Tracker" = "https://github.com/doraemon-code/doraemon-code/issues"
 
 # Ruff configuration
 [tool.ruff]

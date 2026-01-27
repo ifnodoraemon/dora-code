@@ -1,7 +1,7 @@
 """
-Polymath CLI - Main Entry Point
+Doraemon Code CLI - Main Entry Point
 
-Provides the primary interactive interface for Polymath AI agent.
+Provides the primary interactive interface for Doraemon Code AI agent.
 Features:
 - Multi-mode support (plan/build)
 - HITL (Human-in-the-loop) approval for sensitive operations
@@ -147,7 +147,7 @@ async def chat_loop(
 
     if client_mode == ClientMode.GATEWAY:
         if not mode_info.get("gateway_url"):
-            console.print("[red]Error: POLYMATH_GATEWAY_URL not set[/red]")
+            console.print("[red]Error: DORAEMON_GATEWAY_URL not set[/red]")
             return
     else:
         # Direct mode - check for at least one provider
@@ -155,7 +155,7 @@ async def chat_loop(
         if not any(providers.values()):
             console.print("[red]Error: No API keys configured[/red]")
             console.print("[dim]Set at least one of: GOOGLE_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY[/dim]")
-            console.print("[dim]Or configure Gateway mode: POLYMATH_GATEWAY_URL[/dim]")
+            console.print("[dim]Or configure Gateway mode: DORAEMON_GATEWAY_URL[/dim]")
             return
 
     # Initialize unified model client
@@ -200,14 +200,14 @@ async def chat_loop(
         session_id=ctx.session_id,
         permission_mode="default",
     )
-    hooks_file = Path(".polymath/hooks.json")
+    hooks_file = Path(".doraemon/hooks.json")
     if hooks_file.exists():
         hook_mgr.load_from_file(hooks_file)
 
     # Cost tracker
     budget_config = BudgetConfig(
-        daily_limit_usd=float(os.getenv("POLYMATH_DAILY_BUDGET", "0")) or None,
-        session_limit_usd=float(os.getenv("POLYMATH_SESSION_BUDGET", "0")) or None,
+        daily_limit_usd=float(os.getenv("DORAEMON_DAILY_BUDGET", "0")) or None,
+        session_limit_usd=float(os.getenv("DORAEMON_SESSION_BUDGET", "0")) or None,
     )
     cost_tracker = CostTracker(
         project=project,
@@ -256,7 +256,7 @@ async def chat_loop(
     # State
     mode = "build"
     turn_count = 0
-    model_name = os.getenv("POLYMATH_MODEL", "gemini-2.5-flash-preview")
+    model_name = os.getenv("DORAEMON_MODEL", "gemini-2.5-flash-preview")
 
     # Get tools for current mode
     tool_names = tool_selector.get_tools_for_mode(mode)
@@ -305,7 +305,7 @@ async def chat_loop(
 
     console.print(
         Panel.fit(
-            f"[bold blue]Polymath[/bold blue]\n[dim]Type /help for commands. Mode: {mode}[/dim]",
+            f"[bold blue]🤖 Doraemon Code[/bold blue]\n[dim]Type /help for commands. Mode: {mode}[/dim]",
             border_style="blue",
         )
     )
@@ -661,7 +661,7 @@ def start(
     name: str = typer.Option(None, "--name", "-n", help="Name for new session"),
     prompt: str = typer.Option(None, "--prompt", "-P", help="Initial prompt (enables headless mode)"),
 ):
-    """Start Polymath CLI."""
+    """Start Doraemon Code CLI."""
     asyncio.run(chat_loop(project=project, resume_session=resume, session_name=name, prompt=prompt))
 
 
@@ -694,9 +694,9 @@ def sessions(
 @app.command()
 def version():
     """Show version information."""
-    console.print("[bold]Polymath v0.7.0[/bold]")
-    console.print("[dim]Features: Gateway support, checkpointing, subagents, hooks, cost tracking[/dim]")
-    gateway_url = os.getenv("POLYMATH_GATEWAY_URL")
+    console.print("[bold]🤖 Doraemon Code v0.8.0[/bold]")
+    console.print("[dim]Features: Web UI, Gateway, checkpointing, subagents, hooks, cost tracking[/dim]")
+    gateway_url = os.getenv("DORAEMON_GATEWAY_URL")
     if gateway_url:
         console.print(f"[cyan]Mode: Gateway ({gateway_url})[/cyan]")
     else:
