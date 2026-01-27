@@ -439,8 +439,16 @@ def _create_default_registry() -> ToolRegistry:
         registry.register(github_list_issues, name="github_list_issues", sensitive=False, timeout=_get_timeout("github_list_issues", 30.0))
         registry.register(github_create_issue, name="github_create_issue", sensitive=True, timeout=_get_timeout("github_create_issue", 60.0))
 
+        # Database Tools
+        from src.servers.database import db_read_query, db_write_query, db_list_tables, db_describe_table
+        
+        registry.register(db_read_query, name="db_read_query", sensitive=False, timeout=_get_timeout("db_read_query", 60.0))
+        registry.register(db_write_query, name="db_write_query", sensitive=True, timeout=_get_timeout("db_write_query", 60.0))
+        registry.register(db_list_tables, name="db_list_tables", sensitive=False, timeout=_get_timeout("db_list_tables", 30.0))
+        registry.register(db_describe_table, name="db_describe_table", sensitive=False, timeout=_get_timeout("db_describe_table", 30.0))
+
     except ImportError as e:
-        logger.warning(f"Failed to import browser/github tools: {e}")
+        logger.warning(f"Failed to import browser/github/database tools: {e}")
         
     return registry
 

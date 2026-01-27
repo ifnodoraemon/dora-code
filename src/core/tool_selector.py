@@ -44,6 +44,10 @@ AUX_TOOLS = [
     "take_screenshot",     # 网页截图
     "github_list_issues",  # GitHub Issues
     "github_create_issue", # GitHub Create Issue
+    "db_read_query",       # 数据库查询
+    "db_write_query",      # 数据库修改
+    "db_list_tables",      # 列出数据库表
+    "db_describe_table",   # 查看表结构
     "fetch_url",           # 获取网页
     "save_note",           # 保存笔记
     "search_notes",        # 搜索笔记
