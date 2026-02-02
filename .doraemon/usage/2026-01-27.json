@@ -70,6 +70,36 @@
       "session_id": "dedea9ce5756",
       "project": "default",
       "operation": "chat"
+    },
+    {
+      "timestamp": 1769501026.1910627,
+      "model": "gemini-3-pro-preview",
+      "input_tokens": 3389,
+      "output_tokens": 167,
+      "cost_usd": 0.008782,
+      "session_id": "dedea9ce5756",
+      "project": "default",
+      "operation": "chat"
+    },
+    {
+      "timestamp": 1769501307.674736,
+      "model": "gemini-3-pro-preview",
+      "input_tokens": 52875,
+      "output_tokens": 594,
+      "cost_usd": 0.11287799999999999,
+      "session_id": "dedea9ce5756",
+      "project": "default",
+      "operation": "chat"
+    },
+    {
+      "timestamp": 1769504749.41829,
+      "model": "gemini-3-pro-preview",
+      "input_tokens": 47966,
+      "output_tokens": 709,
+      "cost_usd": 0.10444,
+      "session_id": "dedea9ce5756",
+      "project": "default",
+      "operation": "chat"
     }
   ]
 }
