@@ -1,8 +1,11 @@
 """Comprehensive tests for session.py"""
 import pytest
 import time
+import json
+import tempfile
 from pathlib import Path
-from src.core.session import SessionMetadata, SessionData
+from datetime import datetime
+from src.core.session import SessionMetadata, SessionData, SessionManager
 
 
 class TestSessionMetadata:
@@ -238,3 +241,585 @@ class TestSessionData:
         assert restored.metadata.name == original.metadata.name
         assert len(restored.messages) == len(original.messages)
         assert restored.messages[0]["content"] == original.messages[0]["content"]
+
+
+class TestSessionManager:
+    """Tests for SessionManager."""
+
+    @pytest.fixture
+    def temp_session_dir(self):
+        """Create a temporary directory for session storage."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir)
+
+    @pytest.fixture
+    def session_manager(self, temp_session_dir):
+        """Create a SessionManager instance with temp directory."""
+        return SessionManager(base_dir=temp_session_dir)
+
+    def test_initialization(self, temp_session_dir):
+        """Test SessionManager initialization."""
+        manager = SessionManager(base_dir=temp_session_dir)
+        assert manager.base_dir == temp_session_dir
+        assert temp_session_dir.exists()
+        assert isinstance(manager._index, dict)
+
+    def test_generate_id(self, session_manager):
+        """Test ID generation."""
+        id1 = session_manager._generate_id()
+        id2 = session_manager._generate_id()
+        assert len(id1) == 12
+        assert len(id2) == 12
+        assert id1 != id2  # IDs should be unique
+
+    def test_get_session_path(self, session_manager):
+        """Test session path generation."""
+        path = session_manager._get_session_path("test_123")
+        assert path.name == "test_123.json"
+        assert path.parent == session_manager.base_dir
+
+    def test_create_session_basic(self, session_manager):
+        """Test creating a basic session."""
+        session = session_manager.create_session()
+        assert session.metadata.id is not None
+        assert session.metadata.project == "default"
+        assert session.metadata.mode == "build"
+        assert session.messages == []
+
+    def test_create_session_with_name(self, session_manager):
+        """Test creating a session with a name."""
+        session = session_manager.create_session(name="My Session")
+        assert session.metadata.name == "My Session"
+
+    def test_create_session_with_project(self, session_manager):
+        """Test creating a session with a project."""
+        session = session_manager.create_session(project="myproject")
+        assert session.metadata.project == "myproject"
+
+    def test_create_session_with_all_params(self, session_manager):
+        """Test creating a session with all parameters."""
+        session = session_manager.create_session(
+            project="testproj",
+            name="Test Session",
+            mode="plan",
+            description="Test description",
+            tags=["tag1", "tag2"]
+        )
+        assert session.metadata.project == "testproj"
+        assert session.metadata.name == "Test Session"
+        assert session.metadata.mode == "plan"
+        assert session.metadata.description == "Test description"
+        assert session.metadata.tags == ["tag1", "tag2"]
+
+    def test_create_session_persists_to_disk(self, session_manager, temp_session_dir):
+        """Test that created sessions are persisted to disk."""
+        session = session_manager.create_session(name="Persist Test")
+        session_id = session.metadata.id
+
+        # Check that session file exists
+        session_path = temp_session_dir / f"{session_id}.json"
+        assert session_path.exists()
+
+        # Check that index file exists
+        index_path = temp_session_dir / "index.json"
+        assert index_path.exists()
+
+    def test_load_session(self, session_manager):
+        """Test loading a session."""
+        created = session_manager.create_session(name="Load Test")
+        session_id = created.metadata.id
+
+        loaded = session_manager.load_session(session_id)
+        assert loaded is not None
+        assert loaded.metadata.id == session_id
+        assert loaded.metadata.name == "Load Test"
+
+    def test_load_nonexistent_session(self, session_manager):
+        """Test loading a nonexistent session."""
+        loaded = session_manager.load_session("nonexistent_id")
+        assert loaded is None
+
+    def test_save_session(self, session_manager):
+        """Test saving a session."""
+        session = session_manager.create_session(name="Save Test")
+        session.messages.append({"role": "user", "content": "Test message"})
+        session.metadata.message_count = 1
+
+        session_manager.save_session(session)
+
+        # Reload and verify
+        loaded = session_manager.load_session(session.metadata.id)
+        assert len(loaded.messages) == 1
+        assert loaded.messages[0]["content"] == "Test message"
+
+    def test_resume_session_by_id(self, session_manager):
+        """Test resuming a session by ID."""
+        created = session_manager.create_session(name="Resume Test")
+        session_id = created.metadata.id
+
+        resumed = session_manager.resume_session(session_id)
+        assert resumed is not None
+        assert resumed.metadata.id == session_id
+
+    def test_resume_session_by_name(self, session_manager):
+        """Test resuming a session by name."""
+        created = session_manager.create_session(name="Named Session")
+
+        resumed = session_manager.resume_session("Named Session")
+        assert resumed is not None
+        assert resumed.metadata.name == "Named Session"
+
+    def test_resume_nonexistent_session(self, session_manager):
+        """Test resuming a nonexistent session."""
+        resumed = session_manager.resume_session("nonexistent")
+        assert resumed is None
+
+    def test_fork_session_basic(self, session_manager):
+        """Test forking a session."""
+        original = session_manager.create_session(name="Original")
+        original.messages = [
+            {"role": "user", "content": "Message 1"},
+            {"role": "assistant", "content": "Response 1"}
+        ]
+        session_manager.save_session(original)
+
+        forked = session_manager.fork_session(original.metadata.id)
+        assert forked is not None
+        assert forked.metadata.parent_id == original.metadata.id
+        assert len(forked.messages) == 2
+        assert forked.messages[0]["content"] == "Message 1"
+
+    def test_fork_session_with_name(self, session_manager):
+        """Test forking a session with a custom name."""
+        original = session_manager.create_session(name="Original")
+        forked = session_manager.fork_session(original.metadata.id, name="Custom Fork")
+        assert forked.metadata.name == "Custom Fork"
+
+    def test_fork_session_at_message(self, session_manager):
+        """Test forking a session at a specific message."""
+        original = session_manager.create_session(name="Original")
+        original.messages = [
+            {"role": "user", "content": "Message 1"},
+            {"role": "assistant", "content": "Response 1"},
+            {"role": "user", "content": "Message 2"},
+            {"role": "assistant", "content": "Response 2"}
+        ]
+        session_manager.save_session(original)
+
+        forked = session_manager.fork_session(original.metadata.id, at_message=2)
+        assert len(forked.messages) == 2
+        assert forked.messages[-1]["content"] == "Response 1"
+
+    def test_fork_nonexistent_session(self, session_manager):
+        """Test forking a nonexistent session."""
+        forked = session_manager.fork_session("nonexistent")
+        assert forked is None
+
+    def test_fork_preserves_metadata(self, session_manager):
+        """Test that forking preserves relevant metadata."""
+        original = session_manager.create_session(
+            project="testproj",
+            mode="plan",
+            tags=["important", "test"]
+        )
+        forked = session_manager.fork_session(original.metadata.id)
+        assert forked.metadata.project == original.metadata.project
+        assert forked.metadata.mode == original.metadata.mode
+        assert forked.metadata.tags == original.metadata.tags
+
+    def test_list_sessions_empty(self, session_manager):
+        """Test listing sessions when none exist."""
+        sessions = session_manager.list_sessions()
+        assert sessions == []
+
+    def test_list_sessions_basic(self, session_manager):
+        """Test listing sessions."""
+        session1 = session_manager.create_session(name="Session 1")
+        session2 = session_manager.create_session(name="Session 2")
+
+        sessions = session_manager.list_sessions()
+        assert len(sessions) == 2
+        assert any(s.name == "Session 1" for s in sessions)
+        assert any(s.name == "Session 2" for s in sessions)
+
+    def test_list_sessions_by_project(self, session_manager):
+        """Test listing sessions filtered by project."""
+        session_manager.create_session(project="proj1", name="Session 1")
+        session_manager.create_session(project="proj2", name="Session 2")
+        session_manager.create_session(project="proj1", name="Session 3")
+
+        proj1_sessions = session_manager.list_sessions(project="proj1")
+        assert len(proj1_sessions) == 2
+        assert all(s.project == "proj1" for s in proj1_sessions)
+
+    def test_list_sessions_limit(self, session_manager):
+        """Test listing sessions with limit."""
+        for i in range(5):
+            session_manager.create_session(name=f"Session {i}")
+
+        sessions = session_manager.list_sessions(limit=3)
+        assert len(sessions) == 3
+
+    def test_list_sessions_exclude_forks(self, session_manager):
+        """Test listing sessions excluding forks."""
+        original = session_manager.create_session(name="Original")
+        session_manager.fork_session(original.metadata.id, name="Fork 1")
+        session_manager.fork_session(original.metadata.id, name="Fork 2")
+
+        all_sessions = session_manager.list_sessions(include_forks=True)
+        main_sessions = session_manager.list_sessions(include_forks=False)
+
+        assert len(all_sessions) == 3
+        assert len(main_sessions) == 1
+
+    def test_list_sessions_sorted_by_updated_at(self, session_manager):
+        """Test that sessions are sorted by updated_at descending."""
+        session1 = session_manager.create_session(name="Session 1")
+        time.sleep(0.01)
+        session2 = session_manager.create_session(name="Session 2")
+
+        sessions = session_manager.list_sessions()
+        assert sessions[0].id == session2.metadata.id
+        assert sessions[1].id == session1.metadata.id
+
+    def test_search_sessions_by_name(self, session_manager):
+        """Test searching sessions by name."""
+        session_manager.create_session(name="Python Project")
+        session_manager.create_session(name="JavaScript Project")
+        session_manager.create_session(name="Python Testing")
+
+        results = session_manager.search_sessions("Python")
+        assert len(results) == 2
+        assert all("Python" in s.name for s in results)
+
+    def test_search_sessions_by_description(self, session_manager):
+        """Test searching sessions by description."""
+        session_manager.create_session(
+            name="Session 1",
+            description="This is about authentication"
+        )
+        session_manager.create_session(
+            name="Session 2",
+            description="This is about database"
+        )
+
+        results = session_manager.search_sessions("authentication")
+        assert len(results) == 1
+        assert "authentication" in results[0].description
+
+    def test_search_sessions_by_tags(self, session_manager):
+        """Test searching sessions by tags."""
+        session_manager.create_session(
+            name="Session 1",
+            tags=["bug-fix", "urgent"]
+        )
+        session_manager.create_session(
+            name="Session 2",
+            tags=["feature", "enhancement"]
+        )
+
+        results = session_manager.search_sessions("bug-fix")
+        assert len(results) == 1
+        assert "bug-fix" in results[0].tags
+
+    def test_search_sessions_case_insensitive(self, session_manager):
+        """Test that search is case insensitive."""
+        session_manager.create_session(name="Python Project")
+
+        results = session_manager.search_sessions("python")
+        assert len(results) == 1
+
+    def test_search_sessions_with_project_filter(self, session_manager):
+        """Test searching sessions with project filter."""
+        session_manager.create_session(
+            project="proj1",
+            name="Python Project"
+        )
+        session_manager.create_session(
+            project="proj2",
+            name="Python Testing"
+        )
+
+        results = session_manager.search_sessions("Python", project="proj1")
+        assert len(results) == 1
+        assert results[0].project == "proj1"
+
+    def test_search_sessions_empty_results(self, session_manager):
+        """Test searching with no matches."""
+        session_manager.create_session(name="Session 1")
+
+        results = session_manager.search_sessions("nonexistent")
+        assert results == []
+
+    def test_search_sessions_relevance_sorting(self, session_manager):
+        """Test that search results are sorted by relevance."""
+        session_manager.create_session(
+            name="Python",
+            description="About something else"
+        )
+        session_manager.create_session(
+            name="JavaScript",
+            description="Python testing framework"
+        )
+
+        results = session_manager.search_sessions("Python")
+        # Name match should come first
+        assert results[0].name == "Python"
+
+    def test_rename_session(self, session_manager):
+        """Test renaming a session."""
+        session = session_manager.create_session(name="Old Name")
+        session_id = session.metadata.id
+
+        success = session_manager.rename_session(session_id, "New Name")
+        assert success is True
+
+        # Verify rename
+        renamed = session_manager.load_session(session_id)
+        assert renamed.metadata.name == "New Name"
+
+    def test_rename_nonexistent_session(self, session_manager):
+        """Test renaming a nonexistent session."""
+        success = session_manager.rename_session("nonexistent", "New Name")
+        assert success is False
+
+    def test_delete_session(self, session_manager, temp_session_dir):
+        """Test deleting a session."""
+        session = session_manager.create_session(name="To Delete")
+        session_id = session.metadata.id
+        session_path = temp_session_dir / f"{session_id}.json"
+
+        assert session_path.exists()
+
+        success = session_manager.delete_session(session_id)
+        assert success is True
+        assert not session_path.exists()
+
+    def test_delete_nonexistent_session(self, session_manager):
+        """Test deleting a nonexistent session."""
+        success = session_manager.delete_session("nonexistent")
+        assert success is False
+
+    def test_delete_removes_from_index(self, session_manager):
+        """Test that deleting removes session from index."""
+        session = session_manager.create_session(name="To Delete")
+        session_id = session.metadata.id
+
+        assert session_id in session_manager._index
+
+        session_manager.delete_session(session_id)
+        assert session_id not in session_manager._index
+
+    def test_export_session_json(self, session_manager):
+        """Test exporting a session as JSON."""
+        session = session_manager.create_session(name="Export Test")
+        session.messages = [{"role": "user", "content": "Test"}]
+        session_manager.save_session(session)
+
+        exported = session_manager.export_session(session.metadata.id, format="json")
+        data = json.loads(exported)
+        assert data["metadata"]["name"] == "Export Test"
+        assert len(data["messages"]) == 1
+
+    def test_export_session_markdown(self, session_manager):
+        """Test exporting a session as Markdown."""
+        session = session_manager.create_session(name="Export Test")
+        session.messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there"}
+        ]
+        session_manager.save_session(session)
+
+        exported = session_manager.export_session(session.metadata.id, format="markdown")
+        assert "# Export Test" in exported
+        assert "### User" in exported
+        assert "### Assistant" in exported
+        assert "Hello" in exported
+
+    def test_export_session_text(self, session_manager):
+        """Test exporting a session as plain text."""
+        session = session_manager.create_session(name="Export Test")
+        session.messages = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"}
+        ]
+        session_manager.save_session(session)
+
+        exported = session_manager.export_session(session.metadata.id, format="text")
+        assert "Export Test" in exported
+        assert "[USER]" in exported
+        assert "[ASSISTANT]" in exported
+
+    def test_export_session_to_file(self, session_manager, temp_session_dir):
+        """Test exporting a session to a file."""
+        session = session_manager.create_session(name="Export Test")
+        session_manager.save_session(session)
+
+        export_path = temp_session_dir / "export.json"
+        session_manager.export_session(
+            session.metadata.id,
+            format="json",
+            path=export_path
+        )
+
+        assert export_path.exists()
+        content = export_path.read_text()
+        data = json.loads(content)
+        assert data["metadata"]["name"] == "Export Test"
+
+    def test_export_nonexistent_session(self, session_manager):
+        """Test exporting a nonexistent session."""
+        with pytest.raises(ValueError):
+            session_manager.export_session("nonexistent", format="json")
+
+    def test_export_invalid_format(self, session_manager):
+        """Test exporting with invalid format."""
+        session = session_manager.create_session(name="Export Test")
+        session_manager.save_session(session)
+
+        with pytest.raises(ValueError):
+            session_manager.export_session(session.metadata.id, format="invalid")
+
+    def test_get_recent_sessions(self, session_manager):
+        """Test getting recent sessions."""
+        for i in range(3):
+            session_manager.create_session(name=f"Session {i}")
+
+        recent = session_manager.get_recent_sessions(limit=2)
+        assert len(recent) == 2
+        assert all("id" in s for s in recent)
+        assert all("name" in s for s in recent)
+        assert all("project" in s for s in recent)
+        assert all("updated_at" in s for s in recent)
+        assert all("message_count" in s for s in recent)
+
+    def test_get_recent_sessions_empty(self, session_manager):
+        """Test getting recent sessions when none exist."""
+        recent = session_manager.get_recent_sessions()
+        assert recent == []
+
+    def test_index_persistence(self, session_manager, temp_session_dir):
+        """Test that index is persisted and reloaded."""
+        session1 = session_manager.create_session(name="Session 1")
+        session2 = session_manager.create_session(name="Session 2")
+
+        # Create new manager instance
+        new_manager = SessionManager(base_dir=temp_session_dir)
+        sessions = new_manager.list_sessions()
+
+        assert len(sessions) == 2
+        assert any(s.name == "Session 1" for s in sessions)
+        assert any(s.name == "Session 2" for s in sessions)
+
+    def test_session_metadata_updates(self, session_manager):
+        """Test that session metadata is updated on save."""
+        session = session_manager.create_session(name="Update Test")
+        original_updated_at = session.metadata.updated_at
+
+        time.sleep(0.01)
+        session.messages.append({"role": "user", "content": "New message"})
+        session_manager.save_session(session)
+
+        loaded = session_manager.load_session(session.metadata.id)
+        assert loaded.metadata.updated_at > original_updated_at
+
+    def test_export_markdown_with_metadata(self, session_manager):
+        """Test markdown export includes all metadata."""
+        session = session_manager.create_session(
+            name="Full Test",
+            description="Test description",
+            tags=["tag1", "tag2"]
+        )
+        session.metadata.total_tokens = 1000
+        session.messages = [{"role": "user", "content": "Test"}]
+        session_manager.save_session(session)
+
+        exported = session_manager.export_session(session.metadata.id, format="markdown")
+        assert "Full Test" in exported
+        assert "Test description" in exported
+        assert "tag1" in exported
+        assert "tag2" in exported
+        assert "1,000" in exported  # Formatted tokens
+
+    def test_export_text_with_multiple_messages(self, session_manager):
+        """Test text export with multiple messages."""
+        session = session_manager.create_session(name="Multi Test")
+        session.messages = [
+            {"role": "user", "content": "Question 1"},
+            {"role": "assistant", "content": "Answer 1"},
+            {"role": "user", "content": "Question 2"},
+            {"role": "assistant", "content": "Answer 2"}
+        ]
+        session_manager.save_session(session)
+
+        exported = session_manager.export_session(session.metadata.id, format="text")
+        assert exported.count("[USER]") == 2
+        assert exported.count("[ASSISTANT]") == 2
+
+    def test_fork_with_empty_messages(self, session_manager):
+        """Test forking a session with no messages."""
+        original = session_manager.create_session(name="Empty Original")
+        forked = session_manager.fork_session(original.metadata.id)
+
+        assert len(forked.messages) == 0
+        assert forked.metadata.parent_id == original.metadata.id
+
+    def test_multiple_forks_from_same_parent(self, session_manager):
+        """Test creating multiple forks from the same parent."""
+        original = session_manager.create_session(name="Parent")
+        original.messages = [{"role": "user", "content": "Message"}]
+        session_manager.save_session(original)
+
+        fork1 = session_manager.fork_session(original.metadata.id, name="Fork 1")
+        fork2 = session_manager.fork_session(original.metadata.id, name="Fork 2")
+
+        assert fork1.metadata.parent_id == original.metadata.id
+        assert fork2.metadata.parent_id == original.metadata.id
+        assert fork1.metadata.id != fork2.metadata.id
+
+    def test_session_with_summaries(self, session_manager):
+        """Test session with summaries."""
+        session = session_manager.create_session(name="Summary Test")
+        session.summaries = [
+            {"content": "Summary 1", "message_count": 5},
+            {"content": "Summary 2", "message_count": 3}
+        ]
+        session_manager.save_session(session)
+
+        loaded = session_manager.load_session(session.metadata.id)
+        assert len(loaded.summaries) == 2
+        assert loaded.summaries[0]["content"] == "Summary 1"
+
+    def test_session_with_checkpoints(self, session_manager):
+        """Test session with checkpoints."""
+        session = session_manager.create_session(name="Checkpoint Test")
+        session.checkpoints = ["cp_1", "cp_2", "cp_3"]
+        session_manager.save_session(session)
+
+        loaded = session_manager.load_session(session.metadata.id)
+        assert len(loaded.checkpoints) == 3
+        assert "cp_2" in loaded.checkpoints
+
+    def test_export_json_preserves_all_data(self, session_manager):
+        """Test that JSON export preserves all session data."""
+        session = session_manager.create_session(
+            name="Full Data Test",
+            project="testproj",
+            mode="plan",
+            description="Test",
+            tags=["tag1"]
+        )
+        session.messages = [{"role": "user", "content": "Test"}]
+        session.summaries = [{"content": "Summary"}]
+        session.checkpoints = ["cp_1"]
+        session_manager.save_session(session)
+
+        exported = session_manager.export_session(session.metadata.id, format="json")
+        data = json.loads(exported)
+
+        assert data["metadata"]["name"] == "Full Data Test"
+        assert data["metadata"]["project"] == "testproj"
+        assert data["metadata"]["mode"] == "plan"
+        assert len(data["messages"]) == 1
+        assert len(data["summaries"]) == 1
+        assert len(data["checkpoints"]) == 1
