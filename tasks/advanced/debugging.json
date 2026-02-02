@@ -1,0 +1,55 @@
+[
+  {
+    "id": "debug_001",
+    "category": "advanced",
+    "difficulty": "medium",
+    "description": "Fix syntax error",
+    "prompt": "Fix the syntax error in this Python code",
+    "setup": {
+      "files": {
+        "broken.py": "def calculate(x, y)\n    return x + y"
+      }
+    },
+    "assertions": [
+      {"type": "tool_used", "tool": "edit_file"},
+      {"type": "pattern_exists", "pattern": "def calculate.*:"},
+      {"type": "syntax_valid", "language": "python"}
+    ],
+    "expected_outcome": "Syntax error fixed"
+  },
+  {
+    "id": "debug_002",
+    "category": "advanced",
+    "difficulty": "hard",
+    "description": "Fix logic error",
+    "prompt": "This function should return the maximum value but it's returning the minimum. Fix it.",
+    "setup": {
+      "files": {
+        "logic.py": "def find_max(numbers):\n    result = numbers[0]\n    for num in numbers:\n        if num < result:\n            result = num\n    return result"
+      }
+    },
+    "assertions": [
+      {"type": "tool_used", "tool": "edit_file"},
+      {"type": "pattern_exists", "pattern": "if num > result"}
+    ],
+    "expected_outcome": "Logic error corrected"
+  },
+  {
+    "id": "debug_003",
+    "category": "advanced",
+    "difficulty": "very_hard",
+    "description": "Fix race condition",
+    "prompt": "This code has a race condition. Add proper locking.",
+    "setup": {
+      "files": {
+        "concurrent.py": "counter = 0\n\ndef increment():\n    global counter\n    temp = counter\n    counter = temp + 1"
+      }
+    },
+    "assertions": [
+      {"type": "tool_used", "tool": "edit_file"},
+      {"type": "pattern_exists", "pattern": "threading.Lock"},
+      {"type": "pattern_exists", "pattern": "with.*lock"}
+    ],
+    "expected_outcome": "Race condition fixed with lock"
+  }
+]

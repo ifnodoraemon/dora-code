@@ -1,0 +1,87 @@
+[
+  {
+    "id": "code_001",
+    "category": "basic",
+    "difficulty": "easy",
+    "description": "Generate simple Python function",
+    "prompt": "Create a Python function that adds two numbers",
+    "assertions": [
+      {"type": "file_exists", "path": "*.py"},
+      {"type": "tool_used", "tool": "write_file"},
+      {"type": "pattern_exists", "pattern": "def.*add"},
+      {"type": "pattern_exists", "pattern": "return"}
+    ],
+    "expected_outcome": "Function created with correct signature"
+  },
+  {
+    "id": "code_002",
+    "category": "basic",
+    "difficulty": "medium",
+    "description": "Generate class with methods",
+    "prompt": "Create a Calculator class with add, subtract, multiply, and divide methods",
+    "assertions": [
+      {"type": "file_exists", "path": "*.py"},
+      {"type": "pattern_exists", "pattern": "class Calculator"},
+      {"type": "pattern_exists", "pattern": "def add"},
+      {"type": "pattern_exists", "pattern": "def subtract"},
+      {"type": "pattern_exists", "pattern": "def multiply"},
+      {"type": "pattern_exists", "pattern": "def divide"}
+    ],
+    "expected_outcome": "Calculator class with all methods"
+  },
+  {
+    "id": "code_003",
+    "category": "basic",
+    "difficulty": "medium",
+    "description": "Add error handling",
+    "prompt": "Add try-except error handling to the divide method to handle division by zero",
+    "setup": {
+      "files": {
+        "calc.py": "class Calculator:\n    def divide(self, a, b):\n        return a / b"
+      }
+    },
+    "assertions": [
+      {"type": "tool_used", "tool": "edit_file"},
+      {"type": "pattern_exists", "pattern": "try"},
+      {"type": "pattern_exists", "pattern": "except.*ZeroDivision"}
+    ],
+    "expected_outcome": "Error handling added"
+  },
+  {
+    "id": "code_004",
+    "category": "basic",
+    "difficulty": "hard",
+    "description": "Generate unit tests",
+    "prompt": "Create unit tests for the Calculator class using pytest",
+    "setup": {
+      "files": {
+        "calculator.py": "class Calculator:\n    def add(self, a, b): return a + b"
+      }
+    },
+    "assertions": [
+      {"type": "file_exists", "path": "test_*.py"},
+      {"type": "pattern_exists", "pattern": "import pytest"},
+      {"type": "pattern_exists", "pattern": "def test_"},
+      {"type": "pattern_exists", "pattern": "assert"}
+    ],
+    "expected_outcome": "Test file created with assertions"
+  },
+  {
+    "id": "code_005",
+    "category": "basic",
+    "difficulty": "hard",
+    "description": "Add type hints",
+    "prompt": "Add type hints to all functions in utils.py",
+    "setup": {
+      "files": {
+        "utils.py": "def process(data):\n    return data.upper()\n\ndef calculate(x, y):\n    return x + y"
+      }
+    },
+    "assertions": [
+      {"type": "tool_used", "tool": "edit_file"},
+      {"type": "pattern_exists", "pattern": "def process.*str.*->.*str"},
+      {"type": "pattern_exists", "pattern": "def calculate.*int.*int.*->.*int"}
+    ],
+    "expected_outcome": "Type hints added to all functions"
+  }
+]

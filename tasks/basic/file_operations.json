@@ -1,0 +1,13 @@
+[
+  {
+    "id": "file_001",
+    "category": "basic",
+    "difficulty": "easy",
+    "description": "Create a simple text file",
+    "prompt": "Create a file named hello.txt with the content 'Hello, World!'",
+    "assertions": [
+      {"type": "file_exists", "path": "hello.txt"},
+      {"type": "tool_used", "tool": "write_file"}
+    ]
+  }
+]
