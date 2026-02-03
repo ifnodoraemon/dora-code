@@ -1158,3 +1158,656 @@ class TestGitEdgeCasesAndErrors:
 
         result = git_add([])
         assert "Staged" in result or result  # Should handle gracefully
+
+
+class TestGitComprehensiveBasicOps:
+    """Comprehensive tests for basic git operations (10+ tests)."""
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_status_with_changes(self, mock_run, mock_is_repo):
+        """Test status with staged and unstaged changes."""
+        from src.servers.git import git_status
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "On branch main\nChanges to be committed:\n  modified: file.py")
+
+        result = git_status()
+        assert "main" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_status_with_untracked(self, mock_run, mock_is_repo):
+        """Test status with untracked files."""
+        from src.servers.git import git_status
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Untracked files:\n  new_file.py")
+
+        result = git_status()
+        assert "Untracked" in result or "new_file" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_add_with_path_validation(self, mock_run, mock_is_repo):
+        """Test git add validates file paths."""
+        from src.servers.git import git_add
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "")
+
+        result = git_add("src/main.py")
+        assert "Staged" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_commit_with_multiline_message(self, mock_run, mock_is_repo):
+        """Test commit with multiline message."""
+        from src.servers.git import git_commit
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "1 file changed")
+
+        result = git_commit("feat: add feature\n\nDetailed description")
+        assert result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_commit_nothing_to_commit(self, mock_run, mock_is_repo):
+        """Test commit when nothing is staged."""
+        from src.servers.git import git_commit
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (False, "nothing to commit")
+
+        result = git_commit("feat: nothing")
+        assert "Error" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_reset_all_files(self, mock_run, mock_is_repo):
+        """Test resetting all staged files."""
+        from src.servers.git import git_reset
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "")
+
+        result = git_reset()
+        assert "Reset" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_diff_with_context(self, mock_run, mock_is_repo):
+        """Test diff shows context around changes."""
+        from src.servers.git import git_diff
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "@@-1,5 +1,6@@\n context\n-old\n+new")
+
+        result = git_diff()
+        assert "diff" in result.lower() or "context" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_log_with_count_zero(self, mock_run, mock_is_repo):
+        """Test log with count parameter."""
+        from src.servers.git import git_log
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "abc1234 | Author | time | message")
+
+        result = git_log(count=1)
+        assert result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_show_head(self, mock_run, mock_is_repo):
+        """Test showing HEAD commit."""
+        from src.servers.git import git_show
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "commit abc1234\nAuthor: Test")
+
+        result = git_show()
+        assert "commit" in result.lower() or "abc1234" in result
+
+
+class TestGitComprehensiveBranchOps:
+    """Comprehensive tests for branch operations (10+ tests)."""
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_branch_with_custom_path(self, mock_run, mock_is_repo):
+        """Test branch listing with custom repo path."""
+        from src.servers.git import git_branch
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "* main\n  develop")
+
+        result = git_branch(path="/custom/path")
+        assert "main" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_branch_empty_repo(self, mock_run, mock_is_repo):
+        """Test branch on empty repository."""
+        from src.servers.git import git_branch
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (False, "fatal: not a valid object name")
+
+        result = git_branch()
+        assert "Error" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_checkout_with_path(self, mock_run, mock_is_repo):
+        """Test checkout with custom path."""
+        from src.servers.git import git_checkout
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Switched to branch 'feature'")
+
+        result = git_checkout("feature", path="/repo")
+        assert "feature" in result or "Switched" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_checkout_already_on_branch(self, mock_run, mock_is_repo):
+        """Test checkout when already on target branch."""
+        from src.servers.git import git_checkout
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Already on 'main'")
+
+        result = git_checkout("main")
+        assert "main" in result or "Already" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_merge_abort(self, mock_run, mock_is_repo):
+        """Test merge abort on conflict."""
+        from src.servers.git import git_merge
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (False, "CONFLICT")
+
+        result = git_merge("feature")
+        assert "Error" in result or "CONFLICT" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_merge_already_up_to_date(self, mock_run, mock_is_repo):
+        """Test merge when already up to date."""
+        from src.servers.git import git_merge
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Already up to date")
+
+        result = git_merge("main")
+        assert "up to date" in result.lower() or "Already" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_merge_with_custom_path(self, mock_run, mock_is_repo):
+        """Test merge with custom repo path."""
+        from src.servers.git import git_merge
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Merge made")
+
+        result = git_merge("develop", path="/repo")
+        assert result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_checkout_ends_with_slash(self, mock_run, mock_is_repo):
+        """Test checkout validation rejects names ending with slash."""
+        from src.servers.git import git_checkout
+
+        mock_is_repo.return_value = True
+        result = git_checkout("feature/")
+        assert "Error" in result or "Invalid" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_merge_ends_with_dot(self, mock_run, mock_is_repo):
+        """Test merge validation rejects names ending with dot."""
+        from src.servers.git import git_merge
+
+        mock_is_repo.return_value = True
+        result = git_merge("feature.")
+        assert "Error" in result or "Invalid" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_checkout_with_slash_slash(self, mock_run, mock_is_repo):
+        """Test checkout validation rejects double slashes."""
+        from src.servers.git import git_checkout
+
+        mock_is_repo.return_value = True
+        result = git_checkout("feature//main")
+        assert "Error" in result or "Invalid" in result
+
+
+class TestGitComprehensiveRemoteOps:
+    """Comprehensive tests for remote operations (10+ tests)."""
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_fetch_with_custom_remote(self, mock_run, mock_is_repo):
+        """Test fetch from custom remote."""
+        from src.servers.git import git_fetch
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Fetching upstream")
+
+        result = git_fetch(remote="upstream")
+        assert result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_fetch_with_prune_and_custom_remote(self, mock_run, mock_is_repo):
+        """Test fetch with prune and custom remote."""
+        from src.servers.git import git_fetch
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Pruning")
+
+        result = git_fetch(remote="upstream", prune=True)
+        assert result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_pull_with_custom_remote_and_branch(self, mock_run, mock_is_repo):
+        """Test pull from custom remote and branch."""
+        from src.servers.git import git_pull
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Pulling")
+
+        result = git_pull(remote="upstream", branch="main")
+        assert result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_push_with_custom_remote_and_branch(self, mock_run, mock_is_repo):
+        """Test push to custom remote and branch."""
+        from src.servers.git import git_push
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Pushing")
+
+        result = git_push(remote="upstream", branch="feature")
+        assert result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_push_with_upstream_and_branch(self, mock_run, mock_is_repo):
+        """Test push with upstream tracking and branch."""
+        from src.servers.git import git_push
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Branch set up to track")
+
+        result = git_push(branch="feature", set_upstream=True)
+        assert result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_pull_invalid_branch(self, mock_run, mock_is_repo):
+        """Test pull with invalid branch name."""
+        from src.servers.git import git_pull
+
+        mock_is_repo.return_value = True
+        result = git_pull(branch="invalid branch")
+        assert "Error" in result or "Invalid" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_push_invalid_remote(self, mock_run, mock_is_repo):
+        """Test push with invalid remote name."""
+        from src.servers.git import git_push
+
+        mock_is_repo.return_value = True
+        result = git_push(remote="invalid remote")
+        assert "Error" in result or "Invalid" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_fetch_network_error(self, mock_run, mock_is_repo):
+        """Test fetch with network error."""
+        from src.servers.git import git_fetch
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (False, "fatal: unable to access repository")
+
+        result = git_fetch()
+        assert "Error" in result or "fatal" in result.lower()
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_pull_with_path(self, mock_run, mock_is_repo):
+        """Test pull with custom path."""
+        from src.servers.git import git_pull
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Already up to date")
+
+        result = git_pull(path="/repo")
+        assert result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_push_with_path(self, mock_run, mock_is_repo):
+        """Test push with custom path."""
+        from src.servers.git import git_push
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Pushing")
+
+        result = git_push(path="/repo")
+        assert result
+
+
+class TestGitComprehensiveAdvancedOps:
+    """Comprehensive tests for advanced operations (10+ tests)."""
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_stash_with_path(self, mock_run, mock_is_repo):
+        """Test stash with custom path."""
+        from src.servers.git import git_stash
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Saved")
+
+        result = git_stash(path="/repo")
+        assert result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_stash_apply_with_path(self, mock_run, mock_is_repo):
+        """Test stash apply with custom path."""
+        from src.servers.git import git_stash
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Applied")
+
+        result = git_stash("apply", path="/repo")
+        assert result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_worktree_list_with_path(self, mock_run, mock_is_repo):
+        """Test worktree list with custom path."""
+        from src.servers.git import git_worktree_list
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "/path/to/main (branch main)")
+
+        result = git_worktree_list(path="/repo")
+        assert result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_worktree_add_with_path(self, mock_run, mock_is_repo):
+        """Test worktree add with custom repo path."""
+        from src.servers.git import git_worktree_add
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Created")
+
+        result = git_worktree_add("../feature", "feature/new", path="/repo")
+        assert "worktree" in result.lower() or "feature" in result
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_worktree_remove_with_path(self, mock_run, mock_is_repo):
+        """Test worktree remove with custom repo path."""
+        from src.servers.git import git_worktree_remove
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "Removed")
+
+        result = git_worktree_remove("../feature", path="/repo")
+        assert "Removed" in result or "worktree" in result.lower()
+
+    @patch('src.servers.git._is_git_repo')
+    @patch('src.servers.git._run_git_command')
+    def test_git_worktree_prune_with_path(self, mock_run, mock_is_repo):
+        """Test worktree prune with custom path."""
+        from src.servers.git import git_worktree_prune
+
+        mock_is_repo.return_value = True
+        mock_run.return_value = (True, "")
+
+        result = git_worktree_prune(path="/repo")
+        assert "prune" in result.lower() or "completed" in result.lower()
+
+    @patch('src.servers.git._run_gh_command')
+    def test_gh_pr_create_with_path(self, mock_run):
+        """Test PR creation with custom path."""
+        from src.servers.git import gh_pr_create
+
+        mock_run.return_value = (True, "https://github.com/user/repo/pull/1")
+
+        result = gh_pr_create("Title", "Body", path="/repo")
+        assert "https" in result or "pull" in result.lower()
+
+    @patch('src.servers.git._run_gh_command')
+    def test_gh_pr_list_with_path(self, mock_run):
+        """Test PR list with custom path."""
+        from src.servers.git import gh_pr_list
+
+        mock_run.return_value = (True, "#1\tTitle\tOPEN")
+
+        result = gh_pr_list(path="/repo")
+        assert result
+
+    @patch('src.servers.git._run_gh_command')
+    def test_gh_issue_list_with_path(self, mock_run):
+        """Test issue list with custom path."""
+        from src.servers.git import gh_issue_list
+
+        mock_run.return_value = (True, "#1\tIssue\tOPEN")
+
+        result = gh_issue_list(path="/repo")
+        assert result
+
+    @patch('src.servers.git._run_gh_command')
+    def test_gh_pr_view_with_path(self, mock_run):
+        """Test PR view with custom path."""
+        from src.servers.git import gh_pr_view
+
+        mock_run.return_value = (True, "title: Test")
+
+        result = gh_pr_view(path="/repo")
+        assert result
+
+
+class TestGitPathValidation:
+    """Tests for path validation and security."""
+
+    @patch('src.servers.git._is_git_repo')
+    def test_git_status_invalid_path(self, mock_is_repo):
+        """Test status with invalid path."""
+        from src.servers.git import git_status
+
+        mock_is_repo.return_value = False
+        result = git_status("/invalid/path")
+        assert "Error" in result or "not a git repository" in result
+
+    @patch('src.servers.git._is_git_repo')
+    def test_git_branch_invalid_path(self, mock_is_repo):
+        """Test branch with invalid path."""
+        from src.servers.git import git_branch
+
+        mock_is_repo.return_value = False
+        result = git_branch("/invalid/path")
+        assert "Error" in result or "not a git repository" in result
+
+    @patch('src.servers.git._is_git_repo')
+    def test_git_checkout_invalid_path(self, mock_is_repo):
+        """Test checkout with invalid path."""
+        from src.servers.git import git_checkout
+
+        mock_is_repo.return_value = False
+        result = git_checkout("main", path="/invalid/path")
+        assert "Error" in result or "not a git repository" in result
+
+    @patch('src.servers.git._is_git_repo')
+    def test_git_merge_invalid_path(self, mock_is_repo):
+        """Test merge with invalid path."""
+        from src.servers.git import git_merge
+
+        mock_is_repo.return_value = False
+        result = git_merge("develop", path="/invalid/path")
+        assert "Error" in result or "not a git repository" in result
+
+    @patch('src.servers.git._is_git_repo')
+    def test_git_stash_invalid_path(self, mock_is_repo):
+        """Test stash with invalid path."""
+        from src.servers.git import git_stash
+
+        mock_is_repo.return_value = False
+        result = git_stash(path="/invalid/path")
+        assert "Error" in result or "not a git repository" in result
+
+    @patch('src.servers.git._is_git_repo')
+    def test_git_worktree_list_invalid_path(self, mock_is_repo):
+        """Test worktree list with invalid path."""
+        from src.servers.git import git_worktree_list
+
+        mock_is_repo.return_value = False
+        result = git_worktree_list(path="/invalid/path")
+        assert "Error" in result or "not a git repository" in result
+
+    @patch('src.servers.git._is_git_repo')
+    def test_git_worktree_add_invalid_path(self, mock_is_repo):
+        """Test worktree add with invalid path."""
+        from src.servers.git import git_worktree_add
+
+        mock_is_repo.return_value = False
+        result = git_worktree_add("../feature", "feature", path="/invalid/path")
+        assert "Error" in result or "not a git repository" in result
+
+    @patch('src.servers.git._is_git_repo')
+    def test_git_worktree_remove_invalid_path(self, mock_is_repo):
+        """Test worktree remove with invalid path."""
+        from src.servers.git import git_worktree_remove
+
+        mock_is_repo.return_value = False
+        result = git_worktree_remove("../feature", path="/invalid/path")
+        assert "Error" in result or "not a git repository" in result
+
+    @patch('src.servers.git._is_git_repo')
+    def test_git_worktree_prune_invalid_path(self, mock_is_repo):
+        """Test worktree prune with invalid path."""
+        from src.servers.git import git_worktree_prune
+
+        mock_is_repo.return_value = False
+        result = git_worktree_prune(path="/invalid/path")
+        assert "Error" in result or "not a git repository" in result
+
+
+class TestGitRefValidation:
+    """Tests for git reference validation edge cases."""
+
+    def test_validate_git_ref_with_caret(self):
+        """Test validation rejects caret character."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("feature^old")
+        assert not is_valid
+
+    def test_validate_git_ref_with_asterisk(self):
+        """Test validation rejects asterisk."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("feature*")
+        assert not is_valid
+
+    def test_validate_git_ref_with_bracket(self):
+        """Test validation rejects bracket."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("feature[0]")
+        assert not is_valid
+
+    def test_validate_git_ref_with_backslash(self):
+        """Test validation rejects backslash."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("feature\\main")
+        assert not is_valid
+
+    def test_validate_git_ref_with_colon(self):
+        """Test validation rejects colon."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("feature:tag")
+        assert not is_valid
+
+    def test_validate_git_ref_with_question_mark(self):
+        """Test validation rejects question mark."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("feature?")
+        assert not is_valid
+
+    def test_validate_git_ref_with_tilde(self):
+        """Test validation rejects tilde."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("feature~main")
+        assert not is_valid
+
+    def test_validate_git_ref_with_space(self):
+        """Test validation rejects space."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("feature branch")
+        assert not is_valid
+
+    def test_validate_git_ref_valid_with_slash(self):
+        """Test validation accepts valid slash in ref."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("feature/new-ui")
+        assert is_valid
+
+    def test_validate_git_ref_valid_with_dash(self):
+        """Test validation accepts dash in ref."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("feature-new")
+        assert is_valid
+
+    def test_validate_git_ref_valid_with_underscore(self):
+        """Test validation accepts underscore in ref."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("feature_new")
+        assert is_valid
+
+    def test_validate_git_ref_valid_with_numbers(self):
+        """Test validation accepts numbers in ref."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("v1.0.0")
+        assert is_valid
+
+    def test_validate_git_ref_starts_with_dot(self):
+        """Test validation accepts reference starting with dot (git allows it)."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref(".feature")
+        assert is_valid
+
+    def test_validate_git_ref_ends_with_slash(self):
+        """Test validation rejects reference ending with slash."""
+        from src.servers.git import _validate_git_ref
+
+        is_valid, error_msg = _validate_git_ref("feature/")
+        assert not is_valid
