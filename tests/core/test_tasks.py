@@ -700,3 +700,519 @@ class TestTaskManager:
         assert loaded_root.tags == ["important", "urgent"]
         assert loaded_child.status == TaskStatus.IN_PROGRESS
         assert loaded_child.parent_id == root.id
+
+
+class TestTaskProgress:
+    """Tests for task progress tracking."""
+
+    def test_task_progress_initialization(self):
+        """Test task progress initializes to 0."""
+        task = Task(id="task_1", title="Progress Task")
+        assert task.progress == 0
+
+    def test_task_progress_custom_value(self):
+        """Test task with custom progress value."""
+        task = Task(id="task_2", title="Progress Task", progress=50)
+        assert task.progress == 50
+
+    def test_task_progress_clamping_upper(self):
+        """Test progress is clamped to 100."""
+        task = Task(id="task_3", title="Progress Task", progress=150)
+        assert task.progress == 100
+
+    def test_task_progress_clamping_lower(self):
+        """Test progress is clamped to 0."""
+        task = Task(id="task_4", title="Progress Task", progress=-50)
+        assert task.progress == 0
+
+    def test_update_task_progress(self, tmp_path):
+        """Test updating task progress."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task = manager.create_task(title="Progress Task")
+
+        result = manager.update_task_progress(task.id, 75)
+        assert result is True
+        assert manager.get_task(task.id).progress == 75
+
+    def test_update_task_progress_nonexistent(self, tmp_path):
+        """Test updating progress of non-existent task."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        result = manager.update_task_progress("nonexistent", 50)
+        assert result is False
+
+    def test_task_progress_persistence(self, tmp_path):
+        """Test progress is persisted."""
+        storage_path = tmp_path / "tasks.json"
+        manager1 = TaskManager(storage_path=storage_path)
+        task = manager1.create_task(title="Progress Task", progress=60)
+
+        manager2 = TaskManager(storage_path=storage_path)
+        loaded_task = manager2.get_task(task.id)
+        assert loaded_task.progress == 60
+
+
+class TestTaskOwnership:
+    """Tests for task ownership."""
+
+    def test_task_owner_initialization(self):
+        """Test task owner initializes to None."""
+        task = Task(id="task_1", title="Owner Task")
+        assert task.owner is None
+
+    def test_task_owner_custom_value(self):
+        """Test task with custom owner."""
+        task = Task(id="task_2", title="Owner Task", owner="alice")
+        assert task.owner == "alice"
+
+    def test_update_task_owner(self, tmp_path):
+        """Test updating task owner."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task = manager.create_task(title="Owner Task")
+
+        result = manager.update_task_owner(task.id, "bob")
+        assert result is True
+        assert manager.get_task(task.id).owner == "bob"
+
+    def test_update_task_owner_to_none(self, tmp_path):
+        """Test clearing task owner."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task = manager.create_task(title="Owner Task", owner="alice")
+
+        result = manager.update_task_owner(task.id, None)
+        assert result is True
+        assert manager.get_task(task.id).owner is None
+
+    def test_get_tasks_by_owner(self, tmp_path):
+        """Test getting tasks by owner."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1", owner="alice")
+        task2 = manager.create_task(title="Task 2", owner="bob")
+        task3 = manager.create_task(title="Task 3", owner="alice")
+
+        alice_tasks = manager.get_tasks_by_owner("alice")
+        bob_tasks = manager.get_tasks_by_owner("bob")
+
+        assert len(alice_tasks) == 2
+        assert len(bob_tasks) == 1
+        assert all(t.owner == "alice" for t in alice_tasks)
+        assert all(t.owner == "bob" for t in bob_tasks)
+
+
+class TestTaskMetadata:
+    """Tests for task metadata."""
+
+    def test_task_metadata_initialization(self):
+        """Test task metadata initializes to empty dict."""
+        task = Task(id="task_1", title="Metadata Task")
+        assert task.metadata == {}
+
+    def test_task_metadata_custom_value(self):
+        """Test task with custom metadata."""
+        metadata = {"key": "value", "count": 42}
+        task = Task(id="task_2", title="Metadata Task", metadata=metadata)
+        assert task.metadata == metadata
+
+    def test_update_task_metadata(self, tmp_path):
+        """Test updating task metadata."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task = manager.create_task(title="Metadata Task")
+
+        result = manager.update_task_metadata(task.id, {"key": "value"})
+        assert result is True
+        assert manager.get_task(task.id).metadata == {"key": "value"}
+
+    def test_update_task_metadata_merge(self, tmp_path):
+        """Test metadata update merges with existing."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task = manager.create_task(title="Metadata Task", metadata={"a": 1})
+
+        manager.update_task_metadata(task.id, {"b": 2})
+        metadata = manager.get_task(task.id).metadata
+        assert metadata == {"a": 1, "b": 2}
+
+    def test_task_metadata_persistence(self, tmp_path):
+        """Test metadata is persisted."""
+        storage_path = tmp_path / "tasks.json"
+        manager1 = TaskManager(storage_path=storage_path)
+        task = manager1.create_task(
+            title="Metadata Task",
+            metadata={"custom": "data", "version": 1}
+        )
+
+        manager2 = TaskManager(storage_path=storage_path)
+        loaded_task = manager2.get_task(task.id)
+        assert loaded_task.metadata == {"custom": "data", "version": 1}
+
+
+class TestTaskDependencies:
+    """Tests for task dependencies (blocks/blockedBy)."""
+
+    def test_task_dependencies_initialization(self):
+        """Test task dependencies initialize to empty lists."""
+        task = Task(id="task_1", title="Dependency Task")
+        assert task.blocks == []
+        assert task.blockedBy == []
+
+    def test_add_task_dependency(self, tmp_path):
+        """Test adding a task dependency."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+
+        result = manager.add_task_dependency(task1.id, task2.id)
+        assert result is True
+
+        t1 = manager.get_task(task1.id)
+        t2 = manager.get_task(task2.id)
+        assert task2.id in t1.blocks
+        assert task1.id in t2.blockedBy
+
+    def test_add_task_dependency_nonexistent(self, tmp_path):
+        """Test adding dependency with non-existent task."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task = manager.create_task(title="Task")
+
+        result = manager.add_task_dependency(task.id, "nonexistent")
+        assert result is False
+
+    def test_remove_task_dependency(self, tmp_path):
+        """Test removing a task dependency."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+
+        manager.add_task_dependency(task1.id, task2.id)
+        result = manager.remove_task_dependency(task1.id, task2.id)
+        assert result is True
+
+        t1 = manager.get_task(task1.id)
+        t2 = manager.get_task(task2.id)
+        assert task2.id not in t1.blocks
+        assert task1.id not in t2.blockedBy
+
+    def test_get_blocked_tasks(self, tmp_path):
+        """Test getting tasks blocked by a task."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+        task3 = manager.create_task(title="Task 3")
+
+        manager.add_task_dependency(task1.id, task2.id)
+        manager.add_task_dependency(task1.id, task3.id)
+
+        blocked = manager.get_blocked_tasks(task1.id)
+        assert len(blocked) == 2
+        assert all(t.id in [task2.id, task3.id] for t in blocked)
+
+    def test_get_blocking_tasks(self, tmp_path):
+        """Test getting tasks that block a task."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+        task3 = manager.create_task(title="Task 3")
+
+        manager.add_task_dependency(task1.id, task3.id)
+        manager.add_task_dependency(task2.id, task3.id)
+
+        blocking = manager.get_blocking_tasks(task3.id)
+        assert len(blocking) == 2
+        assert all(t.id in [task1.id, task2.id] for t in blocking)
+
+    def test_is_task_blocked_true(self, tmp_path):
+        """Test checking if task is blocked."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+
+        manager.add_task_dependency(task1.id, task2.id)
+        assert manager.is_task_blocked(task2.id) is True
+
+    def test_is_task_blocked_false_when_blocker_completed(self, tmp_path):
+        """Test task is not blocked when blocker is completed."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+
+        manager.add_task_dependency(task1.id, task2.id)
+        manager.update_task_status(task1.id, TaskStatus.COMPLETED)
+        assert manager.is_task_blocked(task2.id) is False
+
+    def test_task_dependencies_persistence(self, tmp_path):
+        """Test dependencies are persisted."""
+        storage_path = tmp_path / "tasks.json"
+        manager1 = TaskManager(storage_path=storage_path)
+        task1 = manager1.create_task(title="Task 1")
+        task2 = manager1.create_task(title="Task 2")
+        manager1.add_task_dependency(task1.id, task2.id)
+
+        manager2 = TaskManager(storage_path=storage_path)
+        t1 = manager2.get_task(task1.id)
+        t2 = manager2.get_task(task2.id)
+        assert task2.id in t1.blocks
+        assert task1.id in t2.blockedBy
+
+    def test_delete_task_cleans_dependencies(self, tmp_path):
+        """Test deleting task cleans up dependencies."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+        task3 = manager.create_task(title="Task 3")
+
+        manager.add_task_dependency(task1.id, task2.id)
+        manager.add_task_dependency(task2.id, task3.id)
+
+        manager.delete_task(task2.id)
+
+        t1 = manager.get_task(task1.id)
+        t3 = manager.get_task(task3.id)
+        assert task2.id not in t1.blocks
+        assert task2.id not in t3.blockedBy
+
+
+class TestTaskFiltering:
+    """Tests for advanced task filtering."""
+
+    def test_list_tasks_by_priority(self, tmp_path):
+        """Test filtering tasks by priority."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1", priority=TaskPriority.HIGH)
+        task2 = manager.create_task(title="Task 2", priority=TaskPriority.LOW)
+        task3 = manager.create_task(title="Task 3", priority=TaskPriority.HIGH)
+
+        high_priority = manager.list_tasks(priority=TaskPriority.HIGH)
+        assert len(high_priority) == 2
+        assert all(t.priority == TaskPriority.HIGH for t in high_priority)
+
+    def test_list_tasks_by_owner(self, tmp_path):
+        """Test filtering tasks by owner."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1", owner="alice")
+        task2 = manager.create_task(title="Task 2", owner="bob")
+        task3 = manager.create_task(title="Task 3", owner="alice")
+
+        alice_tasks = manager.list_tasks(owner="alice")
+        assert len(alice_tasks) == 2
+        assert all(t.owner == "alice" for t in alice_tasks)
+
+    def test_list_tasks_by_tags(self, tmp_path):
+        """Test filtering tasks by tags."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1", tags=["urgent", "bug"])
+        task2 = manager.create_task(title="Task 2", tags=["feature"])
+        task3 = manager.create_task(title="Task 3", tags=["urgent", "feature"])
+
+        urgent_tasks = manager.list_tasks(tags=["urgent"])
+        assert len(urgent_tasks) == 2
+
+    def test_list_tasks_sort_by_priority(self, tmp_path):
+        """Test sorting tasks by priority."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        manager.create_task(title="Task 1", priority=TaskPriority.LOW)
+        manager.create_task(title="Task 2", priority=TaskPriority.CRITICAL)
+        manager.create_task(title="Task 3", priority=TaskPriority.MEDIUM)
+
+        tasks = manager.list_tasks(sort_by="priority")
+        assert tasks[0].priority == TaskPriority.CRITICAL
+        assert tasks[1].priority == TaskPriority.MEDIUM
+        assert tasks[2].priority == TaskPriority.LOW
+
+    def test_list_tasks_sort_by_progress(self, tmp_path):
+        """Test sorting tasks by progress."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        manager.create_task(title="Task 1", progress=30)
+        manager.create_task(title="Task 2", progress=100)
+        manager.create_task(title="Task 3", progress=50)
+
+        tasks = manager.list_tasks(sort_by="progress")
+        assert tasks[0].progress == 30
+        assert tasks[1].progress == 50
+        assert tasks[2].progress == 100
+
+    def test_list_tasks_multiple_filters(self, tmp_path):
+        """Test filtering with multiple criteria."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(
+            title="Task 1",
+            priority=TaskPriority.HIGH,
+            owner="alice"
+        )
+        task2 = manager.create_task(
+            title="Task 2",
+            priority=TaskPriority.HIGH,
+            owner="bob"
+        )
+        task3 = manager.create_task(
+            title="Task 3",
+            priority=TaskPriority.LOW,
+            owner="alice"
+        )
+
+        manager.update_task_status(task1.id, TaskStatus.IN_PROGRESS)
+        manager.update_task_status(task3.id, TaskStatus.IN_PROGRESS)
+
+        tasks = manager.list_tasks(
+            status=TaskStatus.IN_PROGRESS,
+            priority=TaskPriority.HIGH,
+            owner="alice"
+        )
+        assert len(tasks) == 1
+        assert tasks[0].id == task1.id
+
+
+class TestTaskQueries:
+    """Tests for task query methods."""
+
+    def test_get_high_priority_tasks(self, tmp_path):
+        """Test getting high and critical priority tasks."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        manager.create_task(title="Task 1", priority=TaskPriority.CRITICAL)
+        manager.create_task(title="Task 2", priority=TaskPriority.HIGH)
+        manager.create_task(title="Task 3", priority=TaskPriority.MEDIUM)
+        manager.create_task(title="Task 4", priority=TaskPriority.LOW)
+
+        high_priority = manager.get_high_priority_tasks()
+        assert len(high_priority) == 2
+
+    def test_get_in_progress_tasks(self, tmp_path):
+        """Test getting in-progress tasks."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+        manager.update_task_status(task1.id, TaskStatus.IN_PROGRESS)
+        manager.update_task_status(task2.id, TaskStatus.COMPLETED)
+
+        in_progress = manager.get_in_progress_tasks()
+        assert len(in_progress) == 1
+        assert in_progress[0].id == task1.id
+
+    def test_get_blocked_tasks_list(self, tmp_path):
+        """Test getting blocked tasks."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+        manager.update_task_status(task1.id, TaskStatus.BLOCKED)
+        manager.update_task_status(task2.id, TaskStatus.PENDING)
+
+        blocked = manager.get_blocked_tasks_list()
+        assert len(blocked) == 1
+        assert blocked[0].id == task1.id
+
+    def test_get_completed_tasks(self, tmp_path):
+        """Test getting completed tasks."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+        manager.update_task_status(task1.id, TaskStatus.COMPLETED)
+
+        completed = manager.get_completed_tasks()
+        assert len(completed) == 1
+        assert completed[0].id == task1.id
+
+    def test_get_pending_tasks(self, tmp_path):
+        """Test getting pending tasks."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+        manager.update_task_status(task2.id, TaskStatus.IN_PROGRESS)
+
+        pending = manager.get_pending_tasks()
+        assert len(pending) == 1
+        assert pending[0].id == task1.id
+
+    def test_get_tasks_with_tag(self, tmp_path):
+        """Test getting tasks with specific tag."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        manager.create_task(title="Task 1", tags=["bug", "urgent"])
+        manager.create_task(title="Task 2", tags=["feature"])
+        manager.create_task(title="Task 3", tags=["bug", "feature"])
+
+        bug_tasks = manager.get_tasks_with_tag("bug")
+        assert len(bug_tasks) == 2
+
+    def test_get_incomplete_tasks(self, tmp_path):
+        """Test getting incomplete tasks."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+        task3 = manager.create_task(title="Task 3")
+        manager.update_task_status(task2.id, TaskStatus.COMPLETED)
+        manager.update_task_status(task3.id, TaskStatus.CANCELLED)
+
+        incomplete = manager.get_incomplete_tasks()
+        assert len(incomplete) == 1
+        assert incomplete[0].id == task1.id
+
+
+class TestTaskStatistics:
+    """Tests for task statistics."""
+
+    def test_get_task_statistics_empty(self, tmp_path):
+        """Test statistics on empty task list."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        stats = manager.get_task_statistics()
+
+        assert stats["total"] == 0
+        assert stats["average_progress"] == 0
+        assert stats["blocked_count"] == 0
+
+    def test_get_task_statistics_by_status(self, tmp_path):
+        """Test statistics count by status."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+        task3 = manager.create_task(title="Task 3")
+        manager.update_task_status(task1.id, TaskStatus.COMPLETED)
+        manager.update_task_status(task2.id, TaskStatus.IN_PROGRESS)
+
+        stats = manager.get_task_statistics()
+        assert stats["total"] == 3
+        assert stats["by_status"]["pending"] == 1
+        assert stats["by_status"]["in_progress"] == 1
+        assert stats["by_status"]["completed"] == 1
+
+    def test_get_task_statistics_by_priority(self, tmp_path):
+        """Test statistics count by priority."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        manager.create_task(title="Task 1", priority=TaskPriority.HIGH)
+        manager.create_task(title="Task 2", priority=TaskPriority.HIGH)
+        manager.create_task(title="Task 3", priority=TaskPriority.LOW)
+
+        stats = manager.get_task_statistics()
+        assert stats["by_priority"]["high"] == 2
+        assert stats["by_priority"]["low"] == 1
+
+    def test_get_task_statistics_by_owner(self, tmp_path):
+        """Test statistics count by owner."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        manager.create_task(title="Task 1", owner="alice")
+        manager.create_task(title="Task 2", owner="alice")
+        manager.create_task(title="Task 3", owner="bob")
+        manager.create_task(title="Task 4")
+
+        stats = manager.get_task_statistics()
+        assert stats["by_owner"]["alice"] == 2
+        assert stats["by_owner"]["bob"] == 1
+        assert stats["by_owner"]["unassigned"] == 1
+
+    def test_get_task_statistics_average_progress(self, tmp_path):
+        """Test statistics average progress."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        manager.create_task(title="Task 1", progress=0)
+        manager.create_task(title="Task 2", progress=50)
+        manager.create_task(title="Task 3", progress=100)
+
+        stats = manager.get_task_statistics()
+        assert stats["average_progress"] == 50
+
+    def test_get_task_statistics_blocked_count(self, tmp_path):
+        """Test statistics blocked count."""
+        manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        task1 = manager.create_task(title="Task 1")
+        task2 = manager.create_task(title="Task 2")
+        task3 = manager.create_task(title="Task 3")
+
+        manager.add_task_dependency(task1.id, task2.id)
+        manager.add_task_dependency(task1.id, task3.id)
+
+        stats = manager.get_task_statistics()
+        assert stats["blocked_count"] == 2
