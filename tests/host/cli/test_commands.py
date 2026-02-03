@@ -113,7 +113,7 @@ class TestHelpCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console") as mock_console:
+        with patch("src.host.cli.commands_core.console") as mock_console:
             result = await handler.handle(
                 cmd="help",
                 cmd_args=[],
@@ -147,7 +147,7 @@ class TestHelpCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="help",
                 cmd_args=[],
@@ -188,7 +188,7 @@ class TestClearCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="clear",
                 cmd_args=[],
@@ -226,7 +226,7 @@ class TestClearCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             await handler.handle(
                 cmd="clear",
                 cmd_args=[],
@@ -277,7 +277,7 @@ class TestModeCommand:
         build_system_prompt = MagicMock(return_value="build prompt")
         convert_tools = MagicMock(return_value=[])
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="mode",
                 cmd_args=["build"],
@@ -323,7 +323,7 @@ class TestModeCommand:
         build_system_prompt = MagicMock(return_value="plan prompt")
         convert_tools = MagicMock(return_value=[])
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="mode",
                 cmd_args=["plan"],
@@ -357,7 +357,7 @@ class TestModeCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console") as mock_console:
+        with patch("src.host.cli.commands_core.console") as mock_console:
             result = await handler.handle(
                 cmd="mode",
                 cmd_args=[],
@@ -391,7 +391,7 @@ class TestModeCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console") as mock_console:
+        with patch("src.host.cli.commands_core.console") as mock_console:
             result = await handler.handle(
                 cmd="mode",
                 cmd_args=["invalid_mode"],
@@ -443,7 +443,7 @@ class TestResetCommand:
         build_system_prompt = MagicMock(return_value="build prompt")
         convert_tools = MagicMock(return_value=[])
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="reset",
                 cmd_args=[],
@@ -487,7 +487,7 @@ class TestResetCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="reset",
                 cmd_args=[],
@@ -540,7 +540,7 @@ class TestContextCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="context",
                 cmd_args=[],
@@ -582,7 +582,7 @@ class TestSkillsCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console") as mock_console:
+        with patch("src.host.cli.commands_core.console") as mock_console:
             result = await handler.handle(
                 cmd="skills",
                 cmd_args=[],
@@ -619,7 +619,7 @@ class TestSkillsCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="skills",
                 cmd_args=[],
@@ -663,7 +663,7 @@ class TestToolsCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="tools",
                 cmd_args=[],
@@ -718,7 +718,7 @@ class TestCheckpointsCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_session.console"):
             result = await handler.handle(
                 cmd="checkpoints",
                 cmd_args=[],
@@ -755,7 +755,7 @@ class TestCheckpointsCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_session.console"):
             result = await handler.handle(
                 cmd="checkpoints",
                 cmd_args=[],
@@ -799,7 +799,7 @@ class TestRewindCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_session.console"):
             result = await handler.handle(
                 cmd="rewind",
                 cmd_args=["cp123"],
@@ -839,7 +839,7 @@ class TestRewindCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_session.console"):
             result = await handler.handle(
                 cmd="rewind",
                 cmd_args=[],
@@ -879,7 +879,7 @@ class TestRewindCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console") as mock_console:
+        with patch("src.host.cli.commands_session.console") as mock_console:
             result = await handler.handle(
                 cmd="rewind",
                 cmd_args=["cp123"],
@@ -938,7 +938,7 @@ class TestSessionsCommand:
             project="test-project",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_session.console"):
             result = await handler.handle(
                 cmd="sessions",
                 cmd_args=[],
@@ -977,7 +977,7 @@ class TestSessionsCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_session.console"):
             result = await handler.handle(
                 cmd="sessions",
                 cmd_args=[],
@@ -1022,7 +1022,7 @@ class TestHistoryCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_config.console"):
             result = await handler.handle(
                 cmd="history",
                 cmd_args=[],
@@ -1059,7 +1059,7 @@ class TestHistoryCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_config.console"):
             result = await handler.handle(
                 cmd="history",
                 cmd_args=[],
@@ -1118,7 +1118,7 @@ class TestCostCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_config.console"):
             result = await handler.handle(
                 cmd="cost",
                 cmd_args=[],
@@ -1173,7 +1173,7 @@ class TestCostCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console") as mock_console:
+        with patch("src.host.cli.commands_config.console") as mock_console:
             result = await handler.handle(
                 cmd="cost",
                 cmd_args=[],
@@ -1231,7 +1231,7 @@ class TestTasksCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_session.console"):
             result = await handler.handle(
                 cmd="tasks",
                 cmd_args=[],
@@ -1268,7 +1268,7 @@ class TestTasksCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_session.console"):
             result = await handler.handle(
                 cmd="tasks",
                 cmd_args=[],
@@ -1325,7 +1325,7 @@ class TestDebugCommand:
             project="test-project",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="debug",
                 cmd_args=[],
@@ -1402,7 +1402,7 @@ class TestReturnValueStructure:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="help",
                 cmd_args=[],
@@ -1448,7 +1448,7 @@ class TestReturnValueStructure:
         original_tools = ["tool1", "tool2"]
         original_history = [{"role": "user", "content": "test"}]
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="help",
                 cmd_args=[],
@@ -1493,7 +1493,7 @@ class TestSessionManagementCommands:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_session.console"):
             result = await handler.handle(
                 cmd="resume",
                 cmd_args=["sess123"],
@@ -1527,7 +1527,7 @@ class TestSessionManagementCommands:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console") as mock_console:
+        with patch("src.host.cli.commands_session.console") as mock_console:
             result = await handler.handle(
                 cmd="resume",
                 cmd_args=[],
@@ -1566,7 +1566,7 @@ class TestSessionManagementCommands:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_session.console"):
             result = await handler.handle(
                 cmd="rename",
                 cmd_args=["New", "Session", "Name"],
@@ -1605,7 +1605,7 @@ class TestSessionManagementCommands:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_session.console"):
             result = await handler.handle(
                 cmd="export",
                 cmd_args=["/tmp/export.md"],
@@ -1646,7 +1646,7 @@ class TestSessionManagementCommands:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
+        with patch("src.host.cli.commands_session.console"):
             result = await handler.handle(
                 cmd="fork",
                 cmd_args=[],
@@ -1685,8 +1685,8 @@ class TestModelCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
-            with patch("src.host.cli.commands.ModelManager") as mock_mgr_class:
+        with patch("src.host.cli.commands_config.console"):
+            with patch("src.host.cli.commands_config.ModelManager") as mock_mgr_class:
                 mock_mgr = MagicMock()
                 mock_mgr.switch_model = MagicMock(return_value=True)
                 mock_mgr.get_current_model = MagicMock(return_value="gpt-3.5")
@@ -1724,8 +1724,8 @@ class TestModelCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
-            with patch("src.host.cli.commands.ModelManager") as mock_mgr_class:
+        with patch("src.host.cli.commands_config.console"):
+            with patch("src.host.cli.commands_config.ModelManager") as mock_mgr_class:
                 mock_mgr = MagicMock()
                 mock_mgr.format_model_list = MagicMock(return_value="Model list")
                 mock_mgr_class.return_value = mock_mgr
@@ -1767,8 +1767,8 @@ class TestPluginCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
-            with patch("src.host.cli.commands.PluginManager") as mock_mgr_class:
+        with patch("src.host.cli.commands_config.console"):
+            with patch("src.host.cli.commands_config.PluginManager") as mock_mgr_class:
                 mock_mgr = MagicMock()
                 mock_plugin = MagicMock()
                 mock_plugin.manifest.name = "test-plugin"
@@ -1807,8 +1807,8 @@ class TestPluginCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
-            with patch("src.host.cli.commands.PluginManager") as mock_mgr_class:
+        with patch("src.host.cli.commands_config.console"):
+            with patch("src.host.cli.commands_config.PluginManager") as mock_mgr_class:
                 mock_mgr = MagicMock()
                 mock_mgr.enable = MagicMock(return_value=True)
                 mock_mgr_class.return_value = mock_mgr
@@ -1845,8 +1845,8 @@ class TestPluginCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
-            with patch("src.host.cli.commands.PluginManager") as mock_mgr_class:
+        with patch("src.host.cli.commands_config.console"):
+            with patch("src.host.cli.commands_config.PluginManager") as mock_mgr_class:
                 mock_mgr = MagicMock()
                 mock_mgr.disable = MagicMock(return_value=True)
                 mock_mgr_class.return_value = mock_mgr
@@ -1883,7 +1883,7 @@ class TestPluginCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console") as mock_console:
+        with patch("src.host.cli.commands_config.console") as mock_console:
             result = await handler.handle(
                 cmd="plugin",
                 cmd_args=[],
@@ -1922,8 +1922,8 @@ class TestThemeCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
-            with patch("src.host.cli.commands.ThemeManager") as mock_mgr_class:
+        with patch("src.host.cli.commands_config.console"):
+            with patch("src.host.cli.commands_config.ThemeManager") as mock_mgr_class:
                 mock_mgr = MagicMock()
                 mock_mgr.set_theme = MagicMock(return_value=True)
                 mock_mgr_class.return_value = mock_mgr
@@ -1960,8 +1960,8 @@ class TestThemeCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
-            with patch("src.host.cli.commands.ThemeManager") as mock_mgr_class:
+        with patch("src.host.cli.commands_config.console"):
+            with patch("src.host.cli.commands_config.ThemeManager") as mock_mgr_class:
                 mock_mgr = MagicMock()
                 mock_mgr.format_theme_list = MagicMock(return_value="Theme list")
                 mock_mgr_class.return_value = mock_mgr
@@ -2003,8 +2003,8 @@ class TestToggleCommands:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
-            with patch("src.host.cli.commands.InputManager") as mock_mgr_class:
+        with patch("src.host.cli.commands_config.console"):
+            with patch("src.host.cli.commands_config.InputManager") as mock_mgr_class:
                 mock_mgr = MagicMock()
                 from src.core.input_mode import InputMode
                 mock_mgr.toggle_mode = MagicMock(return_value=InputMode.VI)
@@ -2044,8 +2044,8 @@ class TestToggleCommands:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
-            with patch("src.host.cli.commands.ThinkingManager") as mock_mgr_class:
+        with patch("src.host.cli.commands_config.console"):
+            with patch("src.host.cli.commands_config.ThinkingManager") as mock_mgr_class:
                 mock_mgr = MagicMock()
                 mock_mgr.toggle_mode = MagicMock(return_value=ThinkingMode.EXTENDED)
                 mock_mgr.get_mode_indicator = MagicMock(return_value="[ON]")
@@ -2088,8 +2088,8 @@ class TestInitCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
-            with patch("src.host.cli.commands.Path") as mock_path_class:
+        with patch("src.host.cli.commands_core.console"):
+            with patch("src.host.cli.commands_core.Path") as mock_path_class:
                 mock_path = MagicMock()
                 mock_path.exists = MagicMock(return_value=False)
                 mock_path.write_text = MagicMock()
@@ -2128,8 +2128,8 @@ class TestInitCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands.console"):
-            with patch("src.host.cli.commands.Path") as mock_path_class:
+        with patch("src.host.cli.commands_core.console"):
+            with patch("src.host.cli.commands_core.Path") as mock_path_class:
                 mock_path = MagicMock()
                 mock_path.exists = MagicMock(return_value=True)
                 mock_path_class.cwd.return_value = MagicMock()
