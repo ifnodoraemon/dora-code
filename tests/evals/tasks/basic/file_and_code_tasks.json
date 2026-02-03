@@ -1,0 +1,148 @@
+[
+  {
+    "id": "file-001",
+    "category": "file_operations",
+    "difficulty": "easy",
+    "prompt": "Create a Python file named 'hello.py' that prints 'Hello, World!'",
+    "assertions": [
+      {"type": "file_exists", "path": "hello.py"},
+      {"type": "file_contains", "path": "hello.py", "pattern": "print"},
+      {"type": "file_contains", "path": "hello.py", "pattern": "Hello, World!"},
+      {"type": "tool_used", "tool": "write_file"}
+    ],
+    "expected_steps": 1,
+    "timeout": 30,
+    "rubric": "File should exist and contain correct print statement"
+  },
+  {
+    "id": "file-002",
+    "category": "file_operations",
+    "difficulty": "easy",
+    "prompt": "Read the contents of README.md and tell me the project name",
+    "assertions": [
+      {"type": "tool_used", "tool": "read_file"},
+      {"type": "output_contains", "pattern": "Doraemon"}
+    ],
+    "expected_steps": 1,
+    "timeout": 30,
+    "rubric": "Should correctly identify project name from README"
+  },
+  {
+    "id": "file-003",
+    "category": "file_operations",
+    "difficulty": "easy",
+    "prompt": "Create a directory named 'test_dir' and create a file 'test.txt' inside it with content 'test'",
+    "assertions": [
+      {"type": "file_exists", "path": "test_dir/test.txt"},
+      {"type": "file_contains", "path": "test_dir/test.txt", "pattern": "test"},
+      {"type": "tool_used", "tool": "write_file"}
+    ],
+    "expected_steps": 2,
+    "timeout": 30,
+    "rubric": "Directory and file should be created with correct content"
+  },
+  {
+    "id": "code-001",
+    "category": "code_writing",
+    "difficulty": "easy",
+    "prompt": "Write a Python function named 'add' that takes two numbers and returns their sum. Save it to 'math_utils.py'",
+    "assertions": [
+      {"type": "file_exists", "path": "math_utils.py"},
+      {"type": "file_contains", "path": "math_utils.py", "pattern": "def add"},
+      {"type": "file_contains", "path": "math_utils.py", "pattern": "return"},
+      {"type": "tool_used", "tool": "write_file"}
+    ],
+    "expected_steps": 1,
+    "timeout": 30,
+    "rubric": "Function should be correctly defined with proper syntax"
+  },
+  {
+    "id": "code-002",
+    "category": "code_writing",
+    "difficulty": "medium",
+    "prompt": "Create a Python class 'Calculator' with methods add, subtract, multiply, and divide. Save to 'calculator.py'",
+    "assertions": [
+      {"type": "file_exists", "path": "calculator.py"},
+      {"type": "file_contains", "path": "calculator.py", "pattern": "class Calculator"},
+      {"type": "file_contains", "path": "calculator.py", "pattern": "def add"},
+      {"type": "file_contains", "path": "calculator.py", "pattern": "def subtract"},
+      {"type": "file_contains", "path": "calculator.py", "pattern": "def multiply"},
+      {"type": "file_contains", "path": "calculator.py", "pattern": "def divide"},
+      {"type": "tool_used", "tool": "write_file"}
+    ],
+    "expected_steps": 1,
+    "timeout": 45,
+    "rubric": "Class should have all four methods with correct implementation"
+  },
+  {
+    "id": "code-003",
+    "category": "code_writing",
+    "difficulty": "medium",
+    "prompt": "Write a function to calculate fibonacci numbers recursively. Save to 'fibonacci.py'",
+    "assertions": [
+      {"type": "file_exists", "path": "fibonacci.py"},
+      {"type": "file_contains", "path": "fibonacci.py", "pattern": "def"},
+      {"type": "file_contains", "path": "fibonacci.py", "pattern": "return"},
+      {"type": "tool_used", "tool": "write_file"}
+    ],
+    "expected_steps": 1,
+    "timeout": 45,
+    "rubric": "Function should correctly implement fibonacci algorithm"
+  },
+  {
+    "id": "edit-001",
+    "category": "code_editing",
+    "difficulty": "medium",
+    "prompt": "Add error handling to the divide method in calculator.py to handle division by zero",
+    "assertions": [
+      {"type": "file_contains", "path": "calculator.py", "pattern": "ZeroDivisionError"},
+      {"type": "tool_used", "tool": "edit_file"}
+    ],
+    "expected_steps": 1,
+    "timeout": 45,
+    "rubric": "Should add proper exception handling for division by zero"
+  },
+  {
+    "id": "edit-002",
+    "category": "code_editing",
+    "difficulty": "medium",
+    "prompt": "Add docstrings to all methods in the Calculator class",
+    "assertions": [
+      {"type": "file_contains", "path": "calculator.py", "pattern": "\"\"\""},
+      {"type": "tool_used", "tool": "edit_file"}
+    ],
+    "expected_steps": 4,
+    "timeout": 60,
+    "rubric": "All methods should have descriptive docstrings"
+  },
+  {
+    "id": "debug-001",
+    "category": "debugging",
+    "difficulty": "hard",
+    "prompt": "Find and fix the bug in fibonacci.py that causes incorrect results for n=0",
+    "assertions": [
+      {"type": "tool_used", "tool": "read_file"},
+      {"type": "tool_used", "tool": "edit_file"},
+      {"type": "file_contains", "path": "fibonacci.py", "pattern": "if n == 0"}
+    ],
+    "expected_steps": 2,
+    "timeout": 60,
+    "rubric": "Should identify and fix the base case bug"
+  },
+  {
+    "id": "multi-001",
+    "category": "multi_file",
+    "difficulty": "hard",
+    "prompt": "Create a simple Python package with __init__.py, math_utils.py, and string_utils.py. Each should have at least 2 utility functions",
+    "assertions": [
+      {"type": "file_exists", "path": "__init__.py"},
+      {"type": "file_exists", "path": "math_utils.py"},
+      {"type": "file_exists", "path": "string_utils.py"},
+      {"type": "file_contains", "path": "math_utils.py", "pattern": "def"},
+      {"type": "file_contains", "path": "string_utils.py", "pattern": "def"}
+    ],
+    "expected_steps": 3,
+    "timeout": 90,
+    "rubric": "Should create a proper Python package structure with utility functions"
+  }
+]
