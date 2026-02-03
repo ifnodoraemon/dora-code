@@ -1,123 +1,45 @@
 # 🤖 Doraemon Code
 
-**Doraemon Code** 是一个功能完整的 AI 编程助手，对标 Claude Code，支持 **Web UI**、**Model Gateway** 多模型接入和丰富的开发功能。
+**Doraemon Code** is a powerful AI coding assistant built on the Model Context Protocol (MCP), featuring a unified model gateway, comprehensive testing, and rich development tools.
 
-## ✨ 新特性 v0.7.0
+[![Tests](https://img.shields.io/badge/tests-1492%20passing-brightgreen)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-95%25%2B-brightgreen)](tests/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-- **🌐 Model Gateway**: 统一的模型网关，支持 Google Gemini、OpenAI、Anthropic、Ollama
-- **🔄 任务中断恢复**: 自动保存任务状态，支持 Ctrl+C 后恢复
-- **🔌 插件系统**: 从 GitHub 安装插件扩展功能
-- **📊 成本追踪**: 实时 Token 用量和费用统计
-- **🎯 检查点系统**: 代码和对话的回滚能力
-- **🤖 子代理系统**: 动态创建专门化的 AI 代理
-- **🎨 主题系统**: 多种内置主题可选
+## ✨ Features
 
-- **Polyglot**: Writes and understands Python, JavaScript, Go, Rust, etc.
+### 🌐 Model Gateway
+- **Unified API**: Single interface for Google Gemini, OpenAI, Anthropic, and Ollama
+- **Auto-detection**: Automatically selects gateway or direct mode based on configuration
+- **Provider Adapters**: Seamless conversion between different model formats
 
-## 🏗️ Architecture
+### 🧪 Comprehensive Testing
+- **1,492 tests** with **95%+ coverage**
+- Comprehensive test suites for all core modules
+- Automated testing with pytest
 
-Doraemon Code follows a modular **Host-Server** architecture:
+### 🏗️ MCP Architecture
+- **Host-Server Model**: Modular design for unlimited extensibility
+- **Direct Function Calls**: No subprocess overhead with FastMCP
+- **Multiple Servers**: Filesystem, Git, Browser, Database, and more
 
-- **Host (Brain)**: Manages context, LLM interaction, and tool orchestration.
-- **Servers (Limbs)**: specialized modules for capabilities:
-  - `fs`: Unified filesystem operations
-  - `lsp`: Code intelligence (LSP)
-  - `git`: Version control & worktrees
-  - `webui`: Modern web interface
+### 🎯 Core Capabilities
+- **Context Management**: Automatic summarization at 70% of context window
+- **Checkpoint System**: File snapshots and rollback capability
+- **Session Persistence**: Resume conversations across restarts
+- **Tool Registry**: Easy tool registration with automatic parameter extraction
 
-## 📂 Directory Structure
-
-```
-src/
-├── core/           # Core logic (context, planning, subagents)
-├── host/           # CLI implementation
-│   └── cli/        # Modular CLI commands
-├── servers/        # Capability servers
-├── services/       # Shared services
-└── webui/          # Web Interface (React + FastAPI)
-```
-
-## 🚀 Getting Started
-
-    
-    subgraph Core [Core Infrastructure]
-        Config[Configuration]
-        Metrics[Metrics]
-        Telemetry[Telemetry]
-        Errors[Error Handling]
-    end
-    
-    subgraph Servers [MCP Servers]
-        FS[Filesystem]
-        Computer[computer]
-        Memory[memory]
-        Web[web]
-        Task[task]
-    end
-    
-    subgraph External [External Services]
-        Gemini[Google Gemini]
-        OpenAI[OpenAI]
-        ChromaDB[ChromaDB]
-    end
-    
-    CLI --> Client
-    Client --> FS
-    Client --> Computer
-    Client --> Memory
-    Client --> Web
-    Client --> Task
-    
-    CLI --> Gemini
-    CLI --> OpenAI
-    Memory --> ChromaDB
-    
-    DI --> Core
-    Events --> Core
-```
-
-## Features
-
-### v0.4.1 (Enterprise Infrastructure)
-
-- **Parallel Connections**: MCP servers connect in parallel for faster startup
-- **Result Caching**: Intelligent caching with TTL for read operations
-- **Circuit Breaker**: Automatic fault isolation for failing servers
-- **Retry Policy**: Exponential backoff with jitter for transient errors
-- **Metrics Collection**: Counter, Gauge, Histogram metrics
-- **Distributed Tracing**: Span-based tracing across tool calls
-- **User-Friendly Errors**: Localized error messages (EN/ZH)
-
-### v0.4.0 (Multi-Mode Agent)
-
-- **Expert Modes**: Switch between specialized personas
-  - **Default**: General assistant
-  - **Plan (`/mode plan`)**: Strategic planning and task breakdown
-  - **Build (`/mode build`)**: Implementation and execution
-  - **Coder (`/mode coder`)**: Code quality and testing focus
-  - **Architect (`/mode architect`)**: System design and documentation
-- **Code Intelligence**: AST parsing, symbol navigation
-- **Task Management**: Built-in todo list with MCP server
-
-### Core Features
-
-- **MCP Architecture**: Client-Server model for unlimited extensibility
-- **Multi-modal Vision**: Gemini Vision and GPT-4o support
-- **Long-term Memory**: ChromaDB-based vector storage
-- **File Processing**: PDF, Word, PPT, Excel, images
-- **Code Execution**: Sandboxed Python interpreter
-- **Security**: Path jailing, HITL approval, resource limits
-
-## Quick Start
+## 🚀 Quick Start
 
 ### Installation
 
 ```bash
-# Clone
-git clone https://github.com/doraemon-code/doraemon.git
-cd doraemon
+# Clone the repository
+git clone https://github.com/ifnodoraemon/doraemon-code.git
+cd doraemon-code
 
-# Install
+# Install with pip
 pip install -e .
 
 # Or with dev dependencies
@@ -126,88 +48,188 @@ pip install -e ".[dev]"
 
 ### Configuration
 
-Create `.env` in project root:
+Create a `.env` file in the project root:
 
 ```bash
-GOOGLE_API_KEY="your_google_api_key"
-OPENAI_API_KEY="your_openai_api_key"  # Optional
+# For Gateway Mode (recommended)
+DORAEMON_GATEWAY_URL=http://localhost:8000
+DORAEMON_GATEWAY_KEY=your_api_key  # Optional
+
+# For Direct Mode (at least one required)
+GOOGLE_API_KEY=your_google_api_key
+OPENAI_API_KEY=your_openai_api_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
+
+# Model Selection
+DORAEMON_MODEL=gemini-2.0-flash-exp  # or gpt-4, claude-3-5-sonnet, etc.
 ```
 
 ### Run
 
 ```bash
 # Start CLI
-pl start
+doraemon
+
+# Or use the short alias
+dora
 
 # With specific project (isolated memory)
-pl start --project "MyProject"
+doraemon --project "MyProject"
 ```
 
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `/help` | 显示所有命令 |
-| `/mode <name>` | 切换模式（plan/build）|
-| `/model [name]` | 切换/列出可用模型 |
-| `/checkpoints` | 列出检查点 |
-| `/rewind [id]` | 回滚到检查点 |
-| `/cost` | 显示费用统计 |
-| `/sessions` | 列出会话 |
-| `/resume <id>` | 恢复会话 |
-| `/plugins` | 列出插件 |
-| `/theme [name]` | 切换主题 |
-| `/doctor` | 运行健康检查 |
-| `/exit` | 退出 |
-| `!<cmd>` | 执行 Shell 命令 |
-
-## MCP Servers
-
-| Server | Tools | Description |
-|--------|-------|-------------|
-| `filesystem` | `read_file`, `write_file`, `edit_file`, `list_directory`, etc. | Unified filesystem operations |
-| `computer` | `execute_python`, `install_package` | Sandboxed code execution |
-| `memory` | `save_note`, `search_notes` | Vector-based long-term memory |
-| `web` | `fetch_url`, `web_search` | Web content fetching |
-| `task` | `task_create`, `task_list`, `task_update_status` | Task management |
-
-## Project Structure
+## 📂 Project Structure
 
 ```
-doraemon/
+doraemon-code/
 ├── src/
-│   ├── core/           # Core infrastructure
-│   │   ├── configuration.py  # Hierarchical config
-│   │   ├── events.py         # Event bus (pub/sub)
-│   │   ├── metrics.py        # Metrics collection
-│   │   ├── errors.py         # Error handling
-│   │   └── telemetry.py      # Logging & tracing
-│   ├── host/           # CLI host
-│   │   ├── cli.py            # Main CLI
-│   │   └── client.py         # MCP client
-│   ├── servers/        # MCP servers
-│   └── services/       # Shared services
-├── tests/              # Test suite
-└── docs/               # Documentation
+│   ├── core/              # Core infrastructure
+│   │   ├── model_client.py      # Unified LLM interface
+│   │   ├── context_manager.py   # Conversation management
+│   │   ├── mcp_client.py        # MCP client implementation
+│   │   ├── checkpoint.py        # File snapshots & rollback
+│   │   └── session.py           # Session persistence
+│   ├── host/              # CLI implementation
+│   │   ├── cli/                 # Main chat loop
+│   │   └── tools.py             # Tool registry
+│   ├── servers/           # MCP servers
+│   │   ├── filesystem.py        # File operations
+│   │   ├── git.py               # Version control
+│   │   ├── browser.py           # Web browsing
+│   │   └── database.py          # Database operations
+│   ├── gateway/           # Model gateway
+│   │   ├── server.py            # FastAPI server
+│   │   ├── router.py            # Model routing
+│   │   └── adapters/            # Provider adapters
+│   └── webui/             # Web interface (React + FastAPI)
+├── tests/                 # Comprehensive test suite
+│   └── core/              # Core module tests
+└── docs/                  # Documentation
 ```
 
-## Security
+## 🧪 Testing
 
-- **HITL (Human-in-the-loop)**: Sensitive operations require user approval
-- **Path Sandboxing**: File operations restricted to workspace
-- **Resource Limits**: Code execution has memory/CPU/time limits
-- **Circuit Breaker**: Automatic isolation of failing services
+### Run Tests
 
-## Configuration
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=src --cov-report=term-missing
+
+# Run specific test file
+pytest tests/core/test_model_client_comprehensive.py -v
+```
+
+### Test Coverage
+
+| Module | Tests | Coverage | Status |
+|--------|-------|----------|--------|
+| `model_client.py` | 117 | 90%+ | ✅ |
+| `mcp_client.py` | 103 | 97%+ | ✅ |
+| `chat_loop.py` | 72 | 95%+ | ✅ |
+| `checkpoint.py` | 70 | 100% | ✅ |
+| `session.py` | 121 | 95%+ | ✅ |
+| `context_manager.py` | - | 95%+ | ✅ |
+| `plugins.py` | - | 95%+ | ✅ |
+| `hooks.py` | - | 95%+ | ✅ |
+
+**Total**: 1,492 tests with 95%+ overall coverage
+
+## 🛠️ Development
+
+### Setup Development Environment
+
+```bash
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Run linter
+ruff check src/ tests/
+
+# Auto-fix issues
+ruff check src/ tests/ --fix
+
+# Format code
+ruff format src/ tests/
+
+# Type checking
+mypy src/
+```
+
+### Code Style
+
+- **Line length**: 100 characters
+- **Python version**: 3.10+
+- **Linter**: Ruff
+- **Formatter**: Ruff
+- **Type checker**: MyPy
+
+## 🏗️ Architecture
+
+### Host-Server Model
+
+```
+┌─────────────────────────────────────────┐
+│              CLI Host                    │
+│  ┌──────────────────────────────────┐   │
+│  │     Context Manager              │   │
+│  │  - Conversation history          │   │
+│  │  - Auto summarization            │   │
+│  └──────────────────────────────────┘   │
+│  ┌──────────────────────────────────┐   │
+│  │     Model Client                 │   │
+│  │  - Gateway mode / Direct mode    │   │
+│  │  - Unified interface             │   │
+│  └──────────────────────────────────┘   │
+│  ┌──────────────────────────────────┐   │
+│  │     Tool Registry                │   │
+│  │  - Direct function calls         │   │
+│  │  - Auto parameter extraction     │   │
+│  └──────────────────────────────────┘   │
+└─────────────────────────────────────────┘
+                    │
+        ┌───────────┼───────────┐
+        │           │           │
+   ┌────▼────┐ ┌───▼────┐ ┌───▼────┐
+   │Filesystem│ │  Git   │ │Browser │
+   │ Server  │ │ Server │ │ Server │
+   └─────────┘ └────────┘ └────────┘
+```
+
+### Model Gateway
+
+```
+┌─────────────────────────────────────────┐
+│         Gateway Server                   │
+│  ┌──────────────────────────────────┐   │
+│  │     Router                       │   │
+│  │  - Model selection               │   │
+│  │  - Request routing               │   │
+│  └──────────────────────────────────┘   │
+│  ┌──────────────────────────────────┐   │
+│  │     Provider Adapters            │   │
+│  │  - Google Gemini                 │   │
+│  │  - OpenAI                        │   │
+│  │  - Anthropic                     │   │
+│  │  - Ollama                        │   │
+│  └──────────────────────────────────┘   │
+└─────────────────────────────────────────┘
+```
+
+## 🔧 Configuration
 
 ### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `GOOGLE_API_KEY` | Gemini API key | Required |
-| `DORAEMON_MODEL` | LLM model | `gemini-3-pro-preview` |
-| `DORAEMON_LOG_LEVEL` | Log level | `INFO` |
-| `DORAEMON_MAX_MEMORY_MB` | Code execution memory | `512` |
+| `DORAEMON_GATEWAY_URL` | Gateway server URL | - |
+| `DORAEMON_GATEWAY_KEY` | Gateway API key | - |
+| `GOOGLE_API_KEY` | Google Gemini API key | - |
+| `OPENAI_API_KEY` | OpenAI API key | - |
+| `ANTHROPIC_API_KEY` | Anthropic API key | - |
+| `DORAEMON_MODEL` | Default model | `gemini-2.0-flash-exp` |
+| `DORAEMON_LOG_LEVEL` | Logging level | `INFO` |
 
 ### Config File
 
@@ -216,72 +238,61 @@ doraemon/
 ```json
 {
   "mcpServers": {
-    "memory": {
-      "command": "python3",
-      "args": ["src/servers/memory.py"]
+    "filesystem": {
+      "command": "python",
+      "args": ["src/servers/filesystem.py"]
+    },
+    "git": {
+      "command": "python",
+      "args": ["src/servers/git.py"]
     }
   },
-  "persona": {
-    "name": "Doraemon Code",
-    "role": "AI Assistant"
-  },
   "sensitive_tools": [
+    "write_file",
     "execute_python",
-    "write_file"
+    "shell_execute"
   ]
 }
 ```
 
-## Development
+## 📚 Documentation
 
-```bash
-# Install dev dependencies
-pip install -e ".[dev]"
+- [CLAUDE.md](CLAUDE.md) - Development guide for Claude Code
+- [docs/api.md](docs/api.md) - API reference
+- [docs/development.md](docs/development.md) - Development guide
 
-# Run tests
-pytest tests/ -v
+## 🤝 Contributing
 
-# Run with coverage
-pytest tests/ --cov=src --cov-report=term-missing
+Contributions are welcome! Please read our contributing guidelines before submitting PRs.
 
-# Lint
-ruff check src/ tests/
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Ensure all tests pass
+6. Submit a pull request
 
-# Format
-ruff format src/ tests/
-```
-
-### 🧪 Test Coverage
-
-Doraemon Code has comprehensive test coverage for core modules:
-
-| Module | Tests | Coverage | Status |
-|--------|-------|----------|--------|
-| `chat_loop.py` | 72 | 95%+ | ✅ |
-| `model_client.py` | 117 | 90%+ | ✅ |
-| `mcp_client.py` | 103 | 97%+ | ✅ |
-| `checkpoint.py` | 70 | 100% | ✅ |
-| `context_manager.py` | - | 95%+ | ✅ |
-| `plugins.py` | - | 95%+ | ✅ |
-| `session.py` | - | 95%+ | ✅ |
-| `hooks.py` | - | 95%+ | ✅ |
-
-**Total**: 400+ tests with 95%+ overall coverage
-
-
-## Documentation
-
-- [API Reference](docs/api.md) - Complete API documentation
-- [Development Guide](docs/development.md) - How to extend Doraemon
-- [Contributing](CONTRIBUTING.md) - Contribution guidelines
-
-## License
+## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
 - [Model Context Protocol](https://modelcontextprotocol.io) - The foundation
 - [Google Gemini](https://ai.google.dev) - LLM provider
-- [ChromaDB](https://www.trychroma.com) - Vector database
+- [OpenAI](https://openai.com) - LLM provider
+- [Anthropic](https://anthropic.com) - LLM provider
+- [FastMCP](https://github.com/jlowin/fastmcp) - MCP implementation
 - [Rich](https://rich.readthedocs.io) - Beautiful terminal output
+
+## 📊 Project Status
+
+- **Version**: 0.8.0
+- **Status**: Active Development
+- **Python**: 3.10+
+- **Tests**: 1,492 passing
+- **Coverage**: 95%+
+
+---
+
+**Built with ❤️ by the Doraemon Code team**
