@@ -97,24 +97,26 @@ class DependencyAnalyzer:
 
     # Tools that write/modify state
     WRITE_TOOLS = {
-        "file_write",
-        "file_edit",
-        "file_delete",
-        "shell_exec",
+        "write",
+        "write_file",
+        "edit_file",
+        "shell_execute",
         "git_commit",
         "git_push",
     }
 
     # Tools that read state
     READ_TOOLS = {
-        "file_read",
-        "file_list",
-        "file_search",
+        "read",
+        "read_file",
+        "search",
+        "list_directory",
+        "glob_files",
+        "grep_search",
         "git_status",
         "git_log",
         "git_diff",
         "semantic_search",
-        "grep",
     }
 
     # Known dependencies (tool -> depends on)
@@ -145,9 +147,7 @@ class DependencyAnalyzer:
 
         return stages
 
-    def _build_dependency_graph(
-        self, calls: list[ToolCall]
-    ) -> dict[str, set[str]]:
+    def _build_dependency_graph(self, calls: list[ToolCall]) -> dict[str, set[str]]:
         """Build dependency graph from tool calls."""
         graph: dict[str, set[str]] = {call.id: set() for call in calls}
 
@@ -171,9 +171,7 @@ class DependencyAnalyzer:
                 path = call.arguments.get("path", call.arguments.get("file"))
                 if path:
                     for prev_call in calls[:i]:
-                        prev_path = prev_call.arguments.get(
-                            "path", prev_call.arguments.get("file")
-                        )
+                        prev_path = prev_call.arguments.get("path", prev_call.arguments.get("file"))
                         if prev_path == path and prev_call.name in self.WRITE_TOOLS:
                             graph[call.id].add(prev_call.id)
 
@@ -183,9 +181,7 @@ class DependencyAnalyzer:
                     if dep_name in name_to_ids:
                         # Find latest call of that tool before this one
                         for dep_id in reversed(name_to_ids[dep_name]):
-                            dep_idx = next(
-                                j for j, c in enumerate(calls) if c.id == dep_id
-                            )
+                            dep_idx = next(j for j, c in enumerate(calls) if c.id == dep_id)
                             if dep_idx < i:
                                 graph[call.id].add(dep_id)
                                 break
@@ -212,8 +208,7 @@ class DependencyAnalyzer:
             ready = [
                 cid
                 for cid in remaining
-                if in_degree[cid] == 0
-                or all(dep not in remaining for dep in graph[cid])
+                if in_degree[cid] == 0 or all(dep not in remaining for dep in graph[cid])
             ]
 
             if not ready:
@@ -448,7 +443,7 @@ class ParallelExecutor:
         if not calls:
             return []
 
-        stages = self.analyzer.analyze(calls)
+        stages = self._analyzer.analyze(calls)
         results = []
         call_to_result: dict[str, ToolResult] = {}
 
