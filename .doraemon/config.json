@@ -7,36 +7,15 @@
       ],
       "env": {}
     },
-    "fs_read": {
+    "filesystem": {
       "command": "python3",
       "args": [
-        "src/servers/fs_read.py"
+        "src/servers/filesystem_unified.py"
       ],
       "env": {
         "VISION_PROVIDER": "google",
         "VISION_MODEL": "gemini-2.0-flash"
       }
-    },
-    "fs_write": {
-      "command": "python3",
-      "args": [
-        "src/servers/fs_write.py"
-      ],
-      "env": {}
-    },
-    "fs_edit": {
-      "command": "python3",
-      "args": [
-        "src/servers/fs_edit.py"
-      ],
-      "env": {}
-    },
-    "fs_ops": {
-      "command": "python3",
-      "args": [
-        "src/servers/fs_ops.py"
-      ],
-      "env": {}
     },
     "web": {
       "command": "python3",
@@ -93,6 +72,7 @@
     "execute_command",
     "execute_command_background",
     "write_file",
+    "write",
     "edit_file",
     "save_note",
     "move_file",

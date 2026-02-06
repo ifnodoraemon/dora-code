@@ -1,46 +1,537 @@
 """
-Unified Filesystem Tools - Simplified MCP Server
+Unified Filesystem Tools - Consolidated MCP Server
 
-This module provides 3 unified tools that replace 15 scattered tools:
+This module provides 3 unified tools that replace 15+ scattered tools:
 - read: Unified reading (file, outline, directory, tree)
 - write: Unified writing (create, edit, delete, move, copy)
 - search: Unified searching (content, files, symbol)
 
 Design Philosophy:
+- Occam's Razor: Fewer, well-designed tools
 - Single Responsibility: Each tool has one clear purpose
 - Functional Cohesion: Related operations grouped together
 - Parameterized Design: Use parameters instead of multiple tools
-- MCP Best Practices: Follows Model Context Protocol guidelines
+
+This is the single source of truth for filesystem operations.
+All legacy modules (filesystem_read.py, etc.) have been consolidated here.
 """
 
+import fnmatch
+import glob as glob_module
+import itertools
 import logging
 import os
+import re
+import shutil
+from datetime import datetime
 from typing import Literal
 
 from mcp.server.fastmcp import FastMCP
 
-# Import existing implementations
-from src.servers.filesystem import (
-    copy_file,
-    create_directory,
-    delete_file,
-    edit_file,
-    find_symbol,
-    glob_files,
-    grep_search,
-    list_directory,
-    list_directory_tree,
-    move_file,
-    read_file,
-    read_file_outline,
-    write_file,
-)
+from src.core.security import validate_path
+from src.services import code_nav, document, outline, vision
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP("DoraemonFilesystemUnified")
+
+
+# ========================================
+# Helper Functions
+# ========================================
+
+
+def _human_size(bytes_size: int) -> str:
+    """Convert bytes to human-readable size."""
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if bytes_size < 1024.0:
+            return f"{bytes_size:.1f}{unit}"
+        bytes_size /= 1024.0
+    return f"{bytes_size:.1f}PB"
+
+
+# ========================================
+# Core Read Functions (Internal)
+# ========================================
+
+
+def read_file(path: str, offset: int = 0, limit: int | None = None, encoding: str = "utf-8") -> str:
+    """
+    Intelligently read a file with optional partial reading.
+    Supports: .txt, .md, .py, .pdf, .docx, .pptx, .xlsx, .png, .jpg
+    """
+    valid_path = validate_path(path)
+    if not os.path.exists(valid_path):
+        return "Error: File not found."
+
+    ext = os.path.splitext(path)[1].lower()
+
+    try:
+        # Document formats (no offset/limit support)
+        if ext == ".pdf":
+            return document.parse_pdf(valid_path)
+        elif ext == ".docx":
+            return document.parse_docx(valid_path)
+        elif ext == ".pptx":
+            return document.parse_pptx(valid_path)
+        elif ext in [".xlsx", ".xls"]:
+            return document.parse_xlsx(valid_path)
+
+        # Image formats
+        elif ext in [".png", ".jpg", ".jpeg", ".webp"]:
+            return vision.process_image(valid_path)
+
+        # Text formats (support offset/limit)
+        else:
+            if offset == 0 and limit is None:
+                with open(valid_path, encoding=encoding, errors="replace") as f:
+                    return f.read()
+
+            with open(valid_path, encoding=encoding, errors="replace") as f:
+                iterator = itertools.islice(f, offset, offset + limit if limit else None)
+                selected_lines = list(iterator)
+
+                if not selected_lines:
+                    return f"No lines found at offset {offset}."
+
+                result = f"[Lines {offset + 1}-{offset + len(selected_lines)}]\n\n"
+                result += "".join(selected_lines)
+
+                if limit and len(selected_lines) == limit:
+                    result += "\n\n[... (more lines may exist)]"
+
+                return result
+
+    except Exception as e:
+        return f"Error reading file: {str(e)}"
+
+
+def read_file_outline(path: str) -> str:
+    """Read the structural outline of a file (Classes, Functions)."""
+    try:
+        valid_path = validate_path(path)
+    except (PermissionError, ValueError) as e:
+        logger.warning(f"Path validation failed for '{path}': {e}")
+        return f"Error: {e}"
+
+    if not os.path.exists(valid_path):
+        logger.warning(f"File not found: {valid_path}")
+        return "Error: File not found."
+
+    logger.debug(f"Reading outline of: {valid_path}")
+    return outline.parse_outline(valid_path)
+
+
+def list_directory(path: str = ".", show_hidden: bool = False, detailed: bool = True) -> str:
+    """List files and directories at the given path."""
+    valid_path = validate_path(path)
+    if not os.path.exists(valid_path):
+        return "Error: Path not found."
+
+    try:
+        entries = []
+
+        for item in sorted(os.listdir(valid_path)):
+            if item.startswith(".") and not show_hidden:
+                continue
+
+            full_path = os.path.join(valid_path, item)
+
+            if detailed:
+                try:
+                    stat = os.stat(full_path)
+                    size = _human_size(stat.st_size)
+                    mtime = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
+
+                    if os.path.isdir(full_path):
+                        ftype = "dir"
+                        size = "<DIR>"
+                    else:
+                        ftype = "file"
+
+                    entries.append(f"{item:<40} {size:>10} {mtime} [{ftype}]")
+                except OSError:
+                    entries.append(item)
+            else:
+                entries.append(item)
+
+        if not entries:
+            return "(empty directory)"
+
+        return "\n".join(entries)
+
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def list_directory_tree(path: str = ".", depth: int = 2) -> str:
+    """Show a recursive directory tree."""
+    depth = min(max(1, depth), 10)
+    valid_path = validate_path(path)
+
+    def get_tree(current_path: str, current_depth: int) -> str:
+        if current_depth > depth:
+            return ""
+
+        try:
+            items = sorted(os.listdir(current_path))
+        except Exception:
+            return ""
+
+        tree = ""
+        for item in items:
+            if item.startswith("."):
+                continue
+
+            full_path = os.path.join(current_path, item)
+            is_dir = os.path.isdir(full_path)
+
+            indent = "  " * (depth - current_depth)
+            tree += f"{indent}├── {item}{'/' if is_dir else ''}\n"
+
+            if is_dir:
+                tree += get_tree(full_path, current_depth + 1)
+        return tree
+
+    tree_output = get_tree(valid_path, 1)
+    return (
+        f"Project Tree for {path}:\n{tree_output}"
+        if tree_output
+        else "Empty or inaccessible directory."
+    )
+
+
+def find_symbol(symbol: str, path: str = ".") -> str:
+    """Find the DEFINITION of a class or function (Semantic Search)."""
+    valid_path = validate_path(path)
+    return code_nav.find_definition(valid_path, symbol)
+
+
+# ========================================
+# Core Search Functions (Internal)
+# ========================================
+
+
+def glob_files(pattern: str, exclude: list[str] | None = None, max_results: int = 1000) -> str:
+    """Find files matching a glob pattern."""
+    try:
+        if '..' in pattern:
+            return "Error: Pattern cannot contain '..' for security reasons."
+
+        if pattern.startswith('/') or pattern.startswith('~'):
+            return "Error: Pattern cannot be an absolute path."
+
+        matches = glob_module.glob(pattern, recursive=True)
+
+        validated_matches = []
+        for match in matches:
+            try:
+                validate_path(match)
+                validated_matches.append(match)
+            except (PermissionError, ValueError):
+                continue
+        matches = validated_matches
+
+        if exclude:
+            filtered = []
+            for match in matches:
+                should_exclude = False
+                for excl_pattern in exclude:
+                    if fnmatch.fnmatch(match, excl_pattern):
+                        should_exclude = True
+                        break
+                if not should_exclude:
+                    filtered.append(match)
+            matches = filtered
+
+        if len(matches) > max_results:
+            matches = matches[:max_results]
+            truncated = True
+        else:
+            truncated = False
+
+        matches = sorted(matches)
+
+        if not matches:
+            return f"No files found matching pattern: {pattern}"
+
+        result = "\n".join(matches)
+
+        if truncated:
+            result += f"\n\n[Showing first {max_results} of {len(matches)} matches]"
+        else:
+            result = f"Found {len(matches)} file(s):\n\n" + result
+
+        return result
+
+    except Exception as e:
+        return f"Error in glob search: {str(e)}"
+
+
+def grep_search(pattern: str, include: str = "*", path: str = ".") -> str:
+    """Search for a text pattern within files (recursive)."""
+    valid_path = validate_path(path)
+    results = []
+
+    try:
+        regex = re.compile(pattern)
+
+        for root, _, files in os.walk(valid_path):
+            for file in files:
+                if not fnmatch.fnmatch(file, include):
+                    continue
+
+                full_path = os.path.join(root, file)
+                try:
+                    with open(full_path, encoding="utf-8", errors="ignore") as f:
+                        for i, line in enumerate(f, 1):
+                            if regex.search(line):
+                                rel_path = os.path.relpath(full_path, valid_path)
+                                results.append(f"{rel_path}:{i}:{line.strip()}")
+
+                                if len(results) >= 100:
+                                    results.append("... (limit reached)")
+                                    return "\n".join(results)
+                except Exception:
+                    continue
+
+        if not results:
+            return f"No matches found for '{pattern}'."
+
+        return "\n".join(results)
+
+    except Exception as e:
+        return f"Error searching: {str(e)}"
+
+
+# ========================================
+# Core Write Functions (Internal)
+# ========================================
+
+
+def write_file(path: str, content: str) -> str:
+    """Write text content to a file."""
+    try:
+        valid_path = validate_path(path)
+    except (PermissionError, ValueError) as e:
+        logger.warning(f"Path validation failed for '{path}': {e}")
+        return f"Error: {e}"
+
+    try:
+        parent_dir = os.path.dirname(valid_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+
+        with open(valid_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        logger.info(f"Successfully wrote {len(content)} bytes to {path}")
+        return f"Successfully wrote to {path}"
+    except Exception as e:
+        logger.error(f"Failed to write file '{path}': {e}")
+        return f"Error writing file: {str(e)}"
+
+
+def edit_file(path: str, old_string: str, new_string: str, count: int = -1) -> str:
+    """Edit a file by replacing specific content."""
+    try:
+        valid_path = validate_path(path)
+    except (PermissionError, ValueError) as e:
+        logger.warning(f"Path validation failed for '{path}': {e}")
+        return f"Error: {e}"
+
+    if not os.path.exists(valid_path):
+        logger.warning(f"File not found: {valid_path}")
+        return f"Error: File not found: {path}"
+
+    try:
+        with open(valid_path, encoding="utf-8") as f:
+            content = f.read()
+
+        if old_string not in content:
+            logger.debug(f"Search string not found in {path}")
+            return f"Error: Search string not found in {path}:\n'{old_string[:100]}...'"
+
+        occurrences = content.count(old_string)
+
+        if count == -1:
+            new_content = content.replace(old_string, new_string)
+            replaced_count = occurrences
+        else:
+            new_content = content.replace(old_string, new_string, count)
+            replaced_count = min(count, occurrences)
+
+        with open(valid_path, "w", encoding="utf-8") as f:
+            f.write(new_content)
+
+        logger.info(f"Edited {path}: {replaced_count} replacement(s)")
+        return f"Successfully edited {path} ({replaced_count} replacement(s) made)"
+
+    except Exception as e:
+        logger.error(f"Failed to edit file '{path}': {e}")
+        return f"Error editing file: {str(e)}"
+
+
+def edit_file_multiline(path: str, edits: list[dict]) -> str:
+    """Apply multiple search/replace edits in sequence."""
+    valid_path = validate_path(path)
+
+    if not os.path.exists(valid_path):
+        return f"Error: File not found: {path}"
+
+    try:
+        with open(valid_path, encoding="utf-8") as f:
+            content = f.read()
+
+        successful_edits = 0
+
+        for i, edit in enumerate(edits):
+            old_str = edit.get("old_string")
+            new_str = edit.get("new_string")
+
+            if not old_str or new_str is None:
+                return f"Error: Edit #{i + 1} missing 'old_string' or 'new_string'"
+
+            if old_str not in content:
+                return f"Error: Edit #{i + 1} search string not found:\n'{old_str[:100]}...'"
+
+            content = content.replace(old_str, new_str, 1)
+            successful_edits += 1
+
+        with open(valid_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        return f"Successfully applied {successful_edits} edit(s) to {path}"
+
+    except Exception as e:
+        return f"Error applying edits: {str(e)}"
+
+
+# ========================================
+# Core File Operations (Internal)
+# ========================================
+
+
+def move_file(src: str, dst: str) -> str:
+    """Move a file or directory to a new location."""
+    try:
+        src_path = validate_path(src)
+        dst_path = validate_path(dst)
+    except (PermissionError, ValueError) as e:
+        logger.warning(f"Path validation failed: {e}")
+        return f"Error: {e}"
+
+    if not os.path.exists(src_path):
+        logger.warning(f"Source not found: {src_path}")
+        return f"Error: Source not found: {src}"
+
+    try:
+        dst_dir = os.path.dirname(dst_path)
+        if dst_dir:
+            os.makedirs(dst_dir, exist_ok=True)
+
+        shutil.move(src_path, dst_path)
+        logger.info(f"Moved {src} to {dst}")
+        return f"Successfully moved {src} to {dst}"
+
+    except Exception as e:
+        logger.error(f"Failed to move {src} to {dst}: {e}")
+        return f"Error moving file: {str(e)}"
+
+
+def copy_file(src: str, dst: str, overwrite: bool = False) -> str:
+    """Copy a file or directory to a new location."""
+    src_path = validate_path(src)
+    dst_path = validate_path(dst)
+
+    if not os.path.exists(src_path):
+        return f"Error: Source not found: {src}"
+
+    if os.path.exists(dst_path) and not overwrite:
+        return f"Error: Destination already exists: {dst}. Use overwrite=True to replace."
+
+    try:
+        dst_dir = os.path.dirname(dst_path)
+        if dst_dir:
+            os.makedirs(dst_dir, exist_ok=True)
+
+        if os.path.isdir(src_path):
+            if os.path.exists(dst_path) and overwrite:
+                shutil.rmtree(dst_path)
+            shutil.copytree(src_path, dst_path)
+        else:
+            shutil.copy2(src_path, dst_path)
+
+        return f"Successfully copied {src} to {dst}"
+
+    except Exception as e:
+        return f"Error copying: {str(e)}"
+
+
+def delete_file(path: str, recursive: bool = False) -> str:
+    """Delete a file or directory."""
+    try:
+        valid_path = validate_path(path)
+    except (PermissionError, ValueError) as e:
+        logger.warning(f"Path validation failed for '{path}': {e}")
+        return f"Error: {e}"
+
+    if not os.path.exists(valid_path):
+        logger.warning(f"Path not found: {valid_path}")
+        return f"Error: Path not found: {path}"
+
+    try:
+        if os.path.isdir(valid_path):
+            if not recursive:
+                return f"Error: {path} is a directory. Use recursive=True to delete it."
+
+            shutil.rmtree(valid_path)
+            logger.info(f"Deleted directory: {path}")
+            return f"Successfully deleted directory: {path}"
+        else:
+            os.remove(valid_path)
+            logger.info(f"Deleted file: {path}")
+            return f"Successfully deleted file: {path}"
+
+    except Exception as e:
+        logger.error(f"Failed to delete '{path}': {e}")
+        return f"Error deleting: {str(e)}"
+
+
+def rename_file(old_path: str, new_name: str) -> str:
+    """Rename a file or directory (in the same directory)."""
+    old_valid_path = validate_path(old_path)
+
+    if not os.path.exists(old_valid_path):
+        return f"Error: File not found: {old_path}"
+
+    try:
+        directory = os.path.dirname(old_valid_path)
+        new_path = os.path.join(directory, new_name)
+        new_valid_path = validate_path(new_path)
+
+        if os.path.exists(new_valid_path):
+            return f"Error: A file with name '{new_name}' already exists"
+
+        os.rename(old_valid_path, new_valid_path)
+        return f"Successfully renamed {old_path} to {new_name}"
+
+    except Exception as e:
+        return f"Error renaming: {str(e)}"
+
+
+def create_directory(path: str) -> str:
+    """Create a new directory (and parent directories if needed)."""
+    valid_path = validate_path(path)
+
+    try:
+        os.makedirs(valid_path, exist_ok=True)
+        return f"Successfully created directory: {path}"
+
+    except Exception as e:
+        return f"Error creating directory: {str(e)}"
 
 
 # ========================================
@@ -158,10 +649,8 @@ def write(
     try:
         if operation == "create":
             if content is None:
-                # Create directory
                 return create_directory(path)
             else:
-                # Create file
                 return write_file(path, content)
 
         elif operation == "edit":
