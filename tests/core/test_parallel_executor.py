@@ -210,8 +210,8 @@ class TestDependencyAnalyzer:
         """Test sequential writes to same file."""
         analyzer = DependencyAnalyzer()
         calls = [
-            ToolCall(id="call_1", name="file_write", arguments={"path": "/file.txt", "content": "data1"}),
-            ToolCall(id="call_2", name="file_write", arguments={"path": "/file.txt", "content": "data2"}),
+            ToolCall(id="call_1", name="write_file", arguments={"path": "/file.txt", "content": "data1"}),
+            ToolCall(id="call_2", name="write_file", arguments={"path": "/file.txt", "content": "data2"}),
         ]
         stages = analyzer.analyze(calls)
         # Should be in separate stages
@@ -221,8 +221,8 @@ class TestDependencyAnalyzer:
         """Test parallel writes to different files."""
         analyzer = DependencyAnalyzer()
         calls = [
-            ToolCall(id="call_1", name="file_write", arguments={"path": "/file1.txt", "content": "data1"}),
-            ToolCall(id="call_2", name="file_write", arguments={"path": "/file2.txt", "content": "data2"}),
+            ToolCall(id="call_1", name="write_file", arguments={"path": "/file1.txt", "content": "data1"}),
+            ToolCall(id="call_2", name="write_file", arguments={"path": "/file2.txt", "content": "data2"}),
         ]
         stages = analyzer.analyze(calls)
         # Should be in same stage (parallel)
@@ -257,8 +257,8 @@ class TestDependencyAnalyzer:
         """Test building dependency graph."""
         analyzer = DependencyAnalyzer()
         calls = [
-            ToolCall(id="call_1", name="file_write", arguments={"path": "/file.txt", "content": "data1"}),
-            ToolCall(id="call_2", name="file_write", arguments={"path": "/file.txt", "content": "data2"}),
+            ToolCall(id="call_1", name="write_file", arguments={"path": "/file.txt", "content": "data1"}),
+            ToolCall(id="call_2", name="write_file", arguments={"path": "/file.txt", "content": "data2"}),
         ]
         graph = analyzer._build_dependency_graph(calls)
         assert "call_1" in graph
@@ -569,23 +569,20 @@ class TestParallelExecutor:
 
     @pytest.mark.asyncio
     async def test_execute_streaming(self):
-        """Test streaming execution - skipped due to bug in source code."""
-        # Note: execute_streaming has a bug - uses self.analyzer instead of self._analyzer
-        # This test documents the bug
+        """Test streaming execution works after bug fix."""
         async_handler = AsyncMock(return_value="result")
         executor = ParallelExecutor(async_handler)
         calls = [
             ToolCall(id="call_1", name="tool_1", arguments={}),
             ToolCall(id="call_2", name="tool_2", arguments={}),
         ]
-        # This will raise AttributeError due to bug in source
-        with pytest.raises(AttributeError, match="analyzer"):
-            await executor.execute_streaming(calls)
+        results = await executor.execute_streaming(calls)
+        assert len(results) == 2
+        assert all(r.success for r in results)
 
     @pytest.mark.asyncio
     async def test_execute_streaming_with_callback(self):
-        """Test streaming execution with callback - skipped due to bug in source code."""
-        # Note: execute_streaming has a bug - uses self.analyzer instead of self._analyzer
+        """Test streaming execution with callback works after bug fix."""
         async_handler = AsyncMock(return_value="result")
         executor = ParallelExecutor(async_handler)
         callback_results = []
@@ -597,9 +594,9 @@ class TestParallelExecutor:
             ToolCall(id="call_1", name="tool_1", arguments={}),
             ToolCall(id="call_2", name="tool_2", arguments={}),
         ]
-        # This will raise AttributeError due to bug in source
-        with pytest.raises(AttributeError, match="analyzer"):
-            await executor.execute_streaming(calls, on_result=on_result)
+        results = await executor.execute_streaming(calls, on_result=on_result)
+        assert len(results) == 2
+        assert len(callback_results) == 2
 
     @pytest.mark.asyncio
     async def test_execute_streaming_empty(self):
@@ -612,21 +609,19 @@ class TestParallelExecutor:
 
     @pytest.mark.asyncio
     async def test_execute_tools_streaming_convenience_function(self):
-        """Test execute_tools_streaming convenience function - skipped due to bug in source code."""
-        # Note: execute_streaming has a bug - uses self.analyzer instead of self._analyzer
+        """Test execute_tools_streaming convenience function works after bug fix."""
         async_handler = AsyncMock(return_value="result")
         tool_calls = [
             ("tool_1", {"arg": "value1"}),
             ("tool_2", {"arg": "value2"}),
         ]
-        # This will raise AttributeError due to bug in source
-        with pytest.raises(AttributeError, match="analyzer"):
-            await execute_tools_streaming(async_handler, tool_calls)
+        results = await execute_tools_streaming(async_handler, tool_calls)
+        assert len(results) == 2
+        assert all(r.success for r in results)
 
     @pytest.mark.asyncio
     async def test_execute_tools_streaming_with_callback(self):
-        """Test execute_tools_streaming with callback - skipped due to bug in source code."""
-        # Note: execute_streaming has a bug - uses self.analyzer instead of self._analyzer
+        """Test execute_tools_streaming with callback works after bug fix."""
         async_handler = AsyncMock(return_value="result")
         callback_results = []
 
@@ -637,9 +632,9 @@ class TestParallelExecutor:
             ("tool_1", {"arg": "value1"}),
             ("tool_2", {"arg": "value2"}),
         ]
-        # This will raise AttributeError due to bug in source
-        with pytest.raises(AttributeError, match="analyzer"):
-            await execute_tools_streaming(async_handler, tool_calls, on_result=on_result)
+        results = await execute_tools_streaming(async_handler, tool_calls, on_result=on_result)
+        assert len(results) == 2
+        assert len(callback_results) == 2
 
     @pytest.mark.asyncio
     async def test_multiple_errors_in_batch(self):
@@ -797,16 +792,16 @@ class TestParallelExecutor:
     def test_analyzer_write_tools_set(self):
         """Test that WRITE_TOOLS set contains expected tools."""
         analyzer = DependencyAnalyzer()
-        assert "file_write" in analyzer.WRITE_TOOLS
-        assert "file_edit" in analyzer.WRITE_TOOLS
+        assert "write" in analyzer.WRITE_TOOLS
+        assert "write_file" in analyzer.WRITE_TOOLS
         assert "git_commit" in analyzer.WRITE_TOOLS
-        assert "shell_exec" in analyzer.WRITE_TOOLS
+        assert "shell_execute" in analyzer.WRITE_TOOLS
 
     def test_analyzer_read_tools_set(self):
         """Test that READ_TOOLS set contains expected tools."""
         analyzer = DependencyAnalyzer()
-        assert "file_read" in analyzer.READ_TOOLS
-        assert "grep" in analyzer.READ_TOOLS
+        assert "read" in analyzer.READ_TOOLS
+        assert "search" in analyzer.READ_TOOLS
         assert "git_log" in analyzer.READ_TOOLS
         assert "semantic_search" in analyzer.READ_TOOLS
 

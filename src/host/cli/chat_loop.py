@@ -44,6 +44,25 @@ console = Console()
 MAX_TOOL_STEPS = 15  # Prevent infinite tool loops
 
 
+def _is_context_overflow(error: Exception) -> bool:
+    """Check if an error is caused by context window overflow."""
+    msg = str(error).lower()
+    indicators = [
+        "context length",
+        "context window",
+        "token limit",
+        "max.*token",
+        "too many tokens",
+        "request too large",
+        "content too large",
+        "maximum context",
+        "exceeds the model",
+        "prompt is too long",
+        "input is too long",
+    ]
+    return any(indicator in msg for indicator in indicators)
+
+
 def build_system_prompt(mode: str, skills_content: str = "") -> str:
     """Build the system prompt with mode, rules, memory, and skills."""
     config = load_config()
@@ -534,8 +553,39 @@ async def process_tool_calls(
                 )
                 last_usage = response.usage
             except Exception as e:
-                console.print(f"[red]API Error during tool loop: {e}[/red]")
-                break
+                if _is_context_overflow(e):
+                    console.print("[yellow]Context overflow in tool loop, compacting...[/yellow]")
+                    ctx._force_summarize()
+                    # Rebuild conversation_history from compacted context
+                    conversation_history.clear()
+                    for msg in restore_conversation_history(ctx):
+                        conversation_history.append(msg)
+                    # Re-add the latest tool results
+                    for tr in tool_results:
+                        tool_msg = Message(
+                            role="tool",
+                            content=tr["result"],
+                            tool_call_id=tr["tool_call_id"],
+                            name=tr["name"],
+                        )
+                        conversation_history.append(tool_msg)
+                    messages_for_api = [
+                        Message(role="system", content=system_prompt)
+                    ] + conversation_history
+                    try:
+                        response = await stream_model_response(
+                            model_client,
+                            messages_for_api,
+                            tool_definitions,
+                            model_name,
+                        )
+                        last_usage = response.usage
+                    except Exception as retry_e:
+                        console.print(f"[red]API Error after compaction: {retry_e}[/red]")
+                        break
+                else:
+                    console.print(f"[red]API Error during tool loop: {e}[/red]")
+                    break
         else:
             # Fallback: no model_client provided, break after first round
             logger.warning(
@@ -817,10 +867,32 @@ async def chat_loop(
                 checkpoint_mgr.discard_checkpoint()
                 continue
             except Exception as e:
-                console.print(f"[red]API Error: {e}[/red]")
-                conversation_history.pop()
-                checkpoint_mgr.discard_checkpoint()
-                continue
+                if _is_context_overflow(e):
+                    console.print("[yellow]Context too large, compacting and retrying...[/yellow]")
+                    ctx._force_summarize()
+                    conversation_history.clear()
+                    conversation_history = restore_conversation_history(ctx)
+                    conversation_history.append(Message(role="user", content=user_input))
+                    messages_for_api = [
+                        Message(role="system", content=system_prompt)
+                    ] + conversation_history
+                    try:
+                        response = await stream_model_response(
+                            model_client,
+                            messages_for_api,
+                            tool_definitions,
+                            model_name,
+                        )
+                    except Exception as retry_e:
+                        console.print(f"[red]API Error after compaction: {retry_e}[/red]")
+                        conversation_history.pop()
+                        checkpoint_mgr.discard_checkpoint()
+                        continue
+                else:
+                    console.print(f"[red]API Error: {e}[/red]")
+                    conversation_history.pop()
+                    checkpoint_mgr.discard_checkpoint()
+                    continue
 
             # Process tool calls (agentic loop: sends tool results back to model)
             accumulated_text, files_modified, tool_results_messages = await process_tool_calls(

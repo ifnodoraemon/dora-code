@@ -228,7 +228,7 @@ class TestContextManagerBasic:
         history = manager.get_history_for_api()
         # Should have: summary user, summary model, actual user
         assert len(history) == 3
-        assert "[Previous conversation context]" in history[0]["parts"][0]["text"]
+        assert "[Previous Conversation Summary]" in history[0]["parts"][0]["text"]
 
     def test_get_context_stats(self):
         """Test getting context statistics."""

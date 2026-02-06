@@ -13,13 +13,13 @@ class TestToolConstants:
         """Test that READ_TOOLS is defined."""
         assert isinstance(READ_TOOLS, list)
         assert len(READ_TOOLS) > 0
-        assert "read_file" in READ_TOOLS
+        assert "read" in READ_TOOLS
 
     def test_write_tools_defined(self):
         """Test that WRITE_TOOLS is defined."""
         assert isinstance(WRITE_TOOLS, list)
         assert len(WRITE_TOOLS) > 0
-        assert "write_file" in WRITE_TOOLS
+        assert "write" in WRITE_TOOLS
 
     def test_aux_tools_defined(self):
         """Test that AUX_TOOLS is defined."""
@@ -229,13 +229,13 @@ class TestToolSelectorIntegration:
         # Get tools for plan mode
         plan_tools = selector.get_tools_for_mode("plan")
         assert "db_query" in plan_tools
-        assert "read_file" in plan_tools
-        assert "write_file" not in plan_tools
+        assert "read" in plan_tools
+        assert "write" not in plan_tools
 
         # Get tools for build mode
         build_tools = selector.get_tools_for_mode("build")
         assert "db_query" in build_tools
-        assert "write_file" in build_tools
+        assert "write" in build_tools
 
         # Unregister one tool
         selector.unregister_mcp_tools(["db_query"])

@@ -24,48 +24,51 @@ logger = logging.getLogger(__name__)
 
 # 只读工具 - plan 和 build 模式都可用
 READ_TOOLS = [
-    "read_file",       # 读文件
-    "list_directory",  # 目录结构
-    "glob_files",      # 查找文件
-    "grep_search",     # 搜索内容
+    "read",  # 统一读取（文件/目录/大纲/树）
+    "search",  # 统一搜索（内容/文件名/符号）
 ]
 
 # 写入工具 - 只有 build 模式可用
 WRITE_TOOLS = [
-    "write_file",      # 写文件
-    "edit_file",       # 编辑文件
-    "shell_execute",   # 执行命令（包含 git、npm、pip 等）
+    "write",  # 统一写入（创建/编辑/删除/移动/复制）
+    "shell_execute",  # 执行命令（包含 git、npm、pip 等）
 ]
 
 # 辅助工具 - 按需使用
 AUX_TOOLS = [
-    "web_search",          # 网络搜索
-    "browse_page",         # 网页浏览 (Playwright)
-    "take_screenshot",     # 网页截图
+    "web_search",  # 网络搜索
+    "browse_page",  # 网页浏览 (Playwright)
+    "take_screenshot",  # 网页截图
     "github_list_issues",  # GitHub Issues
-    "github_create_issue", # GitHub Create Issue
-    "db_read_query",       # 数据库查询
-    "db_write_query",      # 数据库修改
-    "db_list_tables",      # 列出数据库表
-    "db_describe_table",   # 查看表结构
-    "fetch_url",           # 获取网页
-    "save_note",           # 保存笔记
-    "search_notes",        # 搜索笔记
-    "switch_mode",         # 切换模式 (plan/build)
+    "github_create_issue",  # GitHub Create Issue
+    "db_read_query",  # 数据库查询
+    "db_write_query",  # 数据库修改
+    "db_list_tables",  # 列出数据库表
+    "db_describe_table",  # 查看表结构
+    "fetch_url",  # 获取网页
+    "save_note",  # 保存笔记
+    "search_notes",  # 搜索笔记
+    "switch_mode",  # 切换模式 (plan/build)
 ]
 
 # 高级工具 - 特殊场景
 ADVANCED_TOOLS = [
-    "read_file_outline",   # 文件大纲（大文件时有用）
-    "find_symbol",         # 语义搜索定义
-    "execute_python",      # 执行 Python 代码
-    "shell_background",    # 后台执行
+    "semantic_search",  # 语义搜索
+    "index_codebase",  # 索引代码库
+    "execute_python",  # 执行 Python 代码
+    "shell_background",  # 后台执行
+    "git_status",  # Git 状态
+    "git_diff",  # Git 差异
+    "git_log",  # Git 日志
+    "git_add",  # Git 暂存
+    "git_commit",  # Git 提交
 ]
 
 
 @dataclass
 class ToolConfig:
     """工具配置"""
+
     # 按模式的工具列表
     plan_tools: list[str] = field(default_factory=list)
     build_tools: list[str] = field(default_factory=list)

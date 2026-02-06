@@ -1410,7 +1410,7 @@ class TestDirectModelClientChat:
 
     @pytest.mark.asyncio
     async def test_direct_chat_stream_fallback(self):
-        """Test streaming falls back to non-streaming."""
+        """Test streaming uses provider-specific streaming (Google)."""
         config = ClientConfig(
             mode=ClientMode.DIRECT,
             google_api_key="test_key",
@@ -1418,8 +1418,11 @@ class TestDirectModelClientChat:
         )
         client = DirectModelClient(config)
 
-        with patch.object(client, "chat", new_callable=AsyncMock) as mock_chat:
-            mock_chat.return_value = ChatResponse(content="Hello", finish_reason="stop")
+        # Mock _stream_google to yield chunks
+        async def mock_stream(*args, **kwargs):
+            yield StreamChunk(content="Hello", finish_reason="stop")
+
+        with patch.object(client, "_stream_google", side_effect=mock_stream):
             client._providers[Provider.GOOGLE] = MagicMock()
 
             messages = [Message(role="user", content="Hi")]
