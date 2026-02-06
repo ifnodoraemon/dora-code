@@ -17,26 +17,24 @@ Features:
 """
 
 import asyncio
+import json
 import logging
 import time
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, cast
-
-from google import genai
-from google.genai import types
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class SubagentModel(Enum):
-    """Available models for subagents (Gemini 3 Series - Latest)."""
+    """Available models for subagents."""
 
     INHERIT = "inherit"  # Use parent's model
-    PRO = "pro"  # gemini-3-pro - Most capable, multimodal
-    FLASH = "flash"  # gemini-3-flash - Fast and capable (default)
+    PRO = "pro"  # Most capable model
+    FLASH = "flash"  # Fast and capable (default)
 
 
 class AgentState(Enum):
@@ -202,9 +200,7 @@ class AgentMessageQueue:
         except asyncio.TimeoutError:
             return None
 
-    def subscribe(
-        self, agent_id: str, callback: Callable[[AgentMessage], None]
-    ) -> None:
+    def subscribe(self, agent_id: str, callback: Callable[[AgentMessage], None]) -> None:
         """Subscribe to messages for a specific agent."""
         if agent_id not in self._subscribers:
             self._subscribers[agent_id] = []
@@ -240,9 +236,7 @@ class AgentStateManager:
         async with self._lock:
             return self._states.get(agent_id)
 
-    async def create_metrics(
-        self, agent_id: str, agent_name: str
-    ) -> AgentMetrics:
+    async def create_metrics(self, agent_id: str, agent_name: str) -> AgentMetrics:
         """Create metrics for an agent."""
         async with self._lock:
             metrics = AgentMetrics(
@@ -259,9 +253,7 @@ class AgentStateManager:
         async with self._lock:
             return self._metrics.get(agent_id)
 
-    async def update_metrics(
-        self, agent_id: str, **kwargs: Any
-    ) -> None:
+    async def update_metrics(self, agent_id: str, **kwargs: Any) -> None:
         """Update agent metrics."""
         async with self._lock:
             if agent_id in self._metrics:
@@ -281,16 +273,12 @@ def _create_agent_id() -> str:
     return str(uuid.uuid4())[:8]
 
 
-def _get_model_name(
-    model: SubagentModel, parent_model: str
-) -> str:
-    """Get model name from SubagentModel enum."""
-    model_mapping = {
-        SubagentModel.INHERIT: parent_model,
-        SubagentModel.PRO: "gemini-3-pro-preview",
-        SubagentModel.FLASH: "gemini-3-flash-preview",
-    }
-    return model_mapping.get(model, parent_model)
+def _get_model_name(model: SubagentModel, parent_model: str) -> str:
+    """Get model name from SubagentModel enum. Inherits parent model by default."""
+    if model == SubagentModel.INHERIT or model == SubagentModel.PRO:
+        return parent_model
+    # FLASH: use parent model (provider handles routing)
+    return parent_model
 
 
 async def _execute_agent_task(
@@ -298,21 +286,21 @@ async def _execute_agent_task(
     config: "SubagentConfig",
     task: str,
     context: str,
-    client: genai.Client,
+    model_client: Any,
     tool_registry: Any,
     parent_model: str,
     on_output: Callable[[str], None] | None = None,
     state_manager: AgentStateManager | None = None,
 ) -> SubagentResult:
     """
-    Execute a single agent task with state management and metrics.
+    Execute a single agent task using the unified ModelClient.
 
     Args:
         agent_id: Unique agent ID
         config: Agent configuration
         task: Task description
         context: Additional context
-        client: GenAI client
+        model_client: Unified ModelClient (provider-agnostic)
         tool_registry: Tool registry
         parent_model: Parent model name
         on_output: Output callback
@@ -321,6 +309,8 @@ async def _execute_agent_task(
     Returns:
         SubagentResult with execution details
     """
+    from src.core.model_utils import Message, ToolDefinition
+
     start_time = time.time()
     metrics = None
 
@@ -335,28 +325,29 @@ async def _execute_agent_task(
         # Determine model
         model_name = _get_model_name(config.model, parent_model)
 
-        # Get tools
+        # Get tool definitions
+        tool_defs = None
         if config.tools:
-            tools = tool_registry.get_genai_tools(config.tools)
-        else:
-            tools = tool_registry.get_genai_tools()
+            genai_tools = tool_registry.get_genai_tools(config.tools)
+            tool_defs = [
+                ToolDefinition(
+                    name=getattr(t, "name", ""),
+                    description=getattr(t, "description", "") or "",
+                    parameters=getattr(t, "parameters", {}) or {},
+                )
+                for t in genai_tools
+            ]
 
         # Build system prompt
         system_prompt = config.prompt
         if context:
             system_prompt += f"\n\n[Context]\n{context}"
 
-        # Create chat config
-        gen_config = types.GenerateContentConfig(
-            tools=[types.Tool(function_declarations=tools)] if tools else None,
-            system_instruction=system_prompt,
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                disable=True
-            ),
-        )
-
-        # Create chat session
-        chat = client.chats.create(model=model_name, config=gen_config)
+        # Build conversation using unified Message format
+        conversation: list[Message] = [
+            Message(role="system", content=system_prompt),
+            Message(role="user", content=task),
+        ]
 
         # Run agent loop
         output_parts = []
@@ -364,92 +355,78 @@ async def _execute_agent_task(
         total_tokens = 0
         tool_calls_count = 0
 
-        # Initial message
-        response = await asyncio.wait_for(
-            asyncio.to_thread(chat.send_message, task),
-            timeout=config.timeout,
-        )
-        turns_used += 1
-
         while turns_used < config.max_turns:
-            if not response.candidates or not response.candidates[0].content:
-                break
-
-            parts = response.candidates[0].content.parts
-            if not parts:
-                break
-
-            has_tool_call = False
-            tool_results = []
-
-            for part in parts:
-                # Collect text output
-                if part.text:
-                    output_parts.append(part.text)
-                    if on_output:
-                        on_output(part.text)
-
-                # Handle tool calls
-                if part.function_call:
-                    has_tool_call = True
-                    tool_calls_count += 1
-                    fc = part.function_call
-                    tool_name = fc.name
-                    # Handle fc.args which might be a list or dict depending on SDK version
-                    args = {}
-                    if hasattr(fc, "args") and fc.args:
-                        if hasattr(fc.args, "items"):
-                            args = dict(fc.args.items())
-                        elif isinstance(fc.args, dict):
-                            args = fc.args
-                        else:
-                            # Fallback for other potential types
-                            try:
-                                args = dict(fc.args)  # type: ignore
-                            except (TypeError, ValueError):
-                                logger.warning(
-                                    f"Could not convert fc.args to dict: {type(fc.args)}"
-                                )
-                                args = {}
-
-                    # Execute tool
-                    try:
-                        result = await tool_registry.call_tool(tool_name, args)
-                    except Exception as e:
-                        result = f"Error: {e}"
-
-                    tool_results.append(
-                        {"name": tool_name, "result": {"result": result}}
-                    )
-
-            # Track tokens
-            if response.usage_metadata:
-                total_tokens += response.usage_metadata.prompt_token_count or 0
-                total_tokens += response.usage_metadata.candidates_token_count or 0
-
-            # No more tool calls - done
-            if not has_tool_call:
-                break
-
-            # Send tool results
-            response_parts: Sequence[types.Part] = [
-                types.Part.from_function_response(
-                    name=str(tr["name"]), response=cast(dict[str, Any], tr["result"])
-                )
-                for tr in tool_results
-            ]
-
+            # Call model using unified interface
             response = await asyncio.wait_for(
-                asyncio.to_thread(chat.send_message, list(response_parts)),  # type: ignore
+                model_client.chat(conversation, tools=tool_defs, model=model_name),
                 timeout=config.timeout,
             )
             turns_used += 1
+
+            # Track tokens
+            if response.usage:
+                total_tokens += response.usage.get("total_tokens", 0) or (
+                    response.usage.get("prompt_tokens", 0)
+                    + response.usage.get("completion_tokens", 0)
+                )
+
+            # Collect text output
+            if response.content:
+                output_parts.append(response.content)
+                if on_output:
+                    on_output(response.content)
+
+            # Add assistant message to conversation
+            conversation.append(
+                Message(
+                    role="assistant",
+                    content=response.content,
+                    tool_calls=response.tool_calls,
+                    thought=response.thought,
+                )
+            )
+
+            # No tool calls - done
+            if not response.has_tool_calls:
+                break
+
+            # Execute tool calls
+            for tc in response.tool_calls:
+                func = tc.get("function", {})
+                tool_name = func.get("name", "")
+                args = func.get("arguments", {})
+                tool_call_id = tc.get("id", "")
+
+                # Parse string arguments
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except (json.JSONDecodeError, TypeError):
+                        args = {}
+
+                tool_calls_count += 1
+
+                # Execute tool
+                try:
+                    result = await tool_registry.call_tool(tool_name, args)
+                except Exception as e:
+                    result = f"Error: {e}"
+
+                # Add tool result to conversation
+                conversation.append(
+                    Message(
+                        role="tool",
+                        content=str(result),
+                        tool_call_id=tool_call_id,
+                        name=tool_name,
+                    )
+                )
 
         duration = time.time() - start_time
         output = "\n".join(output_parts)
 
         # Update metrics
-        if metrics:
+        if metrics and state_manager:
             await state_manager.update_metrics(
                 agent_id,
                 state=AgentState.COMPLETED,
@@ -545,8 +522,6 @@ def _aggregate_results(results: list[SubagentResult]) -> dict[str, Any]:
         "average_duration": round(total_duration / len(results), 2) if results else 0,
         "results": [r.to_dict() for r in results],
     }
-
-
 
 
 BUILTIN_AGENTS: dict[str, SubagentConfig] = {
@@ -720,7 +695,7 @@ class SubagentManager:
 
     def __init__(
         self,
-        client: genai.Client,
+        model_client: Any,
         tool_registry: Any,  # ToolRegistry
         parent_model: str = "gemini-2.0-flash",
     ):
@@ -728,11 +703,11 @@ class SubagentManager:
         Initialize subagent manager.
 
         Args:
-            client: GenAI client
+            model_client: Unified ModelClient (provider-agnostic)
             tool_registry: Tool registry for getting tools
             parent_model: Parent model name (used for INHERIT)
         """
-        self.client = client
+        self.model_client = model_client
         self.tool_registry = tool_registry
         self.parent_model = parent_model
         self._custom_agents: dict[str, SubagentConfig] = {}
@@ -793,8 +768,7 @@ class SubagentManager:
         """Send a message between agents."""
         await self._message_queue.send(message)
         logger.debug(
-            f"Message from {message.sender_id} to {message.recipient_id}: "
-            f"{message.message_type}"
+            f"Message from {message.sender_id} to {message.recipient_id}: {message.message_type}"
         )
 
     async def receive_message(
@@ -871,7 +845,7 @@ class SubagentManager:
             config=config,
             task=task,
             context=context,
-            client=self.client,
+            model_client=self.model_client,
             tool_registry=self.tool_registry,
             parent_model=self.parent_model,
             on_output=on_output,
@@ -1016,4 +990,3 @@ class SubagentManager:
             return True
         except asyncio.TimeoutError:
             return False
-
