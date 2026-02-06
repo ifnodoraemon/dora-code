@@ -236,11 +236,15 @@ class ContextManager:
         # Prepend summary context if we have summaries
         if self.summaries:
             summary_text = self._format_summaries_for_context()
-            # Add as a "fake" early exchange to provide context
+            # Add as a context-setting exchange with clear marker
             history.append(
                 {
                     "role": "user",
-                    "parts": [{"text": f"[Previous conversation context]\n{summary_text}"}],
+                    "parts": [
+                        {
+                            "text": f"[Previous Conversation Summary]\n\n{summary_text}\n\n[End of Summary - Continue from here]"
+                        }
+                    ],
                 }
             )
             history.append(
@@ -248,7 +252,7 @@ class ContextManager:
                     "role": "model",
                     "parts": [
                         {
-                            "text": "I understand. I'll keep this context in mind as we continue our conversation."
+                            "text": "Understood. I have the context from our previous conversation and will continue from here."
                         }
                     ],
                 }
@@ -272,7 +276,9 @@ class ContextManager:
             "estimated_tokens": estimated_tokens,
             "last_prompt_tokens": self._last_prompt_tokens,
             "threshold_tokens": threshold,
-            "usage_percent": round(estimated_tokens / max(self.config.max_context_tokens, 1) * 100, 1),
+            "usage_percent": round(
+                estimated_tokens / max(self.config.max_context_tokens, 1) * 100, 1
+            ),
             "session_id": self.session_id,
             "needs_summary": estimated_tokens > threshold,
         }
@@ -315,14 +321,33 @@ class ContextManager:
             self._force_summarize()
 
     def _force_summarize(self):
-        """Force summarization of older messages."""
+        """Force summarization of older messages.
+
+        Ensures tool_call/result message pairs are not split across the boundary.
+        """
         if len(self.messages) <= self.config.keep_recent_messages:
             logger.debug("Not enough messages to summarize")
             return
 
-        # Calculate how many messages to summarize
-        # Keep recent messages, summarize the rest
+        # Calculate initial split point
         split_idx = len(self.messages) - self.config.keep_recent_messages
+
+        # Adjust split_idx to avoid breaking tool_call/result pairs.
+        # If the message at split_idx looks like a tool result (role="tool" or
+        # metadata hints), move split_idx backward to include the preceding
+        # assistant message that triggered the tool call.
+        while split_idx > 0:
+            msg = self.messages[split_idx]
+            # Check if this is a tool result message
+            is_tool_result = (
+                msg.role == "tool"
+                or msg.metadata.get("is_tool_result")
+                or (msg.role == "model" and msg.metadata.get("tool_call_id"))
+            )
+            if is_tool_result:
+                split_idx -= 1
+            else:
+                break
 
         if split_idx < self.config.min_messages_to_summarize:
             logger.debug("Not enough messages to meet minimum for summarization")

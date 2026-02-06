@@ -5,6 +5,7 @@ Handles core commands: help, clear, mode, reset, context, tools, debug, init, sk
 """
 
 from pathlib import Path
+
 from rich.console import Console
 from rich.table import Table
 
@@ -95,7 +96,9 @@ class CoreCommandHandler:
                     result["tool_definitions"] = new_tool_definitions
                     self.hook_mgr.permission_mode = new_mode
                     result["system_prompt"] = build_system_prompt(new_mode, active_skills_content)
-                    console.print(f"[green]Switched to {new_mode} mode ({len(new_tool_definitions)} tools)[/green]")
+                    console.print(
+                        f"[green]Switched to {new_mode} mode ({len(new_tool_definitions)} tools)[/green]"
+                    )
                 else:
                     console.print(f"[red]Unknown mode: {new_mode}[/red]")
             else:
@@ -111,6 +114,19 @@ class CoreCommandHandler:
             self.ctx.clear(keep_summaries=True)
             result["conversation_history"] = []
             console.print("[green]Conversation cleared (summaries preserved)[/green]")
+
+        elif cmd == "compact":
+            stats_before = self.ctx.get_context_stats()
+            if stats_before["messages"] <= self.ctx.config.keep_recent_messages:
+                console.print("[yellow]Not enough messages to compact.[/yellow]")
+            else:
+                self.ctx._force_summarize()
+                stats_after = self.ctx.get_context_stats()
+                result["conversation_history"] = []
+                console.print(
+                    f"[green]Context compacted: {stats_before['messages']} → {stats_after['messages']} messages, "
+                    f"{stats_before['estimated_tokens']:,} → {stats_after['estimated_tokens']:,} tokens[/green]"
+                )
 
         elif cmd == "reset":
             self.ctx.reset()
@@ -176,6 +192,7 @@ Project specific rules for Doraemon Code.
   /context        - Show context/memory statistics
   /skills         - Show loaded skills
   /clear          - Clear conversation (keeps summaries)
+  /compact        - Compress context (summarize older messages)
   /reset          - Full reset (clears everything)
   /tools          - List available tools
   /debug          - Show debug info
@@ -253,7 +270,9 @@ Project specific rules for Doraemon Code.
         else:
             console.print("  [dim]No skills currently active[/dim]")
         console.print("\n[dim]Skills are loaded automatically based on conversation context.[/dim]")
-        console.print("[dim]Put SKILL.md files in .doraemon/skills/<name>/ to add custom skills.[/dim]")
+        console.print(
+            "[dim]Put SKILL.md files in .doraemon/skills/<name>/ to add custom skills.[/dim]"
+        )
 
     def _show_tools(self, mode: str, tool_names: list, sensitive_tools: set):
         """Show available tools."""
