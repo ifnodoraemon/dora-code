@@ -15,6 +15,7 @@ from src.core.context_manager import ContextConfig, ContextManager
 from src.core.cost_tracker import BudgetConfig, CostTracker
 from src.core.hooks import HookManager
 from src.core.model_client import ModelClient
+from src.core.permissions import PermissionManager
 from src.core.session import SessionManager
 from src.core.skills import SkillManager
 from src.core.tool_selector import ToolSelector
@@ -108,6 +109,15 @@ def initialize_session_manager() -> SessionManager:
     return SessionManager()
 
 
+def initialize_permission_manager() -> PermissionManager:
+    """Initialize the permission manager, loading rules from .doraemon/permissions.json if exists."""
+    perm_mgr = PermissionManager()
+    rules_file = Path(".doraemon/permissions.json")
+    if rules_file.exists():
+        perm_mgr.load_rules_from_file(rules_file)
+    return perm_mgr
+
+
 async def initialize_all_managers(project: str):
     """
     Initialize all managers and components.
@@ -127,6 +137,7 @@ async def initialize_all_managers(project: str):
     cmd_history = initialize_command_history(project)
     bash_executor = initialize_bash_executor()
     session_mgr = initialize_session_manager()
+    permission_mgr = initialize_permission_manager()
 
     return {
         "model_client": model_client,
@@ -141,4 +152,5 @@ async def initialize_all_managers(project: str):
         "cmd_history": cmd_history,
         "bash_executor": bash_executor,
         "session_mgr": session_mgr,
+        "permission_mgr": permission_mgr,
     }

@@ -60,19 +60,13 @@ class PermissionRule:
         """Check if rule matches a tool."""
         if not self.tools:
             return True  # No tool restriction
-        return any(
-            fnmatch.fnmatch(tool, pattern)
-            for pattern in self.tools
-        )
+        return any(fnmatch.fnmatch(tool, pattern) for pattern in self.tools)
 
     def matches_path(self, path: str) -> bool:
         """Check if rule matches a path."""
         if not self.paths:
             return True  # No path restriction
-        return any(
-            fnmatch.fnmatch(path, pattern)
-            for pattern in self.paths
-        )
+        return any(fnmatch.fnmatch(path, pattern) for pattern in self.paths)
 
     def matches_operation(self, operation: OperationType) -> bool:
         """Check if rule matches an operation type."""
@@ -242,13 +236,19 @@ class PermissionManager:
 
     # Tool to operation mapping
     TOOL_OPERATIONS = {
-        "file_read": OperationType.READ,
-        "file_list": OperationType.READ,
-        "file_search": OperationType.READ,
-        "file_write": OperationType.WRITE,
-        "file_edit": OperationType.WRITE,
-        "file_delete": OperationType.DELETE,
-        "shell_exec": OperationType.EXECUTE,
+        "read": OperationType.READ,
+        "read_file": OperationType.READ,
+        "list_directory": OperationType.READ,
+        "glob_files": OperationType.READ,
+        "grep_search": OperationType.READ,
+        "search": OperationType.READ,
+        "semantic_search": OperationType.READ,
+        "write": OperationType.WRITE,
+        "write_file": OperationType.WRITE,
+        "edit_file": OperationType.WRITE,
+        "delete_file": OperationType.DELETE,
+        "shell_execute": OperationType.EXECUTE,
+        "execute_python": OperationType.EXECUTE,
         "git_commit": OperationType.WRITE,
         "git_push": OperationType.NETWORK,
         "web_search": OperationType.NETWORK,
@@ -302,9 +302,7 @@ class PermissionManager:
         """
         # Get operation type if not specified
         if request.operation is None:
-            request.operation = self.TOOL_OPERATIONS.get(
-                request.tool, OperationType.READ
-            )
+            request.operation = self.TOOL_OPERATIONS.get(request.tool, OperationType.READ)
 
         # Mode-based restrictions
         if self._mode == "plan" and request.operation in (
@@ -398,7 +396,7 @@ class PermissionManager:
         self._audit_log.append(entry)
         # Trim if too large
         if len(self._audit_log) > self._max_audit_entries:
-            self._audit_log = self._audit_log[-self._max_audit_entries // 2:]
+            self._audit_log = self._audit_log[-self._max_audit_entries // 2 :]
 
     def get_audit_log(self, limit: int = 50) -> list[dict]:
         """Get recent audit entries."""
@@ -432,9 +430,7 @@ class PermissionManager:
                     level=PermissionLevel(rule_data["level"]),
                     tools=rule_data.get("tools", []),
                     paths=rule_data.get("paths", []),
-                    operations=[
-                        OperationType(o) for o in rule_data.get("operations", [])
-                    ],
+                    operations=[OperationType(o) for o in rule_data.get("operations", [])],
                     priority=rule_data.get("priority", 0),
                 )
                 self.add_rule(rule)

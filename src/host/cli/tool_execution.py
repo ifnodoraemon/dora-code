@@ -17,6 +17,12 @@ from rich.prompt import Prompt
 
 from src.core.diff import print_diff
 from src.core.hooks import HookEvent, HookManager
+from src.core.permissions import (
+    OperationType,
+    PermissionLevel,
+    PermissionManager,
+    PermissionRequest,
+)
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -31,6 +37,7 @@ async def execute_tool(
     checkpoint_mgr,
     hook_mgr: HookManager,
     headless: bool = False,
+    permission_mgr: PermissionManager | None = None,
 ) -> dict[str, Any]:
     """
     Execute a tool with HITL approval for sensitive tools.
@@ -44,6 +51,7 @@ async def execute_tool(
         checkpoint_mgr: Checkpoint manager for file snapshots
         hook_mgr: Hook manager for pre/post tool hooks
         headless: Whether running in headless mode
+        permission_mgr: Optional permission manager for fine-grained control
 
     Returns:
         dict with tool_call_id, name, and result
@@ -64,6 +72,36 @@ async def execute_tool(
 
     if pre_hook.modified_input:
         args = pre_hook.modified_input
+
+    # Permission system check (if available)
+    if permission_mgr:
+        # Determine operation type from tool name
+        op_type = permission_mgr.TOOL_OPERATIONS.get(tool_name, OperationType.READ)
+        path = args.get("path", args.get("file"))
+
+        perm_request = PermissionRequest(
+            tool=tool_name,
+            operation=op_type,
+            path=path,
+            arguments=args,
+        )
+        perm_result = permission_mgr.check(perm_request)
+
+        if perm_result.level == PermissionLevel.DENY:
+            console.print(f"[red]🚫 Permission denied: {perm_result.message}[/red]")
+            return {
+                "tool_call_id": tool_call_id,
+                "name": tool_name,
+                "result": f"Permission denied: {perm_result.message}",
+            }
+
+        if perm_result.level == PermissionLevel.WARN:
+            console.print(f"[yellow]⚠️ Warning: {perm_result.message}[/yellow]")
+
+        if perm_result.level == PermissionLevel.ASK:
+            # Route to HITL approval below (same as sensitive_tools)
+            if tool_name not in sensitive_tools:
+                sensitive_tools = sensitive_tools | {tool_name}
 
     # Inject project context for memory tools
     if tool_name in ["save_note", "search_notes"]:
@@ -97,12 +135,26 @@ async def execute_tool(
             if rendered_field:
                 title, field_content, lang = rendered_field
                 if display_args:
-                    console.print(f"[dim]{json.dumps(display_args, indent=2, ensure_ascii=False)}[/dim]")
+                    console.print(
+                        f"[dim]{json.dumps(display_args, indent=2, ensure_ascii=False)}[/dim]"
+                    )
                 # Render as markdown code block for code, or plain markdown for content
                 if lang == "python":
-                    console.print(Panel(Markdown(f"```python\n{field_content}\n```"), title=f"[bold]{title}[/bold]", border_style="dim"))
+                    console.print(
+                        Panel(
+                            Markdown(f"```python\n{field_content}\n```"),
+                            title=f"[bold]{title}[/bold]",
+                            border_style="dim",
+                        )
+                    )
                 else:
-                    console.print(Panel(Markdown(field_content), title=f"[bold]{title}[/bold]", border_style="dim"))
+                    console.print(
+                        Panel(
+                            Markdown(field_content),
+                            title=f"[bold]{title}[/bold]",
+                            border_style="dim",
+                        )
+                    )
             else:
                 console.print(f"[dim]{json.dumps(args, indent=2, ensure_ascii=False)}[/dim]")
 
