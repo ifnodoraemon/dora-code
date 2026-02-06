@@ -1,21 +1,19 @@
 """
-Model Adapters
+Direct Model Client
 
-Provider-specific adapters for Gateway and Direct modes.
-Handles communication with different LLM providers.
+Client that connects directly to provider APIs (Google, OpenAI, Anthropic, Ollama).
 """
 
 import json
 import logging
 import uuid
-from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
+from src.core.model_client_base import BaseModelClient
 from src.core.model_utils import (
     ChatResponse,
     ClientConfig,
-    ClientMode,
     Message,
     Provider,
     StreamChunk,
@@ -23,293 +21,6 @@ from src.core.model_utils import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-class BaseModelClient(ABC):
-    """Base class for model clients."""
-
-    @abstractmethod
-    async def chat(
-        self,
-        messages: Sequence[Message | dict],
-        tools: Sequence[ToolDefinition | dict] | None = None,
-        **kwargs,
-    ) -> ChatResponse:
-        """Send a chat request."""
-        pass
-
-    @abstractmethod
-    def chat_stream(
-        self,
-        messages: Sequence[Message | dict],
-        tools: Sequence[ToolDefinition | dict] | None = None,
-        **kwargs,
-    ) -> AsyncIterator[StreamChunk]:
-        """Send a streaming chat request."""
-        pass
-
-    @abstractmethod
-    async def list_models(self) -> list[dict]:
-        """List available models."""
-        pass
-
-    @abstractmethod
-    async def connect(self) -> None:
-        """Connect to the model provider/gateway."""
-        pass
-
-    @abstractmethod
-    async def close(self) -> None:
-        """Close the client."""
-        pass
-
-
-class GatewayModelClient(BaseModelClient):
-    """Client that connects to the Model Gateway."""
-
-    def __init__(self, config: ClientConfig):
-        self.config = config
-        from httpx import AsyncClient
-        self._client: AsyncClient | None = None
-
-    async def __aenter__(self):
-        """Context manager entry - ensure client is connected."""
-        await self.connect()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit - ensure client is closed."""
-        await self.close()
-        return False  # Don't suppress exceptions
-
-    async def connect(self) -> None:
-        """Initialize HTTP client."""
-        import httpx
-
-        headers = {}
-        if self.config.gateway_key:
-            headers["Authorization"] = f"Bearer {self.config.gateway_key}"
-
-        if not self.config.gateway_url:
-            raise ValueError("Gateway URL must be set for Gateway mode")
-
-        self._client = httpx.AsyncClient(
-            base_url=self.config.gateway_url,
-            headers=headers,
-            timeout=httpx.Timeout(120.0),
-        )
-        logger.info(f"Connected to gateway: {self.config.gateway_url}")
-
-    async def _make_api_call(self, endpoint: str, payload: dict | None = None, method: str = "POST") -> dict:
-        """
-        Make API call with automatic retry on transient errors.
-
-        Args:
-            endpoint: API endpoint path
-            payload: Request payload (for POST) or None (for GET)
-            method: HTTP method (POST or GET)
-
-        Returns:
-            Response JSON data
-
-        Raises:
-            RateLimitError: When rate limited
-            TransientError: When server error occurs
-            DoraemonException: For other API errors
-        """
-        from src.core.errors import (
-            DoraemonException,
-            ErrorCategory,
-            RateLimitError,
-            TransientError,
-            retry,
-        )
-        import httpx
-
-        @retry(
-            max_attempts=3,
-            initial_delay=1.0,
-            max_delay=60.0,
-            exceptions=(TransientError, RateLimitError),
-        )
-        async def _call():
-            if self._client is None:
-                await self.connect()
-            if self._client is None:
-                from src.core.errors import ConfigurationError
-                raise ConfigurationError("Failed to initialize HTTP client")
-
-            try:
-                if method == "GET":
-                    response = await self._client.get(endpoint)
-                else:
-                    response = await self._client.post(endpoint, json=payload)
-                response.raise_for_status()
-                return response.json()
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429:
-                    # Rate limit - extract retry-after header
-                    retry_after = int(e.response.headers.get("Retry-After", 60))
-                    raise RateLimitError(
-                        "Rate limit exceeded",
-                        retry_after=retry_after,
-                        context={"endpoint": endpoint, "status": 429}
-                    )
-                elif e.response.status_code >= 500:
-                    # Server error - transient, can retry
-                    raise TransientError(
-                        f"Server error: {e.response.status_code}",
-                        retry_after=2.0,
-                        context={"endpoint": endpoint, "status": e.response.status_code}
-                    )
-                else:
-                    # Client error - permanent
-                    raise DoraemonException(
-                        f"API error: {e.response.status_code} - {e.response.text}",
-                        category=ErrorCategory.PERMANENT,
-                        context={"endpoint": endpoint, "status": e.response.status_code}
-                    )
-            except httpx.RequestError as e:
-                # Network error - transient
-                raise TransientError(
-                    f"Network error: {str(e)}",
-                    retry_after=2.0,
-                    context={"endpoint": endpoint, "error": str(e)}
-                )
-
-        return await _call()
-
-    async def chat(
-        self,
-        messages: Sequence[Message | dict],
-        tools: Sequence[ToolDefinition | dict] | None = None,
-        **kwargs,
-    ) -> ChatResponse:
-        if not self._client:
-            await self.connect()
-
-        # Normalize messages
-        msg_list = []
-        for m in messages:
-            if isinstance(m, Message):
-                msg_list.append(m.to_dict())
-            else:
-                msg_list.append(m)
-
-        # Normalize tools
-        tool_list = None
-        if tools:
-            tool_list = []
-            for t in tools:
-                if isinstance(t, ToolDefinition):
-                    tool_list.append(t.to_openai_format())
-                else:
-                    tool_list.append(t)
-
-        payload = {
-            "model": kwargs.get("model", self.config.model),
-            "messages": msg_list,
-            "temperature": kwargs.get("temperature", self.config.temperature),
-        }
-        if tool_list:
-            payload["tools"] = tool_list
-        if self.config.max_tokens:
-            payload["max_tokens"] = self.config.max_tokens
-
-        # Use retry-enabled API call
-        data = await self._make_api_call("/v1/chat/completions", payload)
-
-        # Extract response - safely handle empty choices
-        choices = data.get("choices", [])
-        if not choices:
-            return ChatResponse(
-                content=None,
-                tool_calls=None,
-                finish_reason="error",
-                usage=data.get("usage"),
-                raw=data,
-            )
-        choice = choices[0]
-        message = choice.get("message", {})
-
-        return ChatResponse(
-            content=message.get("content"),
-            tool_calls=message.get("tool_calls"),
-            finish_reason=choice.get("finish_reason"),
-            usage=data.get("usage"),
-            raw=data,
-        )
-
-    async def chat_stream(
-        self,
-        messages: Sequence[Message | dict],
-        tools: Sequence[ToolDefinition | dict] | None = None,
-        **kwargs,
-    ) -> AsyncIterator[StreamChunk]:
-        if not self._client:
-            await self.connect()
-
-        # Check for client existence
-        if self._client is None:
-            from src.core.errors import ConfigurationError
-            raise ConfigurationError("Failed to initialize HTTP client for gateway mode")
-
-        msg_list = [m.to_dict() if isinstance(m, Message) else m for m in messages]
-        tool_list = None
-        if tools:
-            tool_list = [
-                t.to_openai_format() if isinstance(t, ToolDefinition) else t
-                for t in tools
-            ]
-
-        payload = {
-            "model": kwargs.get("model", self.config.model),
-            "messages": msg_list,
-            "temperature": kwargs.get("temperature", self.config.temperature),
-            "stream": True,
-        }
-        if tool_list:
-            payload["tools"] = tool_list
-
-        async with self._client.stream("POST", "/v1/chat/completions", json=payload) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if not line or not line.startswith("data: "):
-                    continue
-                data = line[6:]
-                if data == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(data)
-                    choices = chunk.get("choices", [])
-                    if not choices:
-                        continue
-                    choice = choices[0]
-                    delta = choice.get("delta", {})
-                    # For Gemini via Gateway, thought might be in delta if we updated Gateway?
-                    # Or maybe we need to update _chat_google in DIRECT mode?
-                    # The code above (lines 342-365) is inside GatewayModelClient implementation for OpenAI compatible API.
-                    # If Gateway supports thought, it should be in delta.
-
-                    yield StreamChunk(
-                        content=delta.get("content"),
-                        thought=delta.get("thought"), # Add thought
-                        tool_calls=delta.get("tool_calls"),
-                        finish_reason=choice.get("finish_reason"),
-                        usage=chunk.get("usage"),
-                    )
-                except json.JSONDecodeError:
-                    continue
-
-    async def list_models(self) -> list[dict]:
-        """List available models from gateway."""
-        data = await self._make_api_call("/v1/models", method="GET")
-        return data.get("data", [])
-
-    async def close(self) -> None:
-        if self._client:
-            await self._client.aclose()
-            self._client = None
 
 
 class DirectModelClient(BaseModelClient):
@@ -335,7 +46,7 @@ class DirectModelClient(BaseModelClient):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - ensure all providers are closed."""
         await self.close()
-        return False  # Don't suppress exceptions
+        return False
 
     async def connect(self) -> None:
         """Initialize provider clients."""
@@ -467,7 +178,6 @@ class DirectModelClient(BaseModelClient):
                         args=args,
                     )
 
-                    # SDK Part constructor handles thought_signature
                     thought_sig = tc.get("thought_signature") or func.get("thought_signature")
 
                     parts.append(types.Part(
@@ -524,7 +234,7 @@ class DirectModelClient(BaseModelClient):
             config=gen_config,
         )
 
-        # Extract response - safely handle empty candidates
+        # Extract response
         content = None
         tool_calls = None
         finish_reason = "stop"
@@ -551,7 +261,6 @@ class DirectModelClient(BaseModelClient):
                 if tool_calls is None:
                     tool_calls = []
                 fc = part.function_call
-                # Safely convert args to dict
                 try:
                     args = dict(fc.args) if fc.args else {}
                 except (TypeError, ValueError) as e:
@@ -569,7 +278,6 @@ class DirectModelClient(BaseModelClient):
                         "arguments": json.dumps(args),
                     },
                 }
-                # Capture thought_signature if present in the PART (neighbor to function_call)
                 if hasattr(part, "thought_signature") and part.thought_signature:
                     tc_dict["thought_signature"] = part.thought_signature
                 elif isinstance(part, dict) and part.get("thought_signature"):
@@ -632,7 +340,6 @@ class DirectModelClient(BaseModelClient):
 
         response = await client.chat.completions.create(**params)
 
-        # Safely handle empty choices
         if not response.choices:
             logger.warning("No choices in OpenAI response")
             return ChatResponse(
@@ -824,8 +531,7 @@ class DirectModelClient(BaseModelClient):
         tools: Sequence[ToolDefinition | dict] | None = None,
         **kwargs,
     ) -> AsyncIterator[StreamChunk]:
-        """Streaming chat - currently only implemented for gateway mode."""
-        # For simplicity, fall back to non-streaming for direct mode
+        """Streaming chat - currently falls back to non-streaming for direct mode."""
         response = await self.chat(messages, tools, **kwargs)
         if False:
             yield StreamChunk()  # Ensure it's an async generator
