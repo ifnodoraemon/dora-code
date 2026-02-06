@@ -76,3 +76,4 @@ temp/
 # Documentation build
 docs/_build/
 site/
+eval_results/test_history.db
