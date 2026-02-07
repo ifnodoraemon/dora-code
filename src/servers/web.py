@@ -1,7 +1,7 @@
 import logging
 
 import trafilatura
-from ddgs import DDGS
+from duckduckgo_search import DDGS
 from mcp.server.fastmcp import FastMCP
 
 # Setup logging
