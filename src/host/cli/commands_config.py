@@ -5,6 +5,7 @@ Handles configuration commands: model, theme, vim, thinking, doctor, workspace, 
 """
 
 from pathlib import Path
+
 from rich.console import Console
 from rich.table import Table
 

@@ -30,8 +30,8 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
-from src.host.cli.chat_loop import chat_loop
 from src.core.session import SessionManager
+from src.host.cli.chat_loop import chat_loop
 
 logger = logging.getLogger(__name__)
 

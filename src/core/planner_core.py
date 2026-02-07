@@ -12,12 +12,9 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from .planner_output import (
-    Task, TaskStatus, TaskPriority,
-    ExecutionPlan, RiskLevel
-)
 from .planner_analysis import TaskAnalyzer
 from .planner_decompose import TaskDecomposer
+from .planner_output import ExecutionPlan, RiskLevel, Task, TaskPriority, TaskStatus
 
 logger = logging.getLogger(__name__)
 

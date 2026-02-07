@@ -5,7 +5,6 @@ Shared helper functions for all git modules.
 """
 
 import logging
-import re
 import subprocess
 
 from src.core.security import validate_path

@@ -176,7 +176,7 @@ if WATCHDOG_AVAILABLE:
                 self._callback(file_event)
 
         def on_modified(self, event):
-            if isinstance(event, (DirCreatedEvent, DirDeletedEvent, DirMovedEvent)):
+            if isinstance(event, DirCreatedEvent | DirDeletedEvent | DirMovedEvent):
                 return
             file_event = self._create_event(
                 FileEventType.MODIFIED, event.src_path, False
@@ -266,7 +266,7 @@ class FileWatcher:
             return False
 
         # Convert to config
-        if isinstance(config, (str, Path)):
+        if isinstance(config, str | Path):
             config = WatchConfig(path=Path(config))
 
         path = config.path

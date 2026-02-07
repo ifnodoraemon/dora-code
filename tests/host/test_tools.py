@@ -176,19 +176,20 @@ class TestDefaultRegistry:
 
         # Should have at least some basic tools
         assert len(tools) > 0
-        assert "read_file" in tools
-        assert "list_directory" in tools
+        assert "read" in tools
+        assert "write" in tools
+        assert "search" in tools
 
     def test_default_registry_sensitive_tools(self):
         """Test that sensitive tools are marked."""
         registry = get_default_registry()
         sensitive = registry.get_sensitive_tools()
 
-        # write_file should be sensitive
-        assert "write_file" in sensitive
+        # write should be sensitive
+        assert "write" in sensitive
 
-        # read_file should not be sensitive
-        assert "read_file" not in sensitive
+        # read should not be sensitive
+        assert "read" not in sensitive
 
     def test_default_registry_singleton(self):
         """Test that get_default_registry returns same instance."""

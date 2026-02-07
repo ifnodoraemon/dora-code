@@ -10,11 +10,8 @@ Provides analysis capabilities for task planning:
 """
 
 import logging
-from typing import Any
 
-from .planner_output import (
-    Task, TaskPriority, RiskLevel, RiskAssessment
-)
+from .planner_output import RiskAssessment, RiskLevel, Task
 
 logger = logging.getLogger(__name__)
 

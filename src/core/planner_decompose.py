@@ -8,7 +8,7 @@ Provides pattern-based task decomposition for different goal types:
 - Testing tasks
 """
 
-from .planner_output import Task, TaskPriority, TaskDependency
+from .planner_output import Task, TaskDependency, TaskPriority
 
 
 class TaskDecomposer:

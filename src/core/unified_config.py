@@ -10,7 +10,6 @@ Precedence: Environment Variables > Config File > Defaults
 import json
 import os
 from pathlib import Path
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -91,12 +90,12 @@ class UnifiedConfig(BaseModel):
     # ========================================
     # Budget Settings
     # ========================================
-    daily_budget_usd: Optional[float] = Field(
+    daily_budget_usd: float | None = Field(
         default=None,
         ge=0,
         description="Daily spending budget in USD (None = unlimited)"
     )
-    session_budget_usd: Optional[float] = Field(
+    session_budget_usd: float | None = Field(
         default=None,
         ge=0,
         description="Per-session spending budget in USD (None = unlimited)"
@@ -109,7 +108,7 @@ class UnifiedConfig(BaseModel):
         default="INFO",
         description="Logging level (DEBUG, INFO, WARNING, ERROR)"
     )
-    log_file: Optional[str] = Field(
+    log_file: str | None = Field(
         default=None,
         description="Path to log file (None = console only)"
     )
@@ -140,7 +139,7 @@ class UnifiedConfig(BaseModel):
     @classmethod
     def from_env_and_file(
         cls,
-        config_path: Optional[str | Path] = None,
+        config_path: str | Path | None = None,
         validate: bool = True
     ) -> "UnifiedConfig":
         """
@@ -172,7 +171,7 @@ class UnifiedConfig(BaseModel):
                 with open(config_path) as f:
                     file_config = json.load(f)
             except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON in config file: {e}")
+                raise ValueError(f"Invalid JSON in config file: {e}") from e
 
         # Environment variable overrides
         env_overrides = {
@@ -238,7 +237,7 @@ class UnifiedConfig(BaseModel):
 # Helper Functions
 # ========================================
 
-def _parse_int(value: Optional[str]) -> Optional[int]:
+def _parse_int(value: str | None) -> int | None:
     """Parse integer from environment variable."""
     if value is None:
         return None
@@ -248,7 +247,7 @@ def _parse_int(value: Optional[str]) -> Optional[int]:
         return None
 
 
-def _parse_float(value: Optional[str]) -> Optional[float]:
+def _parse_float(value: str | None) -> float | None:
     """Parse float from environment variable."""
     if value is None:
         return None
@@ -258,7 +257,7 @@ def _parse_float(value: Optional[str]) -> Optional[float]:
         return None
 
 
-def _parse_bool(value: Optional[str]) -> Optional[bool]:
+def _parse_bool(value: str | None) -> bool | None:
     """Parse boolean from environment variable."""
     if value is None:
         return None

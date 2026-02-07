@@ -17,17 +17,17 @@ This module serves as the public API, re-exporting from specialized submodules:
 """
 
 # Re-export all public APIs
-from .planner_output import (
-    TaskStatus,
-    TaskPriority,
-    RiskLevel,
-    TaskDependency,
-    RiskAssessment,
-    Task,
-    ExecutionPlan,
-)
-from .planner_core import TaskPlanner
 from .planner_analysis import TaskAnalyzer
+from .planner_core import TaskPlanner
+from .planner_output import (
+    ExecutionPlan,
+    RiskAssessment,
+    RiskLevel,
+    Task,
+    TaskDependency,
+    TaskPriority,
+    TaskStatus,
+)
 
 __all__ = [
     # Enums

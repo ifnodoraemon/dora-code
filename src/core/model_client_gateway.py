@@ -73,6 +73,8 @@ class GatewayModelClient(BaseModelClient):
             TransientError: When server error occurs
             DoraemonException: For other API errors
         """
+        import httpx
+
         from src.core.errors import (
             DoraemonException,
             ErrorCategory,
@@ -80,7 +82,6 @@ class GatewayModelClient(BaseModelClient):
             TransientError,
             retry,
         )
-        import httpx
 
         @retry(
             max_attempts=3,
@@ -109,25 +110,25 @@ class GatewayModelClient(BaseModelClient):
                         "Rate limit exceeded",
                         retry_after=retry_after,
                         context={"endpoint": endpoint, "status": 429}
-                    )
+                    ) from e
                 elif e.response.status_code >= 500:
                     raise TransientError(
                         f"Server error: {e.response.status_code}",
                         retry_after=2.0,
                         context={"endpoint": endpoint, "status": e.response.status_code}
-                    )
+                    ) from e
                 else:
                     raise DoraemonException(
                         f"API error: {e.response.status_code} - {e.response.text}",
                         category=ErrorCategory.PERMANENT,
                         context={"endpoint": endpoint, "status": e.response.status_code}
-                    )
+                    ) from e
             except httpx.RequestError as e:
                 raise TransientError(
                     f"Network error: {str(e)}",
                     retry_after=2.0,
                     context={"endpoint": endpoint, "error": str(e)}
-                )
+                ) from e
 
         return await _call()
 

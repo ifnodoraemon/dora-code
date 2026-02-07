@@ -5,9 +5,10 @@ Handles session commands: sessions, resume, rename, export, fork, checkpoints, r
 """
 
 from datetime import datetime
+
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 console = Console()
 

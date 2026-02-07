@@ -336,7 +336,7 @@ class LogRotationManager:
             True if rotated
         """
         try:
-            if isinstance(handler, (RotatingFileHandler, TimedRotatingFileHandler)):
+            if isinstance(handler, RotatingFileHandler | TimedRotatingFileHandler):
                 handler.doRollover()
                 return True
             return False

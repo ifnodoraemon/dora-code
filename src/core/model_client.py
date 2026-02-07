@@ -26,6 +26,13 @@ Usage:
 
 import os
 
+# Re-export base class
+from src.core.model_client_base import BaseModelClient
+from src.core.model_client_direct import DirectModelClient
+
+# Re-export client implementations
+from src.core.model_client_gateway import GatewayModelClient
+
 # Re-export all types from model_utils for backward compatibility
 from src.core.model_utils import (
     ChatResponse,
@@ -37,13 +44,6 @@ from src.core.model_utils import (
     ToolCall,
     ToolDefinition,
 )
-
-# Re-export base class
-from src.core.model_client_base import BaseModelClient
-
-# Re-export client implementations
-from src.core.model_client_gateway import GatewayModelClient
-from src.core.model_client_direct import DirectModelClient
 
 __all__ = [
     # Types

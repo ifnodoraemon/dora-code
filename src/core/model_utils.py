@@ -5,7 +5,6 @@ Provides utility functions and data classes for the unified model client.
 Includes message conversion, tool definitions, and response handling.
 """
 
-import json
 import logging
 from dataclasses import dataclass
 from enum import Enum

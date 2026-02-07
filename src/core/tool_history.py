@@ -71,9 +71,9 @@ class ToolExecution:
 
     def _serialize_result(self, result: Any) -> Any:
         """Serialize result for storage."""
-        if isinstance(result, (str, int, float, bool, type(None))):
+        if isinstance(result, str | int | float | bool | type(None)):
             return result
-        if isinstance(result, (list, dict)):
+        if isinstance(result, list | dict):
             try:
                 json.dumps(result)
                 return result

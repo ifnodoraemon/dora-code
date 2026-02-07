@@ -414,7 +414,7 @@ Project specific rules for Doraemon Code.
 
         result = self._run_git(commit_args)
         if result is not None:
-            console.print(f"\n[green]Committed successfully![/green]")
+            console.print("\n[green]Committed successfully![/green]")
             # Show the commit
             log_output = self._run_git(["log", "-1", "--oneline"])
             if log_output:
@@ -504,7 +504,7 @@ Project specific rules for Doraemon Code.
             return f"{prefix}: {action} {file_names}"
         else:
             # Group by directory
-            dirs = set(str(Path(f).parent) for f in all_files if Path(f).parent != Path("."))
+            dirs = {str(Path(f).parent) for f in all_files if Path(f).parent != Path(".")}
             if dirs:
                 dir_name = list(dirs)[0] if len(dirs) == 1 else "multiple files"
                 return f"{prefix}: {action} {dir_name} ({len(all_files)} files)"
@@ -612,7 +612,6 @@ Project specific rules for Doraemon Code.
             /review goto <n>     - Go back to turn n (discard later messages)
             /review search <q>   - Search conversation for keyword
         """
-        from datetime import datetime
 
         messages = self.ctx.messages
 
@@ -665,7 +664,6 @@ Project specific rules for Doraemon Code.
 
     def _show_conversation_history(self, messages: list, limit: int | None = 10):
         """Display conversation history with turn numbers."""
-        from rich.markdown import Markdown
 
         if limit:
             display_messages = messages[-limit * 2:]  # 2 messages per turn (user + assistant)
@@ -677,9 +675,9 @@ Project specific rules for Doraemon Code.
         console.print(f"\n[bold cyan]Conversation History[/bold cyan] ({len(messages)} messages total)\n")
 
         turn_num = start_idx // 2 + 1
-        for i, msg in enumerate(display_messages):
-            idx = start_idx + i
-            timestamp = datetime.fromtimestamp(msg.timestamp).strftime("%H:%M:%S")
+        for _i, msg in enumerate(display_messages):
+            from datetime import datetime as dt
+            timestamp = dt.fromtimestamp(msg.timestamp).strftime("%H:%M:%S")
 
             if msg.role == "user":
                 console.print(f"[bold yellow]Turn {turn_num}[/bold yellow] [dim]{timestamp}[/dim]")
@@ -768,7 +766,7 @@ Project specific rules for Doraemon Code.
 
             console.print(f"[bold]Turn {turn_num}[/bold] [{role_color}]{role_name}[/{role_color}]: {snippet}")
 
-        console.print(f"\n[dim]Use /review goto <turn> to jump to a specific turn[/dim]")
+        console.print("\n[dim]Use /review goto <turn> to jump to a specific turn[/dim]")
 
     def _show_status(self, mode: str, tool_names: list):
         """Show system status information."""
