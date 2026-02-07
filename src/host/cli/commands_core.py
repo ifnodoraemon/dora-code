@@ -158,6 +158,9 @@ class CoreCommandHandler:
         elif cmd == "review-pr":
             await self._handle_review_pr(cmd_args)
 
+        elif cmd == "review":
+            result = await self._handle_review(cmd_args, conversation_history)
+
         else:
             return None
 
@@ -214,6 +217,13 @@ Project specific rules for Doraemon Code.
   /commit --amend - Amend the last commit
   /review-pr [n]  - View PR details (current branch or by number)
   /review-pr --diff - Show PR with diff
+
+[bold]Conversation History:[/bold]
+  /review         - Show recent conversation turns
+  /review <n>     - Show last n turns
+  /review goto <n> - Go back to turn n (discard later messages)
+  /review search <q> - Search conversation for keyword
+  /review all     - Show all messages
 
 [bold]Session Commands:[/bold]
   /sessions       - List recent sessions
@@ -574,3 +584,171 @@ Project specific rules for Doraemon Code.
             return None
         except Exception:
             return None
+
+    async def _handle_review(self, cmd_args: list[str], conversation_history: list) -> dict | None:
+        """
+        Handle /review command - view and navigate conversation history.
+
+        Usage:
+            /review              - Show recent conversation turns
+            /review <n>          - Show last n turns
+            /review goto <n>     - Go back to turn n (discard later messages)
+            /review search <q>   - Search conversation for keyword
+        """
+        from datetime import datetime
+
+        messages = self.ctx.messages
+
+        if not messages:
+            console.print("[yellow]No conversation history yet.[/yellow]")
+            return None
+
+        # Parse subcommand
+        if not cmd_args:
+            # Default: show last 10 turns
+            self._show_conversation_history(messages, limit=10)
+            return None
+
+        subcommand = cmd_args[0].lower()
+
+        if subcommand.isdigit():
+            # /review <n> - show last n turns
+            limit = int(subcommand)
+            self._show_conversation_history(messages, limit=limit)
+            return None
+
+        elif subcommand == "goto":
+            # /review goto <n> - go back to turn n
+            if len(cmd_args) < 2 or not cmd_args[1].isdigit():
+                console.print("[red]Usage: /review goto <turn_number>[/red]")
+                return None
+
+            target_turn = int(cmd_args[1])
+            return self._goto_turn(messages, target_turn, conversation_history)
+
+        elif subcommand == "search":
+            # /review search <query>
+            if len(cmd_args) < 2:
+                console.print("[red]Usage: /review search <keyword>[/red]")
+                return None
+
+            query = " ".join(cmd_args[1:])
+            self._search_conversation(messages, query)
+            return None
+
+        elif subcommand == "all":
+            # /review all - show all messages
+            self._show_conversation_history(messages, limit=None)
+            return None
+
+        else:
+            console.print(f"[red]Unknown subcommand: {subcommand}[/red]")
+            console.print("[dim]Usage: /review [n|goto <n>|search <q>|all][/dim]")
+            return None
+
+    def _show_conversation_history(self, messages: list, limit: int | None = 10):
+        """Display conversation history with turn numbers."""
+        from rich.markdown import Markdown
+
+        if limit:
+            display_messages = messages[-limit * 2:]  # 2 messages per turn (user + assistant)
+            start_idx = max(0, len(messages) - limit * 2)
+        else:
+            display_messages = messages
+            start_idx = 0
+
+        console.print(f"\n[bold cyan]Conversation History[/bold cyan] ({len(messages)} messages total)\n")
+
+        turn_num = start_idx // 2 + 1
+        for i, msg in enumerate(display_messages):
+            idx = start_idx + i
+            timestamp = datetime.fromtimestamp(msg.timestamp).strftime("%H:%M:%S")
+
+            if msg.role == "user":
+                console.print(f"[bold yellow]Turn {turn_num}[/bold yellow] [dim]{timestamp}[/dim]")
+                console.print(f"[cyan]You:[/cyan] {msg.content[:200]}{'...' if len(msg.content) > 200 else ''}")
+            elif msg.role in ("assistant", "model"):
+                content_preview = msg.content[:300] if msg.content else "(no content)"
+                console.print(f"[green]AI:[/green] {content_preview}{'...' if len(msg.content) > 300 else ''}")
+                console.print()
+                turn_num += 1
+
+        console.print("[dim]Use /review goto <turn> to go back to a specific turn[/dim]")
+
+    def _goto_turn(self, messages: list, target_turn: int, conversation_history: list) -> dict:
+        """Go back to a specific turn, discarding later messages."""
+        # Calculate message index (2 messages per turn: user + assistant)
+        target_idx = target_turn * 2
+
+        if target_idx > len(messages):
+            console.print(f"[red]Turn {target_turn} doesn't exist. Max turn: {len(messages) // 2}[/red]")
+            return {"handled": True}
+
+        if target_idx <= 0:
+            console.print("[red]Turn number must be positive.[/red]")
+            return {"handled": True}
+
+        # Confirm with user
+        from rich.prompt import Confirm
+        msgs_to_remove = len(messages) - target_idx
+        if msgs_to_remove > 0:
+            if not Confirm.ask(
+                f"This will remove {msgs_to_remove} messages (turns {target_turn + 1} onwards). Continue?",
+                default=False
+            ):
+                console.print("[yellow]Cancelled.[/yellow]")
+                return {"handled": True}
+
+            # Truncate messages
+            self.ctx.messages = messages[:target_idx]
+            self.ctx._auto_save()
+
+            # Clear and rebuild conversation_history
+            conversation_history.clear()
+
+            console.print(f"[green]Returned to turn {target_turn}. Later messages removed.[/green]")
+        else:
+            console.print(f"[yellow]Already at or before turn {target_turn}.[/yellow]")
+
+        return {
+            "handled": True,
+            "conversation_history": [],  # Signal to rebuild from ctx
+        }
+
+    def _search_conversation(self, messages: list, query: str):
+        """Search conversation history for a keyword."""
+        query_lower = query.lower()
+        results = []
+
+        for i, msg in enumerate(messages):
+            if query_lower in msg.content.lower():
+                turn_num = i // 2 + 1
+                results.append((turn_num, msg))
+
+        if not results:
+            console.print(f"[yellow]No matches found for '{query}'[/yellow]")
+            return
+
+        console.print(f"\n[bold cyan]Search Results for '{query}'[/bold cyan] ({len(results)} matches)\n")
+
+        for turn_num, msg in results[:20]:  # Limit to 20 results
+            role_color = "cyan" if msg.role == "user" else "green"
+            role_name = "You" if msg.role == "user" else "AI"
+
+            # Highlight the match in context
+            content = msg.content
+            idx = content.lower().find(query_lower)
+            if idx != -1:
+                start = max(0, idx - 50)
+                end = min(len(content), idx + len(query) + 50)
+                snippet = content[start:end]
+                if start > 0:
+                    snippet = "..." + snippet
+                if end < len(content):
+                    snippet = snippet + "..."
+            else:
+                snippet = content[:100]
+
+            console.print(f"[bold]Turn {turn_num}[/bold] [{role_color}]{role_name}[/{role_color}]: {snippet}")
+
+        console.print(f"\n[dim]Use /review goto <turn> to jump to a specific turn[/dim]")
