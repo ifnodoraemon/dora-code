@@ -1,220 +1,221 @@
 # 🤖 Doraemon Code
 
-**Doraemon Code** is a powerful AI coding assistant built on the Model Context Protocol (MCP), featuring a unified model gateway, comprehensive testing, and rich development tools.
+**Doraemon Code** is a powerful AI coding assistant built on the Model Context Protocol (MCP), designed to match and extend Claude Code's capabilities with a unified model gateway and comprehensive tooling.
 
-[![Tests](https://img.shields.io/badge/tests-2440%20passing-brightgreen)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-core%20modules%2095%25%2B-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1500%2B%20passing-brightgreen)](tests/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-## ✨ Features
+## ✨ Key Features
 
-### 🌐 Model Gateway
-- **Unified API**: Single interface for Google Gemini, OpenAI, Anthropic, and Ollama
-- **Auto-detection**: Automatically selects gateway or direct mode based on configuration
-- **Provider Adapters**: Seamless conversion between different model formats
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         Doraemon Code Features                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  🌐 Multi-Provider    │  🔧 Unified Tools    │  💬 Smart Context           │
+│  - Google Gemini      │  - read/write/search │  - Auto summarization       │
+│  - OpenAI GPT-4       │  - 3 tools → 15 ops  │  - Per-model limits         │
+│  - Anthropic Claude   │  - Occam's Razor     │  - Overflow recovery        │
+│  - Ollama (local)     │                      │                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  🔄 Agentic Loop      │  🛡️ Safety           │  📦 Session Management      │
+│  - Tool result → LLM  │  - Git safety        │  - Resume/continue          │
+│  - Parallel execution │  - Shell hardening   │  - Fork/export              │
+│  - Real streaming     │  - Permission system │  - Search history           │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-### 🧪 Comprehensive Testing
-- **2,440 tests** with **95%+ coverage on core modules**
-- Comprehensive test suites for all core modules
-- Automated testing with pytest
+## 🏗️ System Architecture
 
-### 🏗️ MCP Architecture
-- **Host-Server Model**: Modular design for unlimited extensibility
-- **Direct Function Calls**: No subprocess overhead with FastMCP
-- **Multiple Servers**: Filesystem, Git, Browser, Database, and more
-
-### 🎯 Core Capabilities
-- **Context Management**: Automatic summarization at 70% of context window
-- **Checkpoint System**: File snapshots and rollback capability
-- **Session Persistence**: Resume conversations across restarts
-- **Tool Registry**: Easy tool registration with automatic parameter extraction
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              User Interface                                  │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐             │
+│  │   CLI (main)    │  │    Web UI       │  │   API Server    │             │
+│  │  doraemon       │  │  localhost:3000 │  │  localhost:8000 │             │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘             │
+└───────────┼─────────────────────┼─────────────────────┼─────────────────────┘
+            │                     │                     │
+            └─────────────────────┼─────────────────────┘
+                                  │
+┌─────────────────────────────────▼───────────────────────────────────────────┐
+│                              Host Layer                                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │ Chat Loop    │  │ Tool Registry│  │ Context Mgr  │  │ Session Mgr  │    │
+│  │ - Streaming  │  │ - 30+ tools  │  │ - Summarize  │  │ - Persist    │    │
+│  │ - Agentic    │  │ - HITL       │  │ - Compress   │  │ - Resume     │    │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │ Permissions  │  │ Checkpoints  │  │ Cost Tracker │  │ Hook System  │    │
+│  │ - ALLOW/DENY │  │ - Snapshots  │  │ - Per model  │  │ - Events     │    │
+│  │ - ASK/WARN   │  │ - Rollback   │  │ - Budgets    │  │ - Triggers   │    │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    │
+└─────────────────────────────────┬───────────────────────────────────────────┘
+                                  │
+┌─────────────────────────────────▼───────────────────────────────────────────┐
+│                              Core Layer                                      │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │                        Model Client                                 │    │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │    │
+│  │  │ Gateway Mode│  │ Direct Mode │  │ Streaming   │                 │    │
+│  │  │ → Unified   │  │ → Provider  │  │ → Real-time │                 │    │
+│  │  │   API       │  │   SDKs      │  │   Output    │                 │    │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘                 │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │ Subagents    │  │ Parallel Exec│  │ Tool Select  │  │ Rules/Memory │    │
+│  │ - Explore    │  │ - Dependency │  │ - Plan mode  │  │ - DORAEMON.md│    │
+│  │ - Research   │  │ - Async      │  │ - Build mode │  │ - MEMORY.md  │    │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    │
+└─────────────────────────────────┬───────────────────────────────────────────┘
+                                  │
+┌─────────────────────────────────▼───────────────────────────────────────────┐
+│                           MCP Servers (Capabilities)                         │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐          │
+│  │Filesystem│ │   Git    │ │  Shell   │ │ Browser  │ │ Database │          │
+│  │ read     │ │ status   │ │ execute  │ │ fetch    │ │ query    │          │
+│  │ write    │ │ commit   │ │ bg tasks │ │ search   │ │ schema   │          │
+│  │ search   │ │ diff/log │ │ safety   │ │ scrape   │ │ migrate  │          │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘          │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                  │
+┌─────────────────────────────────▼───────────────────────────────────────────┐
+│                           Model Providers                                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │ Google       │  │ OpenAI       │  │ Anthropic    │  │ Ollama       │    │
+│  │ Gemini 2.5   │  │ GPT-4o       │  │ Claude 4.5   │  │ Local LLMs   │    │
+│  │ Flash/Pro    │  │ GPT-4o-mini  │  │ Opus/Sonnet  │  │ Llama/etc    │    │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ## 🚀 Quick Start
 
 ### Installation
 
 ```bash
-# Clone the repository
+# Clone and install
 git clone https://github.com/ifnodoraemon/doraemon-code.git
 cd doraemon-code
-
-# Install with pip
-pip install -e .
-
-# Or with dev dependencies
 pip install -e ".[dev]"
+
+# Configure API keys
+export GOOGLE_API_KEY=your_key
+# or
+export OPENAI_API_KEY=your_key
+# or
+export ANTHROPIC_API_KEY=your_key
 ```
 
-### Configuration
-
-Create a `.env` file in the project root:
+### Basic Usage
 
 ```bash
-# For Gateway Mode (recommended)
-DORAEMON_GATEWAY_URL=http://localhost:8000
-DORAEMON_GATEWAY_KEY=your_api_key  # Optional
-
-# For Direct Mode (at least one required)
-GOOGLE_API_KEY=your_google_api_key
-OPENAI_API_KEY=your_openai_api_key
-ANTHROPIC_API_KEY=your_anthropic_api_key
-
-# Model Selection
-DORAEMON_MODEL=gemini-2.0-flash-exp  # or gpt-4, claude-3-5-sonnet, etc.
-```
-
-### Run
-
-```bash
-# Start CLI
+# Start interactive session
 doraemon
 
-# Or use the short alias
-dora
+# Continue last session
+doraemon -c
 
-# With specific project (isolated memory)
-doraemon --project "MyProject"
+# Resume specific session (interactive picker)
+doraemon --resume
+
+# Resume by ID
+doraemon --resume abc123
+
+# Non-interactive mode
+doraemon -p "Explain this code" < file.py
+
+# With project isolation
+doraemon --project MyProject
 ```
 
-## 📂 Project Structure
+## 📋 CLI Reference
+
+### Command Line Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--project` | `-p` | Project name for isolated sessions |
+| `--resume` | `-r` | Resume session (ID, name, or picker) |
+| `--continue` | `-c` | Continue most recent session |
+| `--print` | | Non-interactive mode (exit after response) |
+| `--max-turns` | | Limit conversation turns |
+| `--verbose` | `-v` | Enable debug logging |
+| `--allowedTools` | | Comma-separated allowed tools |
+| `--disallowedTools` | | Comma-separated blocked tools |
+
+### Slash Commands
 
 ```
-doraemon-code/
-├── src/
-│   ├── core/              # Core infrastructure
-│   │   ├── model_client.py      # Unified LLM interface
-│   │   ├── context_manager.py   # Conversation management
-│   │   ├── mcp_client.py        # MCP client implementation
-│   │   ├── checkpoint.py        # File snapshots & rollback
-│   │   └── session.py           # Session persistence
-│   ├── host/              # CLI implementation
-│   │   ├── cli/                 # Main chat loop
-│   │   └── tools.py             # Tool registry
-│   ├── servers/           # MCP servers
-│   │   ├── filesystem.py        # File operations
-│   │   ├── git.py               # Version control
-│   │   ├── browser.py           # Web browsing
-│   │   └── database.py          # Database operations
-│   ├── gateway/           # Model gateway
-│   │   ├── server.py            # FastAPI server
-│   │   ├── router.py            # Model routing
-│   │   └── adapters/            # Provider adapters
-│   └── webui/             # Web interface (React + FastAPI)
-├── tests/                 # Comprehensive test suite
-│   └── core/              # Core module tests
-└── docs/                  # Documentation
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Core Commands                                                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ /help          Show all commands                                            │
+│ /init          Create DORAEMON.md project file                              │
+│ /mode <name>   Switch mode (plan/build)                                     │
+│ /model [name]  Switch or list models                                        │
+│ /status        Show system status                                           │
+│ /config        Configure settings                                           │
+│ /doctor        Run diagnostic checks                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Context Management                                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ /context       Show context statistics                                      │
+│ /clear         Clear conversation (keep summaries)                          │
+│ /compact       Force context compression                                    │
+│ /reset         Full reset                                                   │
+│ /memory        Edit MEMORY.md files                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Session Management                                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ /sessions      List recent sessions                                         │
+│ /resume <id>   Resume a session                                             │
+│ /rename <name> Rename current session                                       │
+│ /export [path] Export conversation                                          │
+│ /fork          Fork current session                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ History Navigation                                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ /review        Show recent turns                                            │
+│ /review <n>    Show last n turns                                            │
+│ /review goto n Go back to turn n                                            │
+│ /review search Search conversation                                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Git Integration                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ /commit [msg]  Smart commit with auto-message                               │
+│ /review-pr [n] View PR details                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Other                                                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ /tools         List available tools                                         │
+│ /skills        Show loaded skills                                           │
+│ /checkpoints   List file checkpoints                                        │
+│ /rewind [id]   Restore to checkpoint                                        │
+│ /cost          Show usage statistics                                        │
+│ /exit          Exit                                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## 🧪 Testing
-
-### Run Tests
+### Special Syntax
 
 ```bash
-# Run all tests
-pytest tests/ -v
+# File references - automatically expand to content
+> Explain @./src/main.py
+> Compare @./old.py and @./new.py
 
-# Run with coverage
-pytest tests/ --cov=src --cov-report=term-missing
+# Directory listing
+> What's in @./src/
 
-# Run specific test file
-pytest tests/core/test_model_client_comprehensive.py -v
-```
+# Direct shell execution (bypass AI)
+> !git status
+> !ls -la
 
-### Test Coverage
-
-| Module | Tests | Coverage | Status |
-|--------|-------|----------|--------|
-| `model_client.py` | 117 | 90%+ | ✅ |
-| `mcp_client.py` | 103 | 97%+ | ✅ |
-| `chat_loop.py` | 72 | 95%+ | ✅ |
-| `checkpoint.py` | 70 | 100% | ✅ |
-| `session.py` | 121 | 95%+ | ✅ |
-| `context_manager.py` | - | 95%+ | ✅ |
-| `plugins.py` | - | 95%+ | ✅ |
-| `hooks.py` | - | 95%+ | ✅ |
-
-**Total**: 2,440 tests with 95%+ coverage on core modules
-
-## 🛠️ Development
-
-### Setup Development Environment
-
-```bash
-# Install dev dependencies
-pip install -e ".[dev]"
-
-# Run linter
-ruff check src/ tests/
-
-# Auto-fix issues
-ruff check src/ tests/ --fix
-
-# Format code
-ruff format src/ tests/
-
-# Type checking
-mypy src/
-```
-
-### Code Style
-
-- **Line length**: 100 characters
-- **Python version**: 3.10+
-- **Linter**: Ruff
-- **Formatter**: Ruff
-- **Type checker**: MyPy
-
-## 🏗️ Architecture
-
-### Host-Server Model
-
-```
-┌─────────────────────────────────────────┐
-│              CLI Host                    │
-│  ┌──────────────────────────────────┐   │
-│  │     Context Manager              │   │
-│  │  - Conversation history          │   │
-│  │  - Auto summarization            │   │
-│  └──────────────────────────────────┘   │
-│  ┌──────────────────────────────────┐   │
-│  │     Model Client                 │   │
-│  │  - Gateway mode / Direct mode    │   │
-│  │  - Unified interface             │   │
-│  └──────────────────────────────────┘   │
-│  ┌──────────────────────────────────┐   │
-│  │     Tool Registry                │   │
-│  │  - Direct function calls         │   │
-│  │  - Auto parameter extraction     │   │
-│  └──────────────────────────────────┘   │
-└─────────────────────────────────────────┘
-                    │
-        ┌───────────┼───────────┐
-        │           │           │
-   ┌────▼────┐ ┌───▼────┐ ┌───▼────┐
-   │Filesystem│ │  Git   │ │Browser │
-   │ Server  │ │ Server │ │ Server │
-   └─────────┘ └────────┘ └────────┘
-```
-
-### Model Gateway
-
-```
-┌─────────────────────────────────────────┐
-│         Gateway Server                   │
-│  ┌──────────────────────────────────┐   │
-│  │     Router                       │   │
-│  │  - Model selection               │   │
-│  │  - Request routing               │   │
-│  └──────────────────────────────────┘   │
-│  ┌──────────────────────────────────┐   │
-│  │     Provider Adapters            │   │
-│  │  - Google Gemini                 │   │
-│  │  - OpenAI                        │   │
-│  │  - Anthropic                     │   │
-│  │  - Ollama                        │   │
-│  └──────────────────────────────────┘   │
-└─────────────────────────────────────────┘
+# Multi-line input
+> """
+  This is a
+  multi-line prompt
+  """
 ```
 
 ## 🔧 Configuration
@@ -223,76 +224,184 @@ mypy src/
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DORAEMON_GATEWAY_URL` | Gateway server URL | - |
-| `DORAEMON_GATEWAY_KEY` | Gateway API key | - |
+| `DORAEMON_MODEL` | Default model | `gemini-3-pro-preview` |
+| `DORAEMON_GATEWAY_URL` | Gateway server URL | (direct mode) |
 | `GOOGLE_API_KEY` | Google Gemini API key | - |
 | `OPENAI_API_KEY` | OpenAI API key | - |
 | `ANTHROPIC_API_KEY` | Anthropic API key | - |
-| `DORAEMON_MODEL` | Default model | `gemini-2.0-flash-exp` |
-| `DORAEMON_LOG_LEVEL` | Logging level | `INFO` |
+| `DORAEMON_DAILY_BUDGET` | Daily cost limit (USD) | 0 (unlimited) |
+| `DORAEMON_SESSION_BUDGET` | Session cost limit | 0 (unlimited) |
 
-### Config File
+### Project Files
 
-`.doraemon/config.json`:
+```
+project/
+├── DORAEMON.md              # Project rules (like CLAUDE.md)
+├── .doraemon/
+│   ├── config.json          # Project configuration
+│   ├── MEMORY.md            # Project memory
+│   ├── permissions.json     # Permission rules
+│   ├── hooks.json           # Event hooks
+│   ├── sessions/            # Session storage
+│   ├── conversations/       # Conversation history
+│   └── checkpoints/         # File snapshots
+└── ~/.doraemon/
+    ├── config.json          # Global configuration
+    └── MEMORY.md            # Global memory
+```
 
+## 🛡️ Safety Features
+
+### Git Safety Protocol
+- Blocks `git push --force`, `git reset --hard`, `git checkout .`, `git clean -f`
+- Warns before destructive operations
+- Prevents `--no-verify` flag
+
+### Shell Hardening
+- Command parsing with shlex
+- Multi-command chain detection
+- Blocked commands: `rm -rf /`, `mkfs`, `dd`, etc.
+- Sensitive commands require confirmation
+
+### Permission System
 ```json
 {
-  "mcpServers": {
-    "filesystem": {
-      "command": "python",
-      "args": ["src/servers/filesystem.py"]
-    },
-    "git": {
-      "command": "python",
-      "args": ["src/servers/git.py"]
-    }
-  },
-  "sensitive_tools": [
-    "write_file",
-    "execute_python",
-    "shell_execute"
+  "rules": [
+    {"action": "DENY", "tools": ["*"], "paths": ["**/.env", "**/*secret*"]},
+    {"action": "ASK", "tools": ["shell_execute", "write"]},
+    {"action": "ALLOW", "tools": ["read", "search"]}
   ]
 }
 ```
 
-## 📚 Documentation
+## 📊 Data Flow
 
-- [CLAUDE.md](CLAUDE.md) - Development guide for Claude Code
-- [docs/api.md](docs/api.md) - API reference
-- [docs/development.md](docs/development.md) - Development guide
+```
+User Input
+    │
+    ├── @file references ──→ Expand to content
+    │
+    ▼
+┌─────────────────┐
+│ Command Handler │ ──→ /help, /mode, /commit, etc.
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Context Manager │ ──→ Add to history, check limits
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Model Client   │ ──→ Stream response from LLM
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Tool Execution  │ ──→ Permission check → Execute → Results
+└────────┬────────┘
+         │
+         ├── More tool calls? ──→ Loop back to Model Client
+         │
+         ▼
+┌─────────────────┐
+│ Display Output  │ ──→ Markdown rendering, stats
+└─────────────────┘
+```
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=src --cov-report=term-missing
+
+# Run specific module
+pytest tests/core/test_context_manager.py -v
+
+# Skip slow tests
+pytest tests/ -m "not slow"
+```
+
+## 📂 Project Structure
+
+```
+src/
+├── core/                    # Core infrastructure
+│   ├── model_client.py      # Unified LLM interface
+│   ├── model_client_direct.py # Direct provider APIs
+│   ├── context_manager.py   # Conversation + summarization
+│   ├── tool_selector.py     # Mode-based tool allocation
+│   ├── permissions.py       # Permission rule engine
+│   ├── parallel_executor.py # Parallel tool execution
+│   ├── subagents.py         # Provider-agnostic subagents
+│   ├── checkpoint.py        # File snapshots
+│   ├── session.py           # Session persistence
+│   ├── hooks.py             # Event system
+│   └── rules.py             # DORAEMON.md + MEMORY.md
+├── host/                    # CLI implementation
+│   ├── cli/
+│   │   ├── main.py          # Entry point + CLI args
+│   │   ├── chat_loop.py     # Main loop + streaming
+│   │   ├── commands_core.py # Slash commands
+│   │   └── tool_execution.py # Tool execution + HITL
+│   └── tools.py             # Tool registry
+├── servers/                 # MCP servers
+│   ├── filesystem.py        # read/write/search
+│   ├── git.py               # Git operations
+│   ├── shell.py             # Shell + safety
+│   ├── browser.py           # Web browsing
+│   └── database.py          # Database operations
+├── gateway/                 # Model gateway
+│   ├── server.py            # FastAPI server
+│   └── adapters/            # Provider adapters
+└── webui/                   # Web interface
+```
+
+## 🔄 Recent Improvements (v0.9.0)
+
+### P0 - Critical Fixes
+- ✅ Agentic tool loop: Results sent back to model
+- ✅ Real streaming output with Rich Live
+- ✅ Tool result truncation (30K chars)
+- ✅ Context overflow auto-recovery
+
+### P1 - High Impact
+- ✅ Parallel tool execution with dependency analysis
+- ✅ Git safety protocol
+- ✅ Shell command hardening
+- ✅ Per-model context windows
+- ✅ Permission system integration
+
+### P2 - Experience
+- ✅ `--resume` interactive session picker
+- ✅ `--continue` for most recent session
+- ✅ `@file` reference syntax
+- ✅ `/status`, `/config`, `/memory`, `/doctor` commands
+- ✅ Tab completion for slash commands
+- ✅ Multi-line input with `"""`
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our contributing guidelines before submitting PRs.
-
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Ensure all tests pass
-6. Submit a pull request
+3. Make changes with tests
+4. Run `pytest` and `ruff check`
+5. Submit a pull request
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License - see [LICENSE](LICENSE)
 
 ## 🙏 Acknowledgments
 
-- [Model Context Protocol](https://modelcontextprotocol.io) - The foundation
-- [Google Gemini](https://ai.google.dev) - LLM provider
-- [OpenAI](https://openai.com) - LLM provider
-- [Anthropic](https://anthropic.com) - LLM provider
-- [FastMCP](https://github.com/jlowin/fastmcp) - MCP implementation
-- [Rich](https://rich.readthedocs.io) - Beautiful terminal output
-
-## 📊 Project Status
-
-- **Version**: 0.8.0
-- **Status**: Active Development
-- **Python**: 3.10+
-- **Tests**: 2,440 passing
-- **Coverage**: 95%+ (core modules)
+- [Model Context Protocol](https://modelcontextprotocol.io)
+- [Claude Code](https://claude.ai/code) - Inspiration
+- [FastMCP](https://github.com/jlowin/fastmcp)
+- [Rich](https://rich.readthedocs.io)
 
 ---
 
-**Built with ❤️ by the Doraemon Code team**
+**Version**: 0.9.0 | **Status**: Active Development | **Python**: 3.10+
