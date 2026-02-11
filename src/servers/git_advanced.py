@@ -150,10 +150,12 @@ def _run_gh_command(args: list[str], cwd: str = ".", timeout: int = 30) -> tuple
 
 def _sanitize_git_arg(value: str) -> str:
     """Sanitize a string to be safely used as a git/gh argument."""
-    # Remove or escape potentially dangerous characters
-    # This prevents command injection via crafted title/body
+    # Strip dangerous characters that could enable injection
+    dangerous_chars = ['\n', '\r', '\x00']
+    for ch in dangerous_chars:
+        value = value.replace(ch, ' ')
+    # Prevent argument injection
     if value.startswith('-'):
-        # Prevent argument injection by prefixing with space
         value = ' ' + value
     return value
 

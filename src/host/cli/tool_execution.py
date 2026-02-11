@@ -166,7 +166,11 @@ async def execute_tool(
             console.print("[red]Cancelled[/red]")
         else:
             console.print(f"[cyan]Running {tool_name}...[/cyan]")
-            tool_result = await registry.call_tool(tool_name, args)
+            try:
+                tool_result = await registry.call_tool(tool_name, args)
+            except Exception as e:
+                logger.error(f"Sensitive tool {tool_name} failed: {e}", exc_info=True)
+                tool_result = f"Error executing {tool_name}: {e}"
     else:
         console.print(f"[cyan]Running {tool_name}...[/cyan]")
         try:
@@ -214,11 +218,17 @@ def detect_tool_loop(
     current_call_signature = f"{tool_name}:{args_str_normalized}"
     previous_tool_calls.append(current_call_signature)
 
-    # Check last 3 calls
+    # Check last 3 identical calls
     if len(previous_tool_calls) >= 3:
         last_three = previous_tool_calls[-3:]
         if all(s == current_call_signature for s in last_three):
             return True, f"Loop detected: {tool_name} called repeatedly with same args."
+
+    # Check alternating pattern (A-B-A-B)
+    if len(previous_tool_calls) >= 4:
+        last_four = previous_tool_calls[-4:]
+        if last_four[0] == last_four[2] and last_four[1] == last_four[3] and last_four[0] != last_four[1]:
+            return True, "Loop detected: alternating pattern between tools."
 
     return False, ""
 
@@ -242,5 +252,5 @@ def parse_tool_arguments(args_raw: Any) -> tuple[dict[str, Any], str]:
         args_str_normalized = json.dumps(args, sort_keys=True)
         return args, args_str_normalized
     except json.JSONDecodeError as e:
-        logger.warning(f"Failed to parse tool arguments: {args_raw}, error: {e}")
-        return {}, "{}"
+        logger.error(f"Failed to parse tool arguments: {args_raw}, error: {e}")
+        return {"_parse_error": f"Invalid JSON arguments: {e}"}, "{}"

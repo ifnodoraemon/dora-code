@@ -407,7 +407,11 @@ def execute_command(
     # Prepare environment with safety checks
     process_env = os.environ.copy()
     if env:
-        dangerous_env_vars = {"PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES"}
+        dangerous_env_vars = {
+            "PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES",
+            "PYTHONPATH", "NODE_OPTIONS", "BASH_ENV", "ENV", "CDPATH",
+            "PERL5OPT", "RUBYOPT", "JAVA_TOOL_OPTIONS",
+        }
         safe_env = {k: v for k, v in env.items() if k.upper() not in dangerous_env_vars}
         process_env.update(safe_env)
 
@@ -536,7 +540,11 @@ def execute_command_background(
     process_env = os.environ.copy()
     if env:
         # Filter out dangerous environment variable overrides
-        dangerous_env_vars = {"PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES"}
+        dangerous_env_vars = {
+            "PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES",
+            "PYTHONPATH", "NODE_OPTIONS", "BASH_ENV", "ENV", "CDPATH",
+            "PERL5OPT", "RUBYOPT", "JAVA_TOOL_OPTIONS",
+        }
         safe_env = {k: v for k, v in env.items() if k.upper() not in dangerous_env_vars}
         process_env.update(safe_env)
 
