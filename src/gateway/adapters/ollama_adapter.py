@@ -106,6 +106,12 @@ class OllamaAdapter(BaseAdapter):
         except Exception as e:
             logger.warning(f"Could not fetch Ollama models: {e}")
 
+    async def close(self) -> None:
+        """Close the httpx client to release resources."""
+        if hasattr(self, "_client") and self._client:
+            await self._client.aclose()
+            self._client = None
+
     async def _fetch_models(self) -> None:
         """Fetch available models from Ollama API."""
         try:

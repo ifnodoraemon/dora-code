@@ -118,6 +118,7 @@ class BackgroundTaskManager:
         self.max_concurrent = max_concurrent
         self._tasks: dict[str, BackgroundTask] = {}
         self._running_count: int = 0
+        self._max_completed: int = 100  # Auto-cleanup threshold
 
     async def start_task(
         self,
@@ -155,6 +156,14 @@ class BackgroundTaskManager:
         )
 
         self._tasks[task_id] = task
+
+        # Auto-cleanup if too many completed tasks accumulated
+        completed_count = sum(
+            1 for t in self._tasks.values()
+            if t.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED)
+        )
+        if completed_count > self._max_completed:
+            self.cleanup_completed(max_age=1800)
 
         # Create wrapper that updates task status
         async def run_task():
