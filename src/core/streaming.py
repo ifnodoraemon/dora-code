@@ -71,9 +71,10 @@ class StreamStats:
     @property
     def chars_per_second(self) -> float:
         """Characters per second."""
-        if self.duration > 0:
-            return self.total_chars / self.duration
-        return 0
+        duration = self.duration
+        if duration > 0:
+            return self.total_chars / duration
+        return 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {

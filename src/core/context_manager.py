@@ -430,7 +430,9 @@ class ContextManager:
 
         # Calculate tokens summarized
         tokens_summarized = sum(
-            m.token_count or self._estimate_tokens(m.content) for m in messages_to_summarize
+            m.token_count if isinstance(m.token_count, int) and m.token_count > 0
+            else self._estimate_tokens(m.content)
+            for m in messages_to_summarize
         )
 
         # Create summary object
@@ -523,7 +525,7 @@ class ContextManager:
 
         # Messages
         for msg in self.messages:
-            if msg.token_count:
+            if isinstance(msg.token_count, int) and msg.token_count > 0:
                 total += msg.token_count
             else:
                 total += self._estimate_tokens(msg.content)

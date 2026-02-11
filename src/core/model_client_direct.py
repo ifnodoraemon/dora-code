@@ -71,7 +71,9 @@ async def _retry_async(coro_fn, *args, **kwargs):
                 f"Retrying in {delay:.1f}s..."
             )
             await asyncio.sleep(delay)
-    raise last_exc
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("_retry_async failed: no attempts were made")
 
 
 class DirectModelClient(BaseModelClient):

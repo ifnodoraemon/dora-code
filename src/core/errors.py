@@ -271,24 +271,31 @@ class CircuitBreaker:
                     self.state = CircuitState.HALF_OPEN
                     self.success_count = 0
                 else:
+                    remaining = (
+                        self.config.timeout - (time.time() - self.last_failure_time)
+                        if self.last_failure_time
+                        else self.config.timeout
+                    )
                     raise CircuitBreakerOpenError(
                         f"Circuit breaker is OPEN. "
-                        f"Try again in {self.config.timeout - (time.time() - self.last_failure_time):.1f}s"
+                        f"Try again in {remaining:.1f}s"
                     )
+            current_state = self.state
 
         # Execute function
         try:
             result = func(*args, **kwargs)
-            self._on_success()
+            self._on_success(current_state)
             return result
         except Exception:
-            self._on_failure()
+            self._on_failure(current_state)
             raise
 
-    def _on_success(self):
+    def _on_success(self, state_at_call: CircuitState | None = None):
         """Handle successful call"""
         with self._lock:
-            if self.state == CircuitState.HALF_OPEN:
+            state = state_at_call if state_at_call is not None else self.state
+            if state == CircuitState.HALF_OPEN:
                 self.success_count += 1
                 if self.success_count >= self.config.success_threshold:
                     self.state = CircuitState.CLOSED
@@ -296,7 +303,7 @@ class CircuitBreaker:
             else:
                 self.failure_count = 0
 
-    def _on_failure(self):
+    def _on_failure(self, state_at_call: CircuitState | None = None):
         """Handle failed call"""
         with self._lock:
             self.failure_count += 1
@@ -304,8 +311,7 @@ class CircuitBreaker:
 
             if self.failure_count >= self.config.failure_threshold:
                 self.state = CircuitState.OPEN
-
-            if self.state == CircuitState.HALF_OPEN:
+            elif state_at_call == CircuitState.HALF_OPEN or self.state == CircuitState.HALF_OPEN:
                 self.state = CircuitState.OPEN
 
     def protected(self, func: Callable) -> Callable:
