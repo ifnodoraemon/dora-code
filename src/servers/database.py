@@ -25,13 +25,14 @@ def _get_connection(db_path: str) -> sqlite3.Connection:
 
 
 @mcp.tool()
-def db_read_query(query: str, db_path: str) -> str:
+def db_read_query(query: str, db_path: str, params: list | None = None) -> str:
     """
     Execute a SELECT query on a SQLite database.
 
     Args:
-        query: The SQL SELECT statement
+        query: The SQL SELECT statement (use ? placeholders for parameters)
         db_path: Path to the SQLite database file
+        params: Optional list of query parameters for ? placeholders
 
     Returns:
         JSON string of the results or error message
@@ -42,7 +43,7 @@ def db_read_query(query: str, db_path: str) -> str:
     try:
         conn = _get_connection(db_path)
         cursor = conn.cursor()
-        cursor.execute(query)
+        cursor.execute(query, params or [])
         rows = cursor.fetchall()
         conn.close()
 
@@ -60,13 +61,14 @@ def db_read_query(query: str, db_path: str) -> str:
 
 
 @mcp.tool()
-def db_write_query(query: str, db_path: str) -> str:
+def db_write_query(query: str, db_path: str, params: list | None = None) -> str:
     """
     Execute an INSERT, UPDATE, DELETE, or CREATE query on a SQLite database.
 
     Args:
-        query: The SQL statement
+        query: The SQL statement (use ? placeholders for parameters)
         db_path: Path to the SQLite database file
+        params: Optional list of query parameters for ? placeholders
 
     Returns:
         Success message or error
@@ -74,7 +76,7 @@ def db_write_query(query: str, db_path: str) -> str:
     try:
         conn = _get_connection(db_path)
         cursor = conn.cursor()
-        cursor.execute(query)
+        cursor.execute(query, params or [])
         conn.commit()
         row_count = cursor.rowcount
         conn.close()
@@ -107,6 +109,12 @@ def db_describe_table(table_name: str, db_path: str) -> str:
         table_name: Name of the table
         db_path: Path to the SQLite database file
     """
+    import re
+
+    # Validate table name to prevent injection in PRAGMA
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table_name):
+        return f"Error: Invalid table name '{table_name}'"
+
     query = f"PRAGMA table_info({table_name});"
     try:
         conn = _get_connection(db_path)
