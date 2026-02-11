@@ -4,7 +4,9 @@ Sessions API Routes
 Manages chat sessions.
 """
 
-from fastapi import APIRouter
+import re
+
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from src.core.session import SessionManager
@@ -22,6 +24,7 @@ class SessionResponse(BaseModel):
 @router.get("/", response_model=list[SessionResponse])
 async def list_sessions(project: str = "default", limit: int = 50):
     """List recent sessions."""
+    limit = min(max(1, limit), 100)
     mgr = SessionManager()
     sessions = mgr.list_sessions(project=project, limit=limit)
 
@@ -39,10 +42,14 @@ async def list_sessions(project: str = "default", limit: int = 50):
 @router.get("/{session_id}")
 async def get_session(session_id: str):
     """Get session details."""
+    # Validate session_id format to prevent IDOR
+    if not re.match(r'^[a-zA-Z0-9_-]+$', session_id):
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+
     mgr = SessionManager()
     session = mgr.resume_session(session_id)
     if not session:
-        return {"error": "Session not found"}
+        raise HTTPException(status_code=404, detail="Session not found")
 
     return {
         "id": session.metadata.id,

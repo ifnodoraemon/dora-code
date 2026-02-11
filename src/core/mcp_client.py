@@ -199,12 +199,17 @@ class MCPConnection:
                 pass
 
         if self._process:
-            self._process.terminate()
             try:
-                self._process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._process.kill()
-            self._process = None
+                self._process.terminate()
+                try:
+                    self._process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self._process.kill()
+                    self._process.wait(timeout=2)
+            except Exception as e:
+                logger.warning(f"Error cleaning up MCP process: {e}")
+            finally:
+                self._process = None
 
         self._connected = False
         logger.info(f"Disconnected from MCP server: {self.config.name}")

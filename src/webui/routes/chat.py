@@ -28,6 +28,12 @@ class ChatRequest(BaseModel):
     project: str = "default"
     model: str | None = None
 
+    @property
+    def validated_message(self) -> str:
+        if len(self.message) > 200_000:
+            raise ValueError("Message too long")
+        return self.message
+
 
 # Initializer helpers (simplified for now)
 async def get_model_client():
@@ -104,5 +110,5 @@ async def chat_endpoint(request: ChatRequest):
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     except Exception as e:
-        logger.error(f"Chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.error(f"Chat error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e

@@ -245,6 +245,8 @@ class CostTracker:
         if not pricing:
             pricing = MODEL_PRICING["default"]
 
+        input_tokens = max(0, input_tokens)
+        output_tokens = max(0, output_tokens)
         input_cost = (input_tokens / 1_000_000) * pricing["input"]
         output_cost = (output_tokens / 1_000_000) * pricing["output"]
 
