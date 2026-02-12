@@ -59,7 +59,7 @@ class ModelRouter:
                     for alias in model.aliases:
                         self._model_cache[alias] = provider
             except Exception as e:
-                logger.error(f"Failed to initialize {provider}: {e}")
+                logger.error(f"Failed to initialize {provider}: {type(e).__name__}")
 
     def _get_adapter(self, model_id: str) -> BaseAdapter | None:
         provider = self._model_cache.get(model_id)
@@ -92,7 +92,7 @@ class ModelRouter:
             async for chunk in adapter.chat_stream(request):
                 yield chunk
         except Exception as e:
-            logger.error(f"Stream error for {request.model}: {e}")
+            logger.error(f"Stream error for {request.model}: {type(e).__name__}")
             yield ErrorResponse(error=str(e), code="provider_error")
 
     def list_models(self, provider: str | None = None) -> list[ModelInfo]:
@@ -116,3 +116,13 @@ class ModelRouter:
 
     def get_providers(self) -> list[str]:
         return list(self._adapters.keys())
+
+    async def close(self) -> None:
+        """Close all adapters and release resources."""
+        for provider, adapter in self._adapters.items():
+            try:
+                await adapter.close()
+            except Exception as e:
+                logger.error(f"Error closing {provider} adapter: {type(e).__name__}")
+        self._adapters.clear()
+        self._model_cache.clear()
