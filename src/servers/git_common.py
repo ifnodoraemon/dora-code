@@ -98,6 +98,21 @@ def validate_git_ref(ref: str) -> tuple[bool, str]:
     return True, ""
 
 
+def require_repo(path: str) -> str | None:
+    """Return error string if path is not a git repo, else None."""
+    if not is_git_repo(path):
+        return f"Error: {path} is not a git repository"
+    return None
+
+
+def check_ref(ref: str, label: str = "reference") -> str | None:
+    """Validate a git ref. Return error string or None."""
+    is_valid, msg = validate_git_ref(ref)
+    if not is_valid:
+        return f"Error: Invalid {label} '{ref}': {msg}"
+    return None
+
+
 def sanitize_git_arg(value: str) -> str:
     """Sanitize git argument to prevent shell and option injection."""
     dangerous = [";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\r", "\x00"]
