@@ -237,7 +237,6 @@ def gh_pr_create(
 
     if base:
         # Validate base branch name (alphanumeric, dash, underscore, slash)
-        import re
         if not re.match(r'^[\w\-/]+$', base):
             return "Error: Invalid base branch name"
         args.extend(["--base", base])

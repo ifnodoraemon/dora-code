@@ -15,6 +15,8 @@ Features:
 
 import logging
 import os
+import re
+import shlex
 import subprocess
 import threading
 import time
@@ -158,8 +160,6 @@ def _cleanup_finished_processes():
 
 def _is_command_blocked(command: str, config: ShellConfig = DEFAULT_CONFIG) -> bool:
     """Check if a command is blocked for safety."""
-    import re
-    import shlex
 
     command_lower = command.lower().strip()
 
@@ -219,7 +219,6 @@ def _is_command_blocked(command: str, config: ShellConfig = DEFAULT_CONFIG) -> b
 
 def _is_single_command_blocked(command: str, config: ShellConfig) -> bool:
     """Check a single command (no chains) against blocked list."""
-    import shlex
 
     command_lower = command.lower().strip()
     normalized = command_lower.replace('"', "").replace("'", "").replace("\\", "")
@@ -248,7 +247,6 @@ def _check_git_safety(command: str) -> str | None:
 
     Returns error message if blocked, None if safe.
     """
-    import shlex
 
     command_stripped = command.strip()
 
