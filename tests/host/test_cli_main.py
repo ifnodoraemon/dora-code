@@ -16,13 +16,8 @@ Tests cover:
 
 import asyncio
 import contextlib
-import json
-import os
-import sys
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch, call, mock_open
-from io import StringIO
+from unittest.mock import MagicMock, AsyncMock, patch
 
 from src.host.cli.chat_loop import (
     build_system_prompt,

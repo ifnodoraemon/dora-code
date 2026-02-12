@@ -687,7 +687,7 @@ async def chat_loop(
 
     # Initialize model client
     try:
-        model_client = await asyncio.get_event_loop().run_in_executor(
+        model_client = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: asyncio.run(
                 (
