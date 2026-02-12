@@ -366,311 +366,29 @@ def _run_mypy(file_path: str) -> list[dict]:
 
 
 # ========================================
-# Internal Implementation Functions
+# Helpers
 # ========================================
 
 
-async def _lsp_diagnostics_impl(path: str, include_mypy: bool = False) -> str:
-    """
-    Get code diagnostics (errors, warnings) for a file.
-
-    Uses ruff for fast linting and optionally mypy for type checking.
-    This is useful for finding issues before running code.
-
-    Args:
-        path: Path to the file to analyze
-        include_mypy: Include mypy type checking (slower but more thorough)
-
-    Returns:
-        Formatted list of diagnostics with line numbers and messages
-    """
+def _validate_py_file(path: str) -> tuple[str, str | None]:
+    """Validate path is an existing Python file. Returns (resolved_path, error)."""
     try:
-        valid_path = validate_path(path)
+        valid = validate_path(path)
     except (PermissionError, ValueError) as e:
-        return f"Error: {e}"
-
-    if not os.path.exists(valid_path):
-        return f"Error: File not found: {path}"
-
-    ext = os.path.splitext(valid_path)[1].lower()
-    if ext not in [".py"]:
-        return f"LSP diagnostics not supported for {ext} files (Python only for now)"
-
-    results = []
-
-    # Run ruff (fast)
-    ruff_results = _run_ruff(valid_path)
-    for diag in ruff_results:
-        line = diag.get("location", {}).get("row", 0)
-        code = diag.get("code", "")
-        message = diag.get("message", "")
-        results.append(f"L{line} [{code}]: {message}")
-
-    # Optionally run mypy (slower)
-    if include_mypy:
-        mypy_results = _run_mypy(valid_path)
-        for diag in mypy_results:
-            line = diag.get("line", 0)
-            severity = diag.get("severity", "error")
-            message = diag.get("message", "")
-            results.append(f"L{line} [mypy:{severity}]: {message}")
-
-    if not results:
-        return f"No issues found in {path}"
-
-    return f"Diagnostics for {path}:\n\n" + "\n".join(results)
+        return "", f"Error: {e}"
+    if not os.path.exists(valid):
+        return "", f"Error: File not found: {path}"
+    if not valid.endswith(".py"):
+        return "", f"Error: Only .py files supported, got {os.path.splitext(valid)[1]}"
+    return valid, None
 
 
-async def _lsp_completions_impl(path: str, line: int, column: int) -> str:
-    """
-    Get code completion suggestions at a specific position.
-
-    Useful for understanding what methods/properties are available.
-
-    Args:
-        path: Path to the file
-        line: Line number (1-indexed)
-        column: Column number (1-indexed)
-
-    Returns:
-        List of completion suggestions with their types
-    """
-    try:
-        valid_path = validate_path(path)
-    except (PermissionError, ValueError) as e:
-        return f"Error: {e}"
-
-    if not os.path.exists(valid_path):
-        return f"Error: File not found: {path}"
-
-    ext = os.path.splitext(valid_path)[1].lower()
-    if ext not in [".py"]:
-        return f"LSP completions not supported for {ext} files"
-
+async def _require_lsp() -> tuple[PylspClient | None, str | None]:
+    """Get LSP client or return error message."""
     client = await _get_lsp_client()
     if not client:
-        return "LSP server not available. Install pylsp: pip install python-lsp-server"
-
-    # Convert to 0-indexed
-    completions = await client.get_completions(valid_path, line - 1, column - 1)
-
-    if not completions:
-        return f"No completions available at {path}:{line}:{column}"
-
-    result = f"Completions at {path}:{line}:{column}:\n\n"
-    for c in completions[:15]:
-        detail = f" - {c.detail}" if c.detail else ""
-        result += f"  [{c.kind}] {c.label}{detail}\n"
-
-    if len(completions) > 15:
-        result += f"\n  ... and {len(completions) - 15} more"
-
-    return result
-
-
-async def _lsp_hover_impl(path: str, line: int, column: int) -> str:
-    """
-    Get hover information (documentation, type info) at a position.
-
-    Useful for understanding what a symbol means without leaving context.
-
-    Args:
-        path: Path to the file
-        line: Line number (1-indexed)
-        column: Column number (1-indexed)
-
-    Returns:
-        Documentation or type information for the symbol
-    """
-    try:
-        valid_path = validate_path(path)
-    except (PermissionError, ValueError) as e:
-        return f"Error: {e}"
-
-    if not os.path.exists(valid_path):
-        return f"Error: File not found: {path}"
-
-    ext = os.path.splitext(valid_path)[1].lower()
-    if ext not in [".py"]:
-        return f"LSP hover not supported for {ext} files"
-
-    client = await _get_lsp_client()
-    if not client:
-        return "LSP server not available. Install pylsp: pip install python-lsp-server"
-
-    hover_info = await client.get_hover(valid_path, line - 1, column - 1)
-
-    if not hover_info:
-        return f"No information available at {path}:{line}:{column}"
-
-    return f"Info at {path}:{line}:{column}:\n\n{hover_info}"
-
-
-async def _lsp_references_impl(path: str, symbol: str) -> str:
-    """
-    Find all references to a symbol in the codebase.
-
-    Uses simple grep-based search for now. Full LSP implementation
-    would use textDocument/references.
-
-    Args:
-        path: Starting directory to search
-        symbol: The symbol name to find references for
-
-    Returns:
-        List of files and lines that reference the symbol
-    """
-    try:
-        valid_path = validate_path(path)
-    except (PermissionError, ValueError) as e:
-        return f"Error: {e}"
-
-    # Use grep to find references
-    try:
-        result = subprocess.run(
-            ["grep", "-rn", "--include=*.py", symbol, valid_path],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        lines = result.stdout.strip().split("\n")
-        if not lines or lines == [""]:
-            return f"No references found for '{symbol}'"
-
-        # Limit results
-        if len(lines) > 50:
-            lines = lines[:50]
-            lines.append("... (showing first 50 of many)")
-
-        return f"References to '{symbol}':\n\n" + "\n".join(lines)
-
-    except subprocess.TimeoutExpired:
-        return "Search timed out"
-    except Exception as e:
-        return f"Error searching: {e}"
-
-
-async def _lsp_rename_impl(path: str, old_name: str, new_name: str, preview: bool = True) -> str:
-    """
-    Rename a symbol across files.
-
-    Currently uses simple find-replace. Full LSP implementation
-    would use textDocument/rename for safe refactoring.
-
-    Args:
-        path: File or directory to apply rename
-        old_name: Current name of the symbol
-        new_name: New name for the symbol
-        preview: If True, show changes without applying (default)
-
-    Returns:
-        Preview of changes or confirmation of applied changes
-    """
-    try:
-        valid_path = validate_path(path)
-    except (PermissionError, ValueError) as e:
-        return f"Error: {e}"
-
-    if not os.path.exists(valid_path):
-        return f"Error: Path not found: {path}"
-
-    # Find all occurrences
-    try:
-        if os.path.isdir(valid_path):
-            result = subprocess.run(
-                ["grep", "-rln", "--include=*.py", old_name, valid_path],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            files = [f for f in result.stdout.strip().split("\n") if f]
-        else:
-            files = [valid_path] if old_name in open(valid_path).read() else []
-
-        if not files:
-            return f"No occurrences of '{old_name}' found"
-
-        changes = []
-        for file_path in files[:20]:  # Limit files
-            with open(file_path, encoding="utf-8") as f:
-                content = f.read()
-
-            count = content.count(old_name)
-            changes.append(f"  {file_path}: {count} occurrence(s)")
-
-        if preview:
-            result = f"Preview: Rename '{old_name}' -> '{new_name}'\n\n"
-            result += "\n".join(changes)
-            result += f"\n\nTotal: {len(files)} file(s) affected"
-            result += "\n\nUse preview=False to apply changes."
-            return result
-
-        # Apply changes
-        applied = 0
-        for file_path in files:
-            try:
-                with open(file_path, encoding="utf-8") as f:
-                    content = f.read()
-                new_content = content.replace(old_name, new_name)
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(new_content)
-                applied += 1
-            except Exception as e:
-                logger.warning(f"Failed to rename in {file_path}: {e}")
-
-        return f"Renamed '{old_name}' -> '{new_name}' in {applied} file(s)"
-
-    except subprocess.TimeoutExpired:
-        return "Search timed out"
-    except Exception as e:
-        return f"Error: {e}"
-
-
-async def _lsp_definition_impl(path: str, symbol: str) -> str:
-    """
-    Find the definition of a symbol.
-
-    Searches for class, function, or variable definitions.
-
-    Args:
-        path: Directory to search in
-        symbol: The symbol to find the definition for
-
-    Returns:
-        File and line where the symbol is defined
-    """
-    try:
-        valid_path = validate_path(path)
-    except (PermissionError, ValueError) as e:
-        return f"Error: {e}"
-
-    # Patterns for definitions
-    patterns = [
-        f"class {symbol}",
-        f"def {symbol}",
-        f"{symbol} = ",
-        f"{symbol}:",  # Type annotation
-    ]
-
-    for pattern in patterns:
-        try:
-            result = subprocess.run(
-                ["grep", "-rn", "--include=*.py", pattern, valid_path],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-
-            lines = [line for line in result.stdout.strip().split("\n") if line]
-            if lines:
-                # Return first match (most likely the definition)
-                return f"Definition of '{symbol}':\n\n{lines[0]}"
-
-        except Exception:
-            continue
-
-    return f"Definition not found for '{symbol}'"
+        return None, "LSP server not available. Install pylsp: pip install python-lsp-server"
+    return client, None
 
 
 # ========================================
@@ -680,117 +398,173 @@ async def _lsp_definition_impl(path: str, symbol: str) -> str:
 
 @mcp.tool()
 async def lsp_diagnostics(path: str, include_mypy: bool = False) -> str:
-    """
-    Get code diagnostics (errors, warnings) for a file.
+    """Get code diagnostics (errors, warnings) for a Python file."""
+    valid_path, err = _validate_py_file(path)
+    if err:
+        return err
 
-    Uses ruff for fast linting and optionally mypy for type checking.
-    This is useful for finding issues before running code.
+    results = []
+    for diag in _run_ruff(valid_path):
+        line = diag.get("location", {}).get("row", 0)
+        code = diag.get("code", "")
+        message = diag.get("message", "")
+        results.append(f"L{line} [{code}]: {message}")
 
-    Args:
-        path: Path to the file to analyze
-        include_mypy: Include mypy type checking (slower but more thorough)
+    if include_mypy:
+        for diag in _run_mypy(valid_path):
+            results.append(
+                f"L{diag.get('line', 0)} [mypy:{diag.get('severity', 'error')}]: "
+                f"{diag.get('message', '')}"
+            )
 
-    Returns:
-        Formatted list of diagnostics with line numbers and messages
-
-    """
-    return await _lsp_diagnostics_impl(path, include_mypy)
+    if not results:
+        return f"No issues found in {path}"
+    return f"Diagnostics for {path}:\n\n" + "\n".join(results)
 
 
 @mcp.tool()
 async def lsp_completions(path: str, line: int, column: int) -> str:
-    """
-    Get code completion suggestions at a specific position.
+    """Get code completion suggestions at a position (1-indexed)."""
+    valid_path, err = _validate_py_file(path)
+    if err:
+        return err
+    client, err = await _require_lsp()
+    if err:
+        return err
 
-    Useful for understanding what methods/properties are available.
+    completions = await client.get_completions(valid_path, line - 1, column - 1)
+    if not completions:
+        return f"No completions at {path}:{line}:{column}"
 
-    Args:
-        path: Path to the file
-        line: Line number (1-indexed)
-        column: Column number (1-indexed)
-
-    Returns:
-        List of completion suggestions with their types
-
-    """
-    return await _lsp_completions_impl(path, line, column)
+    lines = [f"Completions at {path}:{line}:{column}:\n"]
+    for c in completions[:15]:
+        detail = f" - {c.detail}" if c.detail else ""
+        lines.append(f"  [{c.kind}] {c.label}{detail}")
+    if len(completions) > 15:
+        lines.append(f"\n  ... and {len(completions) - 15} more")
+    return "\n".join(lines)
 
 
 @mcp.tool()
 async def lsp_hover(path: str, line: int, column: int) -> str:
-    """
-    Get hover information (documentation, type info) at a position.
+    """Get type/documentation info at a position (1-indexed)."""
+    valid_path, err = _validate_py_file(path)
+    if err:
+        return err
+    client, err = await _require_lsp()
+    if err:
+        return err
 
-    Useful for understanding what a symbol means without leaving context.
-
-    Args:
-        path: Path to the file
-        line: Line number (1-indexed)
-        column: Column number (1-indexed)
-
-    Returns:
-        Documentation or type information for the symbol
-
-    """
-    return await _lsp_hover_impl(path, line, column)
+    hover_info = await client.get_hover(valid_path, line - 1, column - 1)
+    if not hover_info:
+        return f"No information at {path}:{line}:{column}"
+    return f"Info at {path}:{line}:{column}:\n\n{hover_info}"
 
 
 @mcp.tool()
 async def lsp_references(path: str, symbol: str) -> str:
-    """
-    Find all references to a symbol in the codebase.
+    """Find all references to a symbol via grep."""
+    try:
+        valid_path = validate_path(path)
+    except (PermissionError, ValueError) as e:
+        return f"Error: {e}"
 
-    Uses simple grep-based search for now. Full LSP implementation
-    would use textDocument/references.
-
-    Args:
-        path: Starting directory to search
-        symbol: The symbol name to find references for
-
-    Returns:
-        List of files and lines that reference the symbol
-
-    """
-    return await _lsp_references_impl(path, symbol)
+    try:
+        result = subprocess.run(
+            ["grep", "-rn", "--include=*.py", symbol, valid_path],
+            capture_output=True, text=True, timeout=30,
+        )
+        lines = [l for l in result.stdout.strip().split("\n") if l]
+        if not lines:
+            return f"No references found for '{symbol}'"
+        if len(lines) > 50:
+            lines = lines[:50] + ["... (showing first 50)"]
+        return f"References to '{symbol}':\n\n" + "\n".join(lines)
+    except subprocess.TimeoutExpired:
+        return "Search timed out"
+    except Exception as e:
+        return f"Error searching: {e}"
 
 
 @mcp.tool()
-async def lsp_rename(path: str, old_name: str, new_name: str, preview: bool = True) -> str:
-    """
-    Rename a symbol across files.
+async def lsp_rename(
+    path: str, old_name: str, new_name: str, preview: bool = True,
+) -> str:
+    """Rename a symbol across Python files (find-replace)."""
+    try:
+        valid_path = validate_path(path)
+    except (PermissionError, ValueError) as e:
+        return f"Error: {e}"
+    if not os.path.exists(valid_path):
+        return f"Error: Path not found: {path}"
 
-    Currently uses simple find-replace. Full LSP implementation
-    would use textDocument/rename for safe refactoring.
+    try:
+        # Find affected files
+        if os.path.isdir(valid_path):
+            result = subprocess.run(
+                ["grep", "-rln", "--include=*.py", old_name, valid_path],
+                capture_output=True, text=True, timeout=30,
+            )
+            files = [f for f in result.stdout.strip().split("\n") if f]
+        else:
+            with open(valid_path, encoding="utf-8") as f:
+                files = [valid_path] if old_name in f.read() else []
 
-    Args:
-        path: File or directory to apply rename
-        old_name: Current name of the symbol
-        new_name: New name for the symbol
-        preview: If True, show changes without applying (default)
+        if not files:
+            return f"No occurrences of '{old_name}' found"
 
-    Returns:
-        Preview of changes or confirmation of applied changes
+        if preview:
+            changes = []
+            for fp in files[:20]:
+                with open(fp, encoding="utf-8") as f:
+                    count = f.read().count(old_name)
+                changes.append(f"  {fp}: {count} occurrence(s)")
+            return (
+                f"Preview: '{old_name}' -> '{new_name}'\n\n"
+                + "\n".join(changes)
+                + f"\n\nTotal: {len(files)} file(s). Use preview=False to apply."
+            )
 
-    """
-    return await _lsp_rename_impl(path, old_name, new_name, preview)
+        # Apply
+        applied = 0
+        for fp in files:
+            try:
+                with open(fp, encoding="utf-8") as f:
+                    content = f.read()
+                with open(fp, "w", encoding="utf-8") as f:
+                    f.write(content.replace(old_name, new_name))
+                applied += 1
+            except Exception as e:
+                logger.warning(f"Failed to rename in {fp}: {e}")
+        return f"Renamed '{old_name}' -> '{new_name}' in {applied} file(s)"
+
+    except subprocess.TimeoutExpired:
+        return "Search timed out"
+    except Exception as e:
+        return f"Error: {e}"
 
 
 @mcp.tool()
 async def lsp_definition(path: str, symbol: str) -> str:
-    """
-    Find the definition of a symbol.
+    """Find where a symbol is defined (class/def/assignment)."""
+    try:
+        valid_path = validate_path(path)
+    except (PermissionError, ValueError) as e:
+        return f"Error: {e}"
 
-    Searches for class, function, or variable definitions.
+    for pattern in [f"class {symbol}", f"def {symbol}", f"{symbol} = ", f"{symbol}:"]:
+        try:
+            result = subprocess.run(
+                ["grep", "-rn", "--include=*.py", pattern, valid_path],
+                capture_output=True, text=True, timeout=30,
+            )
+            lines = [l for l in result.stdout.strip().split("\n") if l]
+            if lines:
+                return f"Definition of '{symbol}':\n\n{lines[0]}"
+        except Exception:
+            continue
 
-    Args:
-        path: Directory to search in
-        symbol: The symbol to find the definition for
-
-    Returns:
-        File and line where the symbol is defined
-
-    """
-    return await _lsp_definition_impl(path, symbol)
+    return f"Definition not found for '{symbol}'"
 
 
 if __name__ == "__main__":
