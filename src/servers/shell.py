@@ -153,6 +153,23 @@ def _cleanup_finished_processes():
             del _background_processes[pid]
 
 
+# Environment variables that must not be overridden by user-provided env
+_DANGEROUS_ENV_VARS = frozenset({
+    "PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES",
+    "PYTHONPATH", "NODE_OPTIONS", "BASH_ENV", "ENV", "CDPATH",
+    "PERL5OPT", "RUBYOPT", "JAVA_TOOL_OPTIONS",
+})
+
+
+def _prepare_safe_env(env: dict[str, str] | None) -> dict[str, str]:
+    """Build process env, filtering dangerous overrides."""
+    process_env = os.environ.copy()
+    if env:
+        safe = {k: v for k, v in env.items() if k.upper() not in _DANGEROUS_ENV_VARS}
+        process_env.update(safe)
+    return process_env
+
+
 # ========================================
 # Command Validation
 # ========================================
@@ -160,16 +177,13 @@ def _cleanup_finished_processes():
 
 def _is_command_blocked(command: str, config: ShellConfig = DEFAULT_CONFIG) -> bool:
     """Check if a command is blocked for safety."""
-
     command_lower = command.lower().strip()
-
-    # Remove quotes and escape sequences for better detection
     normalized = command_lower.replace('"', "").replace("'", "").replace("\\", "")
 
     # Check against blocked command strings
     for blocked in config.blocked_commands:
-        blocked_lower = blocked.lower()
-        if blocked_lower in command_lower or blocked_lower in normalized:
+        bl = blocked.lower()
+        if bl in command_lower or bl in normalized:
             return True
 
     # Parse with shlex for structured analysis
@@ -179,66 +193,30 @@ def _is_command_blocked(command: str, config: ShellConfig = DEFAULT_CONFIG) -> b
         tokens = command_lower.split()
 
     if tokens:
-        # Check base command against blocked list
         base_cmd = os.path.basename(tokens[0])
         if base_cmd in config.blocked_base_commands:
             return True
-
-        # Detect dangerous rm patterns even with variable interpolation
+        # Detect dangerous rm patterns
         if base_cmd == "rm" and any(t in tokens for t in ["-rf", "-fr"]):
-            # Check for root paths
-            for t in tokens:
-                if t in ("/", "/*", "/.", "/.."):
-                    return True
+            if any(t in ("/", "/*", "/.", "/..") for t in tokens):
+                return True
 
-    # Check for multi-command chains (;, &&, ||) containing blocked commands
-    for separator in [";", "&&", "||"]:
-        if separator in command:
-            subcmds = command.split(separator)
-            for subcmd in subcmds:
-                subcmd = subcmd.strip()
-                if subcmd and _is_single_command_blocked(subcmd, config):
-                    return True
+    # Check multi-command chains
+    for sep in [";", "&&", "||"]:
+        if sep in command:
+            return any(
+                _is_command_blocked(sub.strip(), config)
+                for sub in command.split(sep) if sub.strip()
+            )
 
-    # Regex-based pattern checks for dangerous operations
+    # Regex-based dangerous patterns
     dangerous_patterns = [
-        r">\s*/dev/sd",  # Writing to disk devices
-        r"\|\s*bash",  # Piping to bash
-        r"\|\s*sh\b",  # Piping to sh
-        r"\|\s*zsh\b",  # Piping to zsh
-        r"eval\s+",  # eval command (injection vector)
-        r"exec\s+\d*[<>]",  # exec with redirects
+        r">\s*/dev/sd",
+        r"\|\s*(bash|sh|zsh)\b",
+        r"eval\s+",
+        r"exec\s+\d*[<>]",
     ]
-
-    for pattern in dangerous_patterns:
-        if re.search(pattern, command_lower):
-            return True
-
-    return False
-
-
-def _is_single_command_blocked(command: str, config: ShellConfig) -> bool:
-    """Check a single command (no chains) against blocked list."""
-
-    command_lower = command.lower().strip()
-    normalized = command_lower.replace('"', "").replace("'", "").replace("\\", "")
-
-    for blocked in config.blocked_commands:
-        blocked_lower = blocked.lower()
-        if blocked_lower in command_lower or blocked_lower in normalized:
-            return True
-
-    try:
-        tokens = shlex.split(command_lower)
-    except ValueError:
-        tokens = command_lower.split()
-
-    if tokens:
-        base_cmd = os.path.basename(tokens[0])
-        if base_cmd in config.blocked_base_commands:
-            return True
-
-    return False
+    return any(re.search(p, command_lower) for p in dangerous_patterns)
 
 
 def _check_git_safety(command: str) -> str | None:
@@ -430,15 +408,7 @@ def execute_command(
     timeout = min(max(1, timeout), 3600)
 
     # Prepare environment with safety checks
-    process_env = os.environ.copy()
-    if env:
-        dangerous_env_vars = {
-            "PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES",
-            "PYTHONPATH", "NODE_OPTIONS", "BASH_ENV", "ENV", "CDPATH",
-            "PERL5OPT", "RUBYOPT", "JAVA_TOOL_OPTIONS",
-        }
-        safe_env = {k: v for k, v in env.items() if k.upper() not in dangerous_env_vars}
-        process_env.update(safe_env)
+    process_env = _prepare_safe_env(env)
 
     try:
         # Start process with Popen
@@ -562,16 +532,7 @@ def execute_command_background(
     except (PermissionError, ValueError) as e:
         return f"Error: Invalid working directory: {e}"
 
-    process_env = os.environ.copy()
-    if env:
-        # Filter out dangerous environment variable overrides
-        dangerous_env_vars = {
-            "PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES",
-            "PYTHONPATH", "NODE_OPTIONS", "BASH_ENV", "ENV", "CDPATH",
-            "PERL5OPT", "RUBYOPT", "JAVA_TOOL_OPTIONS",
-        }
-        safe_env = {k: v for k, v in env.items() if k.upper() not in dangerous_env_vars}
-        process_env.update(safe_env)
+    process_env = _prepare_safe_env(env)
 
     try:
         # Start the process
