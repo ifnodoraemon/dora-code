@@ -91,7 +91,7 @@ class PermissionRequest:
     """A request for permission check."""
 
     tool: str
-    operation: OperationType
+    operation: OperationType | None = None
     path: str | None = None
     arguments: dict[str, Any] = field(default_factory=dict)
     context: dict[str, Any] = field(default_factory=dict)

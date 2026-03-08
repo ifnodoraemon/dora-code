@@ -107,6 +107,7 @@ class BackgroundProcess:
     start_time: float
     working_dir: str
     process: subprocess.Popen
+    log_file: str | None = None  # Path to temp log file for cleanup
 
 
 # Store for background processes
@@ -115,7 +116,7 @@ _process_lock = threading.Lock()
 
 
 def register_background_process(
-    proc: subprocess.Popen, command: str, working_dir: str
+    proc: subprocess.Popen, command: str, working_dir: str, log_file: str | None = None
 ) -> int:
     """Register a background process for tracking."""
     with _process_lock:
@@ -125,19 +126,26 @@ def register_background_process(
             start_time=time.time(),
             working_dir=working_dir,
             process=proc,
+            log_file=log_file,
         )
         _background_processes[proc.pid] = bp
         return proc.pid
 
 
 def cleanup_finished_processes() -> None:
-    """Remove finished processes from tracking."""
+    """Remove finished processes from tracking and clean up temp log files."""
     with _process_lock:
         finished = [
             pid for pid, bp in _background_processes.items()
             if bp.process.poll() is not None
         ]
         for pid in finished:
+            bp = _background_processes[pid]
+            if bp.log_file and os.path.exists(bp.log_file):
+                try:
+                    os.unlink(bp.log_file)
+                except OSError:
+                    pass
             del _background_processes[pid]
 
 

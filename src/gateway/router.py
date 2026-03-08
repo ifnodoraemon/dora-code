@@ -112,7 +112,16 @@ class ModelRouter:
         return None
 
     async def health_check(self) -> dict[str, bool]:
-        return {p: await a.health_check() for p, a in self._adapters.items()}
+        import asyncio
+
+        results = await asyncio.gather(
+            *[a.health_check() for a in self._adapters.values()],
+            return_exceptions=True,
+        )
+        return {
+            p: (r if isinstance(r, bool) else False)
+            for p, r in zip(self._adapters, results)
+        }
 
     def get_providers(self) -> list[str]:
         return list(self._adapters.keys())

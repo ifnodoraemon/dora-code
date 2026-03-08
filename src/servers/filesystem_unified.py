@@ -277,16 +277,32 @@ def grep_search(pattern: str, include: str = "*", path: str = ".") -> str:
     valid_path = validate_path(path)
     results = []
 
+    # Directories to skip during recursive search
+    skip_dirs = {
+        ".git", "node_modules", ".venv", "venv", "__pycache__",
+        ".tox", ".mypy_cache", ".pytest_cache", "dist", "build",
+        ".eggs", ".egg-info",
+    }
+    # Max file size to search (10 MB)
+    max_file_size = 10 * 1024 * 1024
+
     try:
         regex = re.compile(pattern)
 
-        for root, _, files in os.walk(valid_path):
+        for root, dirs, files in os.walk(valid_path):
+            # Prune skipped directories in-place
+            dirs[:] = [d for d in dirs if d not in skip_dirs]
+
             for file in files:
                 if not fnmatch.fnmatch(file, include):
                     continue
 
                 full_path = os.path.join(root, file)
                 try:
+                    # Skip files that are too large
+                    if os.path.getsize(full_path) > max_file_size:
+                        continue
+
                     with open(full_path, encoding="utf-8", errors="ignore") as f:
                         for i, line in enumerate(f, 1):
                             if regex.search(line):

@@ -1,6 +1,7 @@
 
 import json
 import logging
+import re
 import sqlite3
 
 from mcp.server.fastmcp import FastMCP
@@ -24,6 +25,19 @@ def _get_connection(db_path: str) -> sqlite3.Connection:
     return conn
 
 
+def _contains_multiple_statements(query: str) -> bool:
+    """Check if a query contains multiple SQL statements (semicolon outside strings/comments)."""
+    # Remove SQL comments
+    cleaned = re.sub(r'--[^\n]*', '', query)   # single-line comments
+    cleaned = re.sub(r'/\*.*?\*/', '', cleaned, flags=re.DOTALL)  # block comments
+    # Remove string literals
+    cleaned = re.sub(r"'[^']*'", '', cleaned)
+    cleaned = re.sub(r'"[^"]*"', '', cleaned)
+    # Check for semicolons (ignoring trailing whitespace after last statement)
+    parts = [p.strip() for p in cleaned.split(';') if p.strip()]
+    return len(parts) > 1
+
+
 @mcp.tool()
 def db_read_query(query: str, db_path: str, params: list | None = None) -> str:
     """
@@ -40,12 +54,15 @@ def db_read_query(query: str, db_path: str, params: list | None = None) -> str:
     if not query.strip().lower().startswith("select"):
         return "Error: Only SELECT queries are allowed in db_read_query. Use db_write_query for modifications."
 
+    if _contains_multiple_statements(query):
+        return "Error: Multiple SQL statements are not allowed. Please execute one statement at a time."
+
     try:
         conn = _get_connection(db_path)
-        cursor = conn.cursor()
-        cursor.execute(query, params or [])
-        rows = cursor.fetchall()
-        conn.close()
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params or [])
+            rows = cursor.fetchall()
 
         # Convert rows to dicts
         results = [dict(row) for row in rows]
@@ -58,6 +75,8 @@ def db_read_query(query: str, db_path: str, params: list | None = None) -> str:
     except Exception as e:
         logger.error(f"Database error: {e}")
         return f"Database error: {str(e)}"
+    finally:
+        conn.close()
 
 
 @mcp.tool()
@@ -84,18 +103,23 @@ def db_write_query(query: str, db_path: str, params: list | None = None) -> str:
                 "Use a direct database tool if you need to modify schema."
             )
 
+        if _contains_multiple_statements(query):
+            return "Error: Multiple SQL statements are not allowed. Please execute one statement at a time."
+
         conn = _get_connection(db_path)
-        cursor = conn.cursor()
-        cursor.execute(query, params or [])
-        conn.commit()
-        row_count = cursor.rowcount
-        conn.close()
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params or [])
+            conn.commit()
+            row_count = cursor.rowcount
 
         return f"Query executed successfully. Rows affected: {row_count}"
 
     except Exception as e:
         logger.error(f"Database error: {e}")
         return f"Database error: {str(e)}"
+    finally:
+        conn.close()
 
 
 @mcp.tool()
@@ -126,13 +150,12 @@ def db_describe_table(table_name: str, db_path: str) -> str:
         return f"Error: Invalid table name '{table_name}'"
 
     query = f"PRAGMA table_info({table_name});"
+    conn = None
     try:
         conn = _get_connection(db_path)
         cursor = conn.cursor()
         cursor.execute(query)
         rows = cursor.fetchall()
-        conn.close()
-
         if not rows:
             return f"Table '{table_name}' not found or empty schema."
 
@@ -145,6 +168,9 @@ def db_describe_table(table_name: str, db_path: str) -> str:
         return "\n".join(output)
     except Exception as e:
         return f"Error describing table: {e}"
+    finally:
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":

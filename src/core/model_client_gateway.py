@@ -41,8 +41,6 @@ class GatewayModelClient(BaseModelClient):
 
     async def connect(self) -> None:
         """Initialize HTTP client."""
-        import httpx
-
         headers = {}
         if self.config.gateway_key:
             headers["Authorization"] = f"Bearer {self.config.gateway_key}"
@@ -76,8 +74,6 @@ class GatewayModelClient(BaseModelClient):
             TransientError: When server error occurs
             DoraemonException: For other API errors
         """
-        import httpx
-
         from src.core.errors import (
             DoraemonException,
             ErrorCategory,

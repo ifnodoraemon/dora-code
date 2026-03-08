@@ -361,7 +361,8 @@ async def stream_response(request: ChatRequest, router: ModelRouter):
             yield f"data: {json.dumps(chunk.to_dict())}\n\n"
     except Exception as e:
         logger.error(f"Stream error: {e}")
-        yield f"data: {json.dumps({'error': 'Internal stream error'})}\n\n"
+        error_payload = json.dumps({"error": "Internal stream error"})
+        yield f"data: {error_payload}\n\n"
 
     yield "data: [DONE]\n\n"
 

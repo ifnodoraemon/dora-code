@@ -251,6 +251,7 @@ def execute_command_background(
         stdout_file = tempfile.NamedTemporaryFile(
             mode='w', prefix='doraemon_bg_', suffix='.log', delete=False
         )
+        log_file_path = stdout_file.name
         proc = subprocess.Popen(
             command,
             shell=True,
@@ -262,7 +263,7 @@ def execute_command_background(
             start_new_session=True,  # Detach from parent
         )
 
-        pid = _register_background_process(proc, command, resolved_dir)
+        pid = _register_background_process(proc, command, resolved_dir, log_file=log_file_path)
 
         return f"Started background process with PID: {pid}\nCommand: {command}"
 
@@ -323,6 +324,13 @@ def stop_background_process(pid: int) -> str:
             except subprocess.TimeoutExpired:
                 bp.process.kill()
 
+            # Clean up temp log file
+            if bp.log_file and os.path.exists(bp.log_file):
+                try:
+                    os.unlink(bp.log_file)
+                except OSError:
+                    pass
+
             del _background_processes[pid]
             return f"Stopped background process {pid}: {bp.command[:50]}"
 
@@ -348,29 +356,25 @@ def get_process_output(pid: int, max_lines: int = 100) -> str:
 
         bp = _background_processes[pid]
 
-        # Note: This is a simple implementation. For production, you'd want
-        # to capture output to a file or use a more sophisticated approach.
         try:
-            # Non-blocking read attempt
-            import select
+            # Read output from the temp log file
+            if bp.log_file and os.path.exists(bp.log_file):
+                with open(bp.log_file, encoding="utf-8", errors="replace") as f:
+                    lines = f.readlines()
 
-            output_lines = []
+                if lines:
+                    # Return the last max_lines lines
+                    tail = lines[-max_lines:]
+                    output = "".join(tail)
+                    total = len(lines)
+                    if total > max_lines:
+                        output = f"[Showing last {max_lines} of {total} lines]\n" + output
+                    return output
 
-            # Check if there's output available
-            if bp.process.stdout and select.select([bp.process.stdout], [], [], 0.1)[0]:
-                for _ in range(max_lines):
-                    line = bp.process.stdout.readline()
-                    if not line:
-                        break
-                    output_lines.append(line.decode() if isinstance(line, bytes) else line)
-
-            if output_lines:
-                return "".join(output_lines)
-            else:
-                status = (
-                    "running" if bp.process.poll() is None else f"exited ({bp.process.returncode})"
-                )
-                return f"No new output available. Process status: {status}"
+            status = (
+                "running" if bp.process.poll() is None else f"exited ({bp.process.returncode})"
+            )
+            return f"No output available yet. Process status: {status}"
 
         except Exception as e:
             return f"Error reading process output: {str(e)}"
