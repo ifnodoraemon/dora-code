@@ -15,16 +15,27 @@ Features:
 
 import logging
 import os
-import re
-import shlex
 import subprocess
+import tempfile
 import threading
 import time
-from dataclasses import dataclass, field
 
 from mcp.server.fastmcp import FastMCP
 
 from src.core.security import validate_path
+from src.core.shell_security import (
+    DEFAULT_CONFIG,
+    BackgroundProcess,
+    ShellConfig,
+    check_git_safety,
+    cleanup_finished_processes,
+    get_background_processes,
+    get_process_lock,
+    is_command_blocked,
+    is_command_sensitive,
+    register_background_process,
+    truncate_output,
+)
 from src.core.subprocess_utils import prepare_safe_env
 
 # Setup logging
@@ -33,325 +44,23 @@ logger = logging.getLogger(__name__)
 
 mcp = FastMCP("DoraemonShell")
 
-
 # ========================================
-# Configuration
-# ========================================
-
-
-@dataclass
-class ShellConfig:
-    """Configuration for shell execution."""
-
-    default_timeout: int = 30  # seconds
-    max_timeout: int = 600  # 10 minutes
-    max_output_size: int = 100_000  # characters
-    shell: str = "/bin/bash"
-
-    # Commands that are blocked for safety
-    blocked_commands: list[str] = field(
-        default_factory=lambda: [
-            "rm -rf /",
-            "rm -rf /*",
-            "mkfs",
-            "dd if=/dev/zero",
-            ":(){:|:&};:",  # fork bomb
-            "chmod -R 777 /",
-            "chown -R",
-            "> /dev/sda",
-            "mv / ",
-            "wget -O- | sh",
-            "curl -s | sh",
-        ]
-    )
-
-    # Commands that require confirmation (handled by HITL in main CLI)
-    sensitive_patterns: list[str] = field(
-        default_factory=lambda: [
-            "rm -rf",
-            "rm -r",
-            "sudo",
-            "chmod 777",
-            "curl | bash",
-            "wget | bash",
-            "pip install",
-            "npm install -g",
-            "apt install",
-            "apt remove",
-            "systemctl",
-            "service ",
-            "kill -9",
-            "pkill",
-            "docker rm",
-            "docker rmi",
-        ]
-    )
-
-    # Dangerous base commands to detect via shlex parsing
-    blocked_base_commands: list[str] = field(
-        default_factory=lambda: [
-            "mkfs",
-            "fdisk",
-            "parted",
-            "wipefs",
-            "shred",
-            "halt",
-            "poweroff",
-            "reboot",
-            "shutdown",
-            "init",
-            "telinit",
-        ]
-    )
-
-
-DEFAULT_CONFIG = ShellConfig()
-
-
-# ========================================
-# Background Process Management
+# Backward-compatible aliases (used by tests)
 # ========================================
 
-
-@dataclass
-class BackgroundProcess:
-    """Tracks a background process."""
-
-    pid: int
-    command: str
-    start_time: float
-    working_dir: str
-    process: subprocess.Popen
-
-
-# Store for background processes
-_background_processes: dict[int, BackgroundProcess] = {}
-_process_lock = threading.Lock()
-
-
-def _register_background_process(proc: subprocess.Popen, command: str, working_dir: str) -> int:
-    """Register a background process for tracking."""
-    with _process_lock:
-        bp = BackgroundProcess(
-            pid=proc.pid,
-            command=command,
-            start_time=time.time(),
-            working_dir=working_dir,
-            process=proc,
-        )
-        _background_processes[proc.pid] = bp
-        return proc.pid
-
-
-def _cleanup_finished_processes():
-    """Remove finished processes from tracking."""
-    with _process_lock:
-        finished = []
-        for pid, bp in _background_processes.items():
-            if bp.process.poll() is not None:
-                finished.append(pid)
-        for pid in finished:
-            del _background_processes[pid]
-
-
-# Environment variables that must not be overridden by user-provided env
-_DANGEROUS_ENV_VARS = frozenset({
-    "PATH", "LD_PRELOAD", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES",
-    "PYTHONPATH", "NODE_OPTIONS", "BASH_ENV", "ENV", "CDPATH",
-    "PERL5OPT", "RUBYOPT", "JAVA_TOOL_OPTIONS",
-})
+_background_processes = get_background_processes()
+_process_lock = get_process_lock()
+_is_command_blocked = is_command_blocked
+_is_command_sensitive = is_command_sensitive
+_check_git_safety = check_git_safety
+_truncate_output = truncate_output
+_register_background_process = register_background_process
+_cleanup_finished_processes = cleanup_finished_processes
 
 
 def _prepare_safe_env(env: dict[str, str] | None) -> dict[str, str]:
-    """Build process env, filtering dangerous overrides.
-
-    Delegates to the shared subprocess_utils.prepare_safe_env.
-    """
+    """Build process env, filtering dangerous overrides."""
     return prepare_safe_env(env)
-
-
-# ========================================
-# Command Validation
-# ========================================
-
-
-def _is_command_blocked(command: str, config: ShellConfig = DEFAULT_CONFIG) -> bool:
-    """Check if a command is blocked for safety."""
-    command_lower = command.lower().strip()
-    normalized = command_lower.replace('"', "").replace("'", "").replace("\\", "")
-
-    # Check against blocked command strings
-    for blocked in config.blocked_commands:
-        bl = blocked.lower()
-        if bl in command_lower or bl in normalized:
-            return True
-
-    # Parse with shlex for structured analysis
-    try:
-        tokens = shlex.split(command_lower)
-    except ValueError:
-        tokens = command_lower.split()
-
-    if tokens:
-        base_cmd = os.path.basename(tokens[0])
-        if base_cmd in config.blocked_base_commands:
-            return True
-        # Detect dangerous rm patterns
-        if base_cmd == "rm" and any(t in tokens for t in ["-rf", "-fr"]):
-            if any(t in ("/", "/*", "/.", "/..") for t in tokens):
-                return True
-
-    # Check multi-command chains
-    for sep in [";", "&&", "||"]:
-        if sep in command:
-            return any(
-                _is_command_blocked(sub.strip(), config)
-                for sub in command.split(sep) if sub.strip()
-            )
-
-    # Regex-based dangerous patterns
-    dangerous_patterns = [
-        r">\s*/dev/sd",
-        r"\|\s*(bash|sh|zsh)\b",
-        r"eval\s+",
-        r"exec\s+\d*[<>]",
-    ]
-    return any(re.search(p, command_lower) for p in dangerous_patterns)
-
-
-def _check_git_safety(command: str) -> str | None:
-    """
-    Check git commands for dangerous operations.
-
-    Returns error message if blocked, None if safe.
-    """
-
-    command_stripped = command.strip()
-
-    # Only check git commands
-    if not command_stripped.startswith("git "):
-        return None
-
-    # Parse command tokens safely
-    try:
-        tokens = shlex.split(command_stripped)
-    except ValueError:
-        tokens = command_stripped.split()
-
-    if len(tokens) < 2:
-        return None
-
-    # Extract git subcommand
-    subcommand = tokens[1]
-
-    # --- Force push protection ---
-    if subcommand == "push":
-        for token in tokens[2:]:
-            if token in ("--force", "-f", "--force-with-lease"):
-                # Check if pushing to main/master
-                for t in tokens[2:]:
-                    if t in ("main", "master", "origin/main", "origin/master"):
-                        return (
-                            "Error: Force push to main/master is blocked for safety. "
-                            "This could overwrite shared history."
-                        )
-                return (
-                    "Error: Force push (--force) is blocked for safety. "
-                    "Use --force-with-lease if you must, or ask the user to confirm."
-                )
-
-    # --- Destructive reset protection ---
-    if subcommand == "reset":
-        if "--hard" in tokens:
-            return (
-                "Warning: 'git reset --hard' will discard all uncommitted changes. "
-                "This is blocked for safety. Use 'git stash' first to preserve changes."
-            )
-
-    # --- Checkout discard protection ---
-    if subcommand == "checkout":
-        if "." in tokens or "--" in tokens:
-            # checkout . or checkout -- <files> discards changes
-            if "." in tokens:
-                return (
-                    "Error: 'git checkout .' will discard all uncommitted changes. "
-                    "Use 'git stash' to preserve them first."
-                )
-
-    # --- Clean protection ---
-    if subcommand == "clean":
-        if "-f" in tokens or "--force" in tokens:
-            return (
-                "Error: 'git clean -f' will permanently delete untracked files. "
-                "This is blocked for safety."
-            )
-
-    # --- Branch delete protection ---
-    if subcommand == "branch":
-        if "-D" in tokens:
-            for t in tokens[2:]:
-                if t in ("main", "master"):
-                    return "Error: Deleting main/master branch is blocked for safety."
-
-    # --- Hooks bypass protection ---
-    if "--no-verify" in tokens:
-        return (
-            "Error: --no-verify bypasses pre-commit hooks. "
-            "This is blocked unless explicitly authorized."
-        )
-
-    return None
-
-
-def _is_command_sensitive(command: str, config: ShellConfig = DEFAULT_CONFIG) -> bool:
-    """Check if a command requires extra confirmation."""
-    command_lower = command.lower()
-
-    for pattern in config.sensitive_patterns:
-        if pattern.lower() in command_lower:
-            return True
-
-    return False
-
-
-def _truncate_output(output: str, max_size: int = DEFAULT_CONFIG.max_output_size) -> str:
-    """Truncate output if it exceeds max size, preserving head and tail by lines."""
-    if len(output) <= max_size:
-        return output
-
-    lines = output.splitlines(keepends=True)
-    total_lines = len(lines)
-
-    # Allocate 40% head, 60% tail (errors/results usually at end)
-    head_budget = int(max_size * 0.4)
-    tail_budget = max_size - head_budget
-
-    head_lines: list[str] = []
-    head_chars = 0
-    for line in lines:
-        if head_chars + len(line) > head_budget:
-            break
-        head_lines.append(line)
-        head_chars += len(line)
-
-    tail_lines: list[str] = []
-    tail_chars = 0
-    for line in reversed(lines):
-        if tail_chars + len(line) > tail_budget:
-            break
-        tail_lines.insert(0, line)
-        tail_chars += len(line)
-
-    # Guard against overlap when few long lines exist
-    if len(head_lines) + len(tail_lines) >= total_lines:
-        return output
-
-    omitted = total_lines - len(head_lines) - len(tail_lines)
-    separator = (
-        f"\n\n... [{omitted} lines omitted, {len(output):,} chars total] ...\n\n"
-    )
-
-    return "".join(head_lines) + separator + "".join(tail_lines)
 
 
 # ========================================
@@ -445,20 +154,24 @@ def execute_command(
         last_activity_time = time.time()
 
         while True:
-            # Check if process has finished
+            # Block waiting for output (up to 1s), avoids CPU-burning busy-loop
+            try:
+                line = output_queue.get(timeout=1.0)
+                output_lines.append(line)
+                last_activity_time = time.time()
+                # Drain any additional lines already queued
+                while True:
+                    try:
+                        line = output_queue.get_nowait()
+                        output_lines.append(line)
+                        last_activity_time = time.time()
+                    except queue.Empty:
+                        break
+            except queue.Empty:
+                pass  # No output in the last second
+
             return_code = process.poll()
-
-            # Read all available output from queue
-            while True:
-                try:
-                    line = output_queue.get_nowait()
-                    output_lines.append(line)
-                    last_activity_time = time.time()
-                except queue.Empty:
-                    break
-
             if return_code is not None and not t.is_alive() and output_queue.empty():
-                # Process finished and thread finished
                 break
 
             # Check Idle Timeout
@@ -470,9 +183,6 @@ def execute_command(
                     + f"\n\nError: Command timed out. No output for {timeout} seconds."
                 )
 
-            # Sleep briefly to avoid busy loop
-            time.sleep(0.1)
-
         # Process finished
         output = "".join(output_lines)
         if return_code != 0:
@@ -482,7 +192,7 @@ def execute_command(
 
         if not output.strip():
             if return_code == 0:
-                return f"Command completed successfully (exit code: 0)"
+                return "Command completed successfully (exit code: 0)"
             return f"Command completed (exit code: {return_code})"
 
         return output
@@ -537,14 +247,17 @@ def execute_command_background(
     process_env = _prepare_safe_env(env)
 
     try:
-        # Start the process
+        # Capture stdout/stderr to temp files so get_process_output can read them
+        stdout_file = tempfile.NamedTemporaryFile(
+            mode='w', prefix='doraemon_bg_', suffix='.log', delete=False
+        )
         proc = subprocess.Popen(
             command,
             shell=True,
             executable=DEFAULT_CONFIG.shell,
             cwd=resolved_dir,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=stdout_file,
+            stderr=subprocess.STDOUT,
             env=process_env,
             start_new_session=True,  # Detach from parent
         )

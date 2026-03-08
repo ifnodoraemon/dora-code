@@ -18,12 +18,19 @@ import sys
 import tempfile
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 from mcp.server.fastmcp import FastMCP
 
 from src.core.security import validate_path
+from src.core.shell_security import (
+    DEFAULT_CONFIG as DEFAULT_SHELL_CONFIG,
+    check_git_safety,
+    is_command_blocked,
+    register_background_process,
+    truncate_output,
+)
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -33,71 +40,8 @@ mcp = FastMCP("DoraemonRunUnified")
 
 
 # ========================================
-# Configuration (from shell.py and computer.py)
+# Configuration (Python execution specific)
 # ========================================
-
-
-@dataclass
-class ShellConfig:
-    """Configuration for shell execution."""
-
-    default_timeout: int = 30
-    max_timeout: int = 600
-    max_output_size: int = 100_000
-    shell: str = "/bin/bash"
-
-    blocked_commands: list[str] = field(
-        default_factory=lambda: [
-            "rm -rf /",
-            "rm -rf /*",
-            "mkfs",
-            "dd if=/dev/zero",
-            ":(){:|:&};:",
-            "chmod -R 777 /",
-            "chown -R",
-            "> /dev/sda",
-            "mv / ",
-            "wget -O- | sh",
-            "curl -s | sh",
-        ]
-    )
-
-    sensitive_patterns: list[str] = field(
-        default_factory=lambda: [
-            "rm -rf",
-            "rm -r",
-            "sudo",
-            "chmod 777",
-            "curl | bash",
-            "wget | bash",
-            "pip install",
-            "npm install -g",
-            "apt install",
-            "apt remove",
-            "systemctl",
-            "service ",
-            "kill -9",
-            "pkill",
-            "docker rm",
-            "docker rmi",
-        ]
-    )
-
-    blocked_base_commands: list[str] = field(
-        default_factory=lambda: [
-            "mkfs",
-            "fdisk",
-            "parted",
-            "wipefs",
-            "shred",
-            "halt",
-            "poweroff",
-            "reboot",
-            "shutdown",
-            "init",
-            "telinit",
-        ]
-    )
 
 
 @dataclass
@@ -110,7 +54,6 @@ class ResourceLimits:
     max_processes: int = 10
 
 
-DEFAULT_SHELL_CONFIG = ShellConfig()
 DEFAULT_LIMITS = ResourceLimits(
     max_memory_mb=int(os.getenv("DORAEMON_MAX_MEMORY_MB", "512")),
     max_cpu_time_seconds=int(os.getenv("DORAEMON_MAX_CPU_TIME", "30")),
@@ -120,205 +63,7 @@ DEFAULT_LIMITS = ResourceLimits(
 
 
 # ========================================
-# Background Process Management
-# ========================================
-
-
-@dataclass
-class BackgroundProcess:
-    """Tracks a background process."""
-
-    pid: int
-    command: str
-    start_time: float
-    working_dir: str
-    process: subprocess.Popen
-
-
-_background_processes: dict[int, BackgroundProcess] = {}
-_process_lock = threading.Lock()
-
-
-def _register_background_process(proc: subprocess.Popen, command: str, working_dir: str) -> int:
-    """Register a background process for tracking."""
-    with _process_lock:
-        bp = BackgroundProcess(
-            pid=proc.pid,
-            command=command,
-            start_time=time.time(),
-            working_dir=working_dir,
-            process=proc,
-        )
-        _background_processes[proc.pid] = bp
-        return proc.pid
-
-
-# ========================================
-# Security Functions (from shell.py)
-# ========================================
-
-
-def _is_command_blocked(command: str, config: ShellConfig = DEFAULT_SHELL_CONFIG) -> bool:
-    """Check if a command is blocked for safety."""
-    import re
-    import shlex
-
-    command_lower = command.lower().strip()
-    normalized = command_lower.replace('"', "").replace("'", "").replace("\\", "")
-
-    for blocked in config.blocked_commands:
-        blocked_lower = blocked.lower()
-        if blocked_lower in command_lower or blocked_lower in normalized:
-            return True
-
-    try:
-        tokens = shlex.split(command_lower)
-    except ValueError:
-        tokens = command_lower.split()
-
-    if tokens:
-        base_cmd = os.path.basename(tokens[0])
-        if base_cmd in config.blocked_base_commands:
-            return True
-
-        if base_cmd == "rm" and any(t in tokens for t in ["-rf", "-fr"]):
-            for t in tokens:
-                if t in ("/", "/*", "/.", "/.."):
-                    return True
-
-    for separator in [";", "&&", "||"]:
-        if separator in command:
-            subcmds = command.split(separator)
-            for subcmd in subcmds:
-                subcmd = subcmd.strip()
-                if subcmd and _is_single_command_blocked(subcmd, config):
-                    return True
-
-    dangerous_patterns = [
-        r">\s*/dev/sd",
-        r"\|\s*bash",
-        r"\|\s*sh\b",
-        r"\|\s*zsh\b",
-        r"eval\s+",
-        r"exec\s+\d*[<>]",
-    ]
-
-    for pattern in dangerous_patterns:
-        if re.search(pattern, command_lower):
-            return True
-
-    return False
-
-
-def _is_single_command_blocked(command: str, config: ShellConfig) -> bool:
-    """Check a single command against blocked list."""
-    import shlex
-
-    command_lower = command.lower().strip()
-    normalized = command_lower.replace('"', "").replace("'", "").replace("\\", "")
-
-    for blocked in config.blocked_commands:
-        blocked_lower = blocked.lower()
-        if blocked_lower in command_lower or blocked_lower in normalized:
-            return True
-
-    try:
-        tokens = shlex.split(command_lower)
-    except ValueError:
-        tokens = command_lower.split()
-
-    if tokens:
-        base_cmd = os.path.basename(tokens[0])
-        if base_cmd in config.blocked_base_commands:
-            return True
-
-    return False
-
-
-def _check_git_safety(command: str) -> str | None:
-    """Check git commands for dangerous operations."""
-    import shlex
-
-    command_stripped = command.strip()
-
-    if not command_stripped.startswith("git "):
-        return None
-
-    try:
-        tokens = shlex.split(command_stripped)
-    except ValueError:
-        tokens = command_stripped.split()
-
-    if len(tokens) < 2:
-        return None
-
-    subcommand = tokens[1]
-
-    if subcommand == "push":
-        for token in tokens[2:]:
-            if token in ("--force", "-f", "--force-with-lease"):
-                for t in tokens[2:]:
-                    if t in ("main", "master", "origin/main", "origin/master"):
-                        return (
-                            "Error: Force push to main/master is blocked for safety. "
-                            "This could overwrite shared history."
-                        )
-                return (
-                    "Error: Force push (--force) is blocked for safety. "
-                    "Use --force-with-lease if you must, or ask the user to confirm."
-                )
-
-    if subcommand == "reset":
-        if "--hard" in tokens:
-            return (
-                "Warning: 'git reset --hard' will discard all uncommitted changes. "
-                "This is blocked for safety. Use 'git stash' first to preserve changes."
-            )
-
-    if subcommand == "checkout":
-        if "." in tokens:
-            return (
-                "Error: 'git checkout .' will discard all uncommitted changes. "
-                "Use 'git stash' to preserve them first."
-            )
-
-    if subcommand == "clean":
-        if "-f" in tokens or "--force" in tokens:
-            return (
-                "Error: 'git clean -f' will permanently delete untracked files. "
-                "This is blocked for safety."
-            )
-
-    if subcommand == "branch":
-        if "-D" in tokens:
-            for t in tokens[2:]:
-                if t in ("main", "master"):
-                    return "Error: Deleting main/master branch is blocked for safety."
-
-    if "--no-verify" in tokens:
-        return (
-            "Error: --no-verify bypasses pre-commit hooks. "
-            "This is blocked unless explicitly authorized."
-        )
-
-    return None
-
-
-def _truncate_output(output: str, max_size: int = DEFAULT_SHELL_CONFIG.max_output_size) -> str:
-    """Truncate output if it exceeds max size."""
-    if len(output) <= max_size:
-        return output
-
-    half = max_size // 2
-    return (
-        output[:half]
-        + f"\n\n... [Output truncated: {len(output)} chars total] ...\n\n"
-        + output[-half:]
-    )
-
-
-# ========================================
-# Python Execution Helpers (from computer.py)
+# Python Execution Helpers
 # ========================================
 
 
@@ -355,11 +100,30 @@ def _indent_code(code: str, spaces: int) -> str:
 
 
 def _get_sandbox_wrapper_code(user_code: str) -> str:
-    """Wrap user code with safety measures."""
+    """Wrap user code with safety measures.
+
+    Enhanced (C2): blocks access to dangerous modules within the sandbox.
+    """
     return f"""
 import sys
 import os
 
+# Block dangerous modules to prevent sandbox escape
+_BLOCKED_MODULES = {{
+    'subprocess', 'shutil', 'socket', 'http', 'urllib',
+    'ftplib', 'smtplib', 'telnetlib', 'ctypes', 'multiprocessing',
+}}
+
+class _SandboxImportBlocker:
+    def find_module(self, name, path=None):
+        top_level = name.split('.')[0]
+        if top_level in _BLOCKED_MODULES:
+            return self
+        return None
+    def load_module(self, name):
+        raise ImportError(f"Module '{{name}}' is blocked in sandbox mode")
+
+sys.meta_path.insert(0, _SandboxImportBlocker())
 sys.setrecursionlimit(1000)
 
 try:
@@ -394,6 +158,16 @@ def _validate_package_name(name: str) -> tuple[bool, str]:
         return False, "Package name must start with alphanumeric"
 
     return True, ""
+
+
+# ========================================
+# Output truncation helper
+# ========================================
+
+_truncate_output = truncate_output
+_is_command_blocked = is_command_blocked
+_check_git_safety = check_git_safety
+_register_background_process = register_background_process
 
 
 # ========================================
@@ -497,16 +271,23 @@ def _run_shell(command: str, timeout: int, working_dir: str | None) -> str:
         last_activity_time = time.time()
 
         while True:
+            # Block waiting for output (up to 1s), avoids CPU-burning busy-loop
+            try:
+                line = output_queue.get(timeout=1.0)
+                output_lines.append(line)
+                last_activity_time = time.time()
+                # Drain any additional lines already queued
+                while True:
+                    try:
+                        line = output_queue.get_nowait()
+                        output_lines.append(line)
+                        last_activity_time = time.time()
+                    except queue.Empty:
+                        break
+            except queue.Empty:
+                pass  # No output in the last second
+
             return_code = process.poll()
-
-            while True:
-                try:
-                    line = output_queue.get_nowait()
-                    output_lines.append(line)
-                    last_activity_time = time.time()
-                except queue.Empty:
-                    break
-
             if return_code is not None and not t.is_alive() and output_queue.empty():
                 break
 
@@ -517,8 +298,6 @@ def _run_shell(command: str, timeout: int, working_dir: str | None) -> str:
                     "".join(output_lines)
                     + f"\n\nError: Command timed out. No output for {timeout} seconds."
                 )
-
-            time.sleep(0.1)
 
         output = "".join(output_lines)
         if return_code != 0:

@@ -29,9 +29,6 @@ from .schema import ChatMessage, ChatRequest, ErrorResponse, ToolDefinition
 
 logger = logging.getLogger(__name__)
 
-# Global router instance
-router: ModelRouter | None = None
-
 
 def load_config() -> dict[str, Any]:
     """Load gateway configuration from environment."""
@@ -59,15 +56,14 @@ def load_config() -> dict[str, Any]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize router on startup, clean up on shutdown."""
-    global router
     config = load_config()
-    router = ModelRouter(config)
-    await router.initialize()
+    app.state.router = ModelRouter(config)
+    await app.state.router.initialize()
     logger.info("Model Gateway started")
     yield
-    if router:
-        await router.close()
-        router = None
+    if app.state.router:
+        await app.state.router.close()
+        app.state.router = None
     logger.info("Model Gateway stopped")
 
 
@@ -108,13 +104,15 @@ async def limit_request_body(request: Request, call_next):
                     status_code=413,
                     content={"detail": "Request body too large"},
                 )
+            # Content-Length is present and within limits — skip full body read
+            return await call_next(request)
         except ValueError:
             return JSONResponse(
                 status_code=400,
                 content={"detail": "Invalid Content-Length header"},
             )
 
-    # Guard against chunked transfers without Content-Length
+    # No Content-Length (e.g. chunked transfer) — must read body to check size
     body = await request.body()
     if len(body) > MAX_REQUEST_BODY_BYTES:
         return JSONResponse(
@@ -146,17 +144,31 @@ def verify_api_key(authorization: str | None) -> bool:
 
 
 # Pydantic models for API
+class FunctionDefinition(BaseModel):
+    """Typed function definition for tool calls."""
+    name: str
+    description: str = ""
+    parameters: dict[str, Any] = {}
+
+
+class ToolCallInfo(BaseModel):
+    """Typed tool call information."""
+    id: str
+    type: str = "function"
+    function: FunctionDefinition
+
+
 class ChatCompletionMessage(BaseModel):
     role: str
     content: str | None = None
-    tool_calls: list[dict] | None = None
+    tool_calls: list[ToolCallInfo] | None = None
     tool_call_id: str | None = None
     name: str | None = None
 
 
 class ChatCompletionTool(BaseModel):
     type: str = "function"
-    function: dict
+    function: FunctionDefinition
 
 
 class ChatCompletionRequest(BaseModel):
@@ -173,8 +185,9 @@ class ChatCompletionRequest(BaseModel):
 
 
 @app.get("/health")
-async def health():
+async def health(request: Request):
     """Health check endpoint."""
+    router = getattr(request.app.state, "router", None)
     if router:
         provider_health = await router.health_check()
         return {
@@ -186,6 +199,7 @@ async def health():
 
 @app.get("/v1/models")
 async def list_models(
+    request: Request,
     provider: str | None = None,
     authorization: str | None = Header(None),
 ):
@@ -193,6 +207,7 @@ async def list_models(
     if not verify_api_key(authorization):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
+    router = getattr(request.app.state, "router", None)
     if not router:
         raise HTTPException(status_code=503, detail="Gateway not initialized")
 
@@ -226,12 +241,14 @@ async def list_models(
 @app.get("/v1/models/{model_id}")
 async def get_model(
     model_id: str,
+    request: Request,
     authorization: str | None = Header(None),
 ):
     """Get information about a specific model."""
     if not verify_api_key(authorization):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
+    router = getattr(request.app.state, "router", None)
     if not router:
         raise HTTPException(status_code=503, detail="Gateway not initialized")
 
@@ -258,12 +275,14 @@ async def get_model(
 @app.post("/v1/chat/completions")
 async def chat_completions(
     request: ChatCompletionRequest,
+    raw_request: Request,
     authorization: str | None = Header(None),
 ):
     """Create a chat completion."""
     if not verify_api_key(authorization):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
+    router = getattr(raw_request.app.state, "router", None)
     if not router:
         raise HTTPException(status_code=503, detail="Gateway not initialized")
 
@@ -273,7 +292,14 @@ async def chat_completions(
         tool_calls = None
         if m.tool_calls:
             from .schema import ToolCall
-            tool_calls = [ToolCall.from_dict(tc) for tc in m.tool_calls]
+            tool_calls = [
+                ToolCall(
+                    id=tc.id,
+                    type=tc.type,
+                    function={"name": tc.function.name, "arguments": tc.function.parameters},
+                )
+                for tc in m.tool_calls
+            ]
 
         messages.append(ChatMessage(
             role=m.role,
@@ -287,9 +313,9 @@ async def chat_completions(
     if request.tools:
         tools = [
             ToolDefinition(
-                name=t.function["name"],
-                description=t.function.get("description", ""),
-                parameters=t.function.get("parameters", {}),
+                name=t.function.name,
+                description=t.function.description,
+                parameters=t.function.parameters,
             )
             for t in request.tools
         ]
@@ -309,7 +335,7 @@ async def chat_completions(
 
     if request.stream:
         return StreamingResponse(
-            stream_response(chat_request),
+            stream_response(chat_request, router),
             media_type="text/event-stream",
         )
 
@@ -324,11 +350,8 @@ async def chat_completions(
     return response.to_dict()
 
 
-async def stream_response(request: ChatRequest):
+async def stream_response(request: ChatRequest, router: ModelRouter):
     """Generate SSE stream for chat completion."""
-    if router is None:
-        yield f"data: {json.dumps({'error': 'Gateway not initialized'})}\n\n"
-        return
     try:
         async for chunk in router.chat_stream(request):
             if isinstance(chunk, ErrorResponse):
@@ -344,11 +367,15 @@ async def stream_response(request: ChatRequest):
 
 
 @app.get("/v1/providers")
-async def list_providers(authorization: str | None = Header(None)):
+async def list_providers(
+    request: Request,
+    authorization: str | None = Header(None),
+):
     """List enabled providers."""
     if not verify_api_key(authorization):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
+    router = getattr(request.app.state, "router", None)
     if not router:
         raise HTTPException(status_code=503, detail="Gateway not initialized")
 

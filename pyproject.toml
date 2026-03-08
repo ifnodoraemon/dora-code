@@ -129,10 +129,13 @@ addopts = [
     "--verbose",
     "--strict-markers",
     "--tb=short",
+    "--ignore=tests/evals/fixtures",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
+    "benchmark: marks tests as benchmarks",
+    "security: marks tests as security tests",
 ]
 
 # Coverage configuration
@@ -157,6 +160,11 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["src.core.*", "src.gateway.*"]
+disallow_untyped_defs = true
+warn_unreachable = true
 
 # Setuptools configuration
 [tool.setuptools.packages.find]

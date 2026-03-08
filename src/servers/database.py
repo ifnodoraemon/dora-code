@@ -74,6 +74,16 @@ def db_write_query(query: str, db_path: str, params: list | None = None) -> str:
         Success message or error
     """
     try:
+        # Block destructive SQL operations
+        first_keyword = query.strip().split()[0].upper() if query.strip() else ""
+        destructive_keywords = {"DROP", "TRUNCATE", "ALTER"}
+        if first_keyword in destructive_keywords:
+            return (
+                f"Error: '{first_keyword}' operations are blocked for safety. "
+                "These operations can cause irreversible data loss. "
+                "Use a direct database tool if you need to modify schema."
+            )
+
         conn = _get_connection(db_path)
         cursor = conn.cursor()
         cursor.execute(query, params or [])

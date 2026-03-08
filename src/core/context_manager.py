@@ -11,6 +11,7 @@ Key improvements over naive approaches:
 4. Injects summary as user context (not system instruction)
 """
 
+
 import json
 import logging
 import time
@@ -43,6 +44,7 @@ class Message:
     def text(self) -> str:
         """Extract plain text from content (works for both str and multimodal)."""
         from src.core.model_utils import get_content_text
+
         return get_content_text(self.content)
 
     def to_dict(self) -> dict[str, Any]:
@@ -149,19 +151,19 @@ class ContextConfig:
 # Source: developers.openai.com, platform.claude.com, ai.google.dev, api-docs.deepseek.com
 MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     # Google Gemini 3.x (latest gen, 2026)
-    "gemini-3.1-pro": 1_000_000,       # gemini-3.1-pro-preview
-    "gemini-3-flash": 1_000_000,       # gemini-3-flash-preview
+    "gemini-3.1-pro": 1_000_000,  # gemini-3.1-pro-preview
+    "gemini-3-flash": 1_000_000,  # gemini-3-flash-preview
     "gemini-3.1-flash-lite": 1_000_000,  # gemini-3.1-flash-lite-preview
     # OpenAI (latest gen, 2026)
-    "gpt-5.3": 400_000,               # 128K max output
-    "gpt-5.2": 400_000,               # 128K max output
+    "gpt-5.3": 400_000,  # 128K max output
+    "gpt-5.2": 400_000,  # 128K max output
     # Anthropic Claude (latest gen, 2026)
-    "claude-opus-4-6": 200_000,        # 128K max output, 1M beta
-    "claude-sonnet-4-6": 200_000,      # 64K max output, 1M beta
-    "claude-haiku-4-5": 200_000,       # 64K max output (Haiku 最新就是 4.5)
+    "claude-opus-4-6": 200_000,  # 128K max output, 1M beta
+    "claude-sonnet-4-6": 200_000,  # 64K max output, 1M beta
+    "claude-haiku-4-5": 200_000,  # 64K max output (Haiku 最新就是 4.5)
     # DeepSeek V3.2 (latest gen, 2025-2026)
-    "deepseek-chat": 128_000,          # 8K max output
-    "deepseek-reasoner": 128_000,      # 64K max output
+    "deepseek-chat": 128_000,  # 8K max output
+    "deepseek-reasoner": 128_000,  # 64K max output
 }
 
 DEFAULT_CONTEXT_WINDOW = 200_000
@@ -372,7 +374,7 @@ class ContextManager:
         self.messages = []
         self.summaries = []
         self.total_messages_ever = 0
-        self.session_id = hashlib.md5(str(time.time()).encode()).hexdigest()[:12]
+        self.session_id = uuid.uuid4().hex[:12]
         self._last_prompt_tokens = 0
         self._total_tokens_used = 0
         self._auto_save()
@@ -443,7 +445,8 @@ class ContextManager:
 
         # Calculate tokens summarized
         tokens_summarized = sum(
-            m.token_count if isinstance(m.token_count, int) and m.token_count > 0
+            m.token_count
+            if isinstance(m.token_count, int) and m.token_count > 0
             else self._estimate_tokens(m.content)
             for m in messages_to_summarize
         )
@@ -532,6 +535,7 @@ class ContextManager:
         """Estimate tokens for text or multimodal content."""
         if isinstance(text, list):
             from src.core.model_utils import TOKENS_PER_IMAGE
+
             total = 0
             for part in text:
                 if part.get("type") == "text":
