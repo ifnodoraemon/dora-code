@@ -19,7 +19,6 @@ console = Console()
 MODE_COLORS = {
     "plan": "blue",
     "build": "green",
-    "spec": "magenta",
 }
 
 
@@ -42,7 +41,7 @@ class CoreCommandHandler:
         self.model_name = cc.model_name
         self.project = cc.project
         self.permission_mgr = cc.permission_mgr
-        self.spec_mgr = cc.spec_mgr
+
 
     async def handle_core_command(
         self,
@@ -164,15 +163,6 @@ class CoreCommandHandler:
         elif cmd == "doctor":
             self._run_doctor()
 
-        elif cmd == "spec":
-            spec_result = await self._handle_spec(
-                cmd_args, mode, tool_names, tool_definitions,
-                active_skills_content, build_system_prompt,
-                convert_tools_to_definitions,
-            )
-            if spec_result:
-                result.update(spec_result)
-
         else:
             return None
 
@@ -276,13 +266,6 @@ Project specific rules for Doraemon Code.
   /history        - Show command history
   /exit           - Exit
 
-[bold]Spec Mode (spec-driven development):[/bold]
-  /spec <desc>    - Start spec workflow (generates spec.md, tasks.md, checklist.md)
-  /spec approve   - Approve spec and begin execution
-  /spec status    - Show spec progress
-  /spec list      - List all spec sessions
-  /spec resume <n>- Resume a previous spec
-  /spec abort     - Cancel current spec
 
 [bold]Shortcuts:[/bold]
   !<cmd>          - Execute shell command directly (Bash mode)
@@ -1012,223 +995,3 @@ Project specific rules for Doraemon Code.
             "system_prompt": prompt,
         }
 
-    async def _handle_spec(
-        self,
-        cmd_args: list[str],
-        mode: str,
-        tool_names: list[str],
-        tool_definitions: list,
-        active_skills_content: str,
-        build_system_prompt,
-        convert_tools_to_definitions,
-    ) -> dict | None:
-        """Handle /spec command and subcommands."""
-        if not self.spec_mgr:
-            console.print("[red]Spec manager not available.[/red]")
-            return None
-
-        if not cmd_args:
-            console.print("[red]Usage: /spec <description> | approve | status | list | resume <name> | abort[/red]")
-            return None
-
-        # Bind callables once for sub-methods
-        bsp, ctd = build_system_prompt, convert_tools_to_definitions
-        subcmd = cmd_args[0].lower()
-
-        if subcmd == "approve":
-            return self._spec_approve(active_skills_content, bsp, ctd)
-        elif subcmd == "status":
-            self._spec_status()
-            return None
-        elif subcmd == "list":
-            self._spec_list()
-            return None
-        elif subcmd == "resume":
-            name = cmd_args[1] if len(cmd_args) > 1 else None
-            if not name:
-                console.print("[red]Usage: /spec resume <name_or_id>[/red]")
-                return None
-            return self._spec_resume(name, active_skills_content, bsp, ctd)
-        elif subcmd == "abort":
-            return self._spec_abort(active_skills_content, bsp, ctd)
-        else:
-            description = " ".join(cmd_args)
-            return self._spec_start(description, active_skills_content, bsp, ctd)
-
-    def _spec_draft_state(self, description: str, session,
-                          active_skills_content: str,
-                          build_system_prompt, convert_tools_to_definitions) -> dict:
-        """Build state dict for DRAFT phase (no session creation)."""
-        plan_tools = self.tool_selector.get_tools_for_mode("plan")
-        draft_tools = list(set(plan_tools + ["write"]))
-
-        extra = (
-            f"<user_requirement>\n{description}\n</user_requirement>"
-        )
-
-        console.print(Panel(
-            f"[bold magenta]Spec Mode: DRAFT[/bold magenta]\n"
-            f"Session: {session.id} ({session.name})\n"
-            f"Description: {description}\n\n"
-            f"[dim]Generating spec.md, tasks.md, checklist.md...\n"
-            f"When done, use /spec approve or provide feedback.[/dim]",
-            border_style="magenta",
-        ))
-
-        return self._make_tool_state(
-            "plan", draft_tools, active_skills_content,
-            build_system_prompt, convert_tools_to_definitions, extra,
-        )
-
-    def _spec_execute_state(self, active_skills_content: str,
-                            build_system_prompt, convert_tools_to_definitions) -> dict:
-        """Build state dict for EXECUTE phase (no phase transition)."""
-        build_tools = self.tool_selector.get_tools_for_mode("build")
-        spec_tools = self.tool_selector.get_spec_tools()
-        exec_tools = list(set(build_tools + spec_tools))
-
-        extra = ""
-        spec_content = self.spec_mgr.get_all_spec_content()
-        if spec_content:
-            extra = f"<spec_documents>\n{spec_content}\n</spec_documents>"
-
-        p = self.spec_mgr.get_progress()
-        console.print(Panel(
-            f"[bold magenta]Spec Mode: EXECUTE[/bold magenta]\n"
-            f"Tasks: {p['tasks_total']} | Checks: {p['checks_total']}\n\n"
-            f"[dim]Executing tasks in order. Progress tracked automatically.[/dim]",
-            border_style="magenta",
-        ))
-
-        return self._make_tool_state(
-            "build", exec_tools, active_skills_content,
-            build_system_prompt, convert_tools_to_definitions, extra,
-        )
-
-    def _spec_start(self, description: str, active_skills_content: str,
-                    build_system_prompt, convert_tools_to_definitions) -> dict:
-        """Start a new spec session (DRAFT phase)."""
-        if self.spec_mgr.is_active:
-            console.print("[yellow]A spec is already active. Use /spec abort first.[/yellow]")
-            return {}
-        session = self.spec_mgr.create_spec(description)
-        return self._spec_draft_state(
-            description, session, active_skills_content,
-            build_system_prompt, convert_tools_to_definitions,
-        )
-
-    def _spec_approve(self, active_skills_content: str,
-                      build_system_prompt, convert_tools_to_definitions) -> dict:
-        """Approve spec and transition to EXECUTE phase."""
-        from src.core.spec_manager import SpecPhase
-
-        if not self.spec_mgr.is_active:
-            console.print("[yellow]No active spec to approve.[/yellow]")
-            return {}
-
-        session = self.spec_mgr.session
-        if session.phase == SpecPhase.EXECUTE:
-            console.print("[yellow]Spec is already in execution.[/yellow]")
-            return {}
-
-        # Check draft completeness
-        if session.phase == SpecPhase.DRAFT:
-            self.spec_mgr.check_draft_complete()
-            session = self.spec_mgr.session
-            if session.phase != SpecPhase.REVIEW:
-                console.print("[yellow]Spec documents not complete yet. Need: spec.md, tasks.md, checklist.md[/yellow]")
-                return {}
-
-        self.spec_mgr.advance_phase(SpecPhase.EXECUTE)
-        return self._spec_execute_state(
-            active_skills_content, build_system_prompt, convert_tools_to_definitions,
-        )
-
-    def _spec_status(self) -> None:
-        """Show current spec progress."""
-        if not self.spec_mgr.is_active:
-            console.print("[yellow]No active spec session.[/yellow]")
-            return
-
-        session = self.spec_mgr.session
-        p = self.spec_mgr.get_progress()
-
-        table = Table(title=f"Spec: {session.name}", show_header=False)
-        table.add_column("Key", style="cyan")
-        table.add_column("Value", style="green")
-        table.add_row("ID", session.id)
-        table.add_row("Phase", session.phase.value)
-        table.add_row("Tasks", f"{p['tasks_done']}/{p['tasks_total']}")
-        table.add_row("Checks", f"{p['checks_done']}/{p['checks_total']}")
-        table.add_row("Progress", f"{p['percent']}%")
-        console.print(table)
-
-        if session.tasks:
-            status_icons = {"done": "✅", "in_progress": "🔄", "pending": "⬜", "skipped": "⏭️"}
-            console.print("\n[bold]Tasks:[/bold]")
-            for t in session.tasks:
-                icon = status_icons.get(t.status, "⬜")
-                console.print(f"  {icon} {t.id}: {t.title}")
-
-    def _spec_list(self) -> None:
-        """List all spec sessions."""
-        from datetime import datetime
-
-        specs = self.spec_mgr.list_specs()
-        if not specs:
-            console.print("[yellow]No spec sessions found.[/yellow]")
-            return
-
-        table = Table(title="Spec Sessions")
-        table.add_column("ID", style="cyan")
-        table.add_column("Name", style="green")
-        table.add_column("Phase", style="yellow")
-        table.add_column("Updated")
-
-        for s in specs:
-            updated = datetime.fromtimestamp(s["updated_at"]).strftime("%Y-%m-%d %H:%M")
-            table.add_row(s["id"], s["name"], s["phase"], updated)
-        console.print(table)
-
-    def _spec_resume(self, name_or_id: str, active_skills_content: str,
-                     build_system_prompt, convert_tools_to_definitions) -> dict:
-        """Resume a previous spec session."""
-        from src.core.spec_manager import SpecPhase
-
-        session = self.spec_mgr.resume_spec(name_or_id)
-        if not session:
-            console.print(f"[red]Spec '{name_or_id}' not found.[/red]")
-            return {}
-
-        console.print(f"[green]Resumed spec: {session.name} (phase: {session.phase.value})[/green]")
-
-        if session.phase in (SpecPhase.DRAFT, SpecPhase.REVIEW):
-            return self._spec_draft_state(
-                session.description, session, active_skills_content,
-                build_system_prompt, convert_tools_to_definitions,
-            )
-        elif session.phase == SpecPhase.EXECUTE:
-            return self._spec_execute_state(
-                active_skills_content, build_system_prompt, convert_tools_to_definitions,
-            )
-        return {}
-
-    def _spec_abort(self, active_skills_content: str,
-                    build_system_prompt, convert_tools_to_definitions) -> dict:
-        """Abort the current spec and return to build mode."""
-        if not self.spec_mgr.is_active:
-            console.print("[yellow]No active spec to abort.[/yellow]")
-            return {}
-
-        name = self.spec_mgr.session.name
-        self.spec_mgr.abort()
-
-        build_tools = self.tool_selector.get_tools_for_mode("build")
-        state = self._make_tool_state(
-            "build", build_tools, active_skills_content,
-            build_system_prompt, convert_tools_to_definitions,
-        )
-        state["mode"] = "build"
-
-        console.print(f"[yellow]Spec '{name}' aborted. Returned to build mode.[/yellow]")
-        return state

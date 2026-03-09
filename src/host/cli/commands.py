@@ -40,7 +40,6 @@ class CommandHandler:
         model_name: str,
         project: str,
         permission_mgr=None,
-        spec_mgr=None,
     ):
         # Build shared context once
         self.cc = CommandContext(
@@ -57,7 +56,6 @@ class CommandHandler:
             model_name=model_name,
             project=project,
             permission_mgr=permission_mgr,
-            spec_mgr=spec_mgr,
         )
 
         # Expose commonly accessed attributes for backward compatibility

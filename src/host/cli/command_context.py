@@ -26,4 +26,4 @@ class CommandContext:
     model_name: str
     project: str
     permission_mgr: Any = field(default=None)
-    spec_mgr: Any = field(default=None)
+
