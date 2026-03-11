@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Tools](https://img.shields.io/badge/tools-39-green)](src/host/tools.py)
+[![Tools](https://img.shields.io/badge/tools-47-green)](src/host/tools.py)
 
 ---
 
@@ -35,11 +35,21 @@
 ```bash
 git clone https://github.com/ifnodoraemon/doraemon-code.git
 cd doraemon-code && pip install -e .
+cp .env.example .env
 
 export GOOGLE_API_KEY=your_key   # 或 OPENAI_API_KEY / ANTHROPIC_API_KEY
 
+mkdir -p .agent
+cat > .agent/config.json <<'JSON'
+{
+  "model": "gemini-3-pro-preview"
+}
+JSON
+
 doraemon
 ```
+
+模型配置统一放在 `.agent/config.json`。可选字段还包括 `embedding_model` 和 `rerank_model`。
 
 ---
 
@@ -76,7 +86,7 @@ doraemon
 │                                                                             │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐      │
 │  │Context Mgr   │ │Tool Registry │ │Permission Mgr│ │Session Mgr   │      │
-│  │• 消息历史    │ │• 39个工具    │ │• ALLOW/DENY  │ │• 持久化      │      │
+│  │• 消息历史    │ │• 47个工具    │ │• ALLOW/DENY  │ │• 持久化      │      │
 │  │• 自动摘要    │ │• 直接调用    │ │• ASK/WARN    │ │• 恢复/分叉   │      │
 │  │• 溢出恢复    │ │• 结果截断    │ │• 路径规则    │ │• 导出        │      │
 │  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘      │
@@ -119,7 +129,7 @@ doraemon
 │  │Parallel Exec │ │Subagent Sys  │ │Tool Selector │ │Rules/Memory  │      │
 │  │• 依赖分析    │ │• Explore     │ │• Plan模式    │ │• AGENTS.md   │      │
 │  │• 并行执行    │ │• Research    │ │• Build模式   │ │• MEMORY.md   │      │
-│  │• asyncio     │ │• 多Provider  │ │• 工具过滤    │ │• 自动注入    │      │
+│  │• asyncio     │ │• 多Provider  │ │• 工具过滤    │ │• notes/persona│      │
 │  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘      │
 └─────────────────────────────────────────────────────────────────────────────┘
                                      │
@@ -155,15 +165,15 @@ doraemon
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐        │
-│  │ Shell    │ │ Git      │ │ LSP      │ │ Lint     │ │ Web      │        │
-│  │ 执行命令 │ │ 版本控制 │ │ 语言服务 │ │ 代码检查 │ │ 网络请求 │        │
-│  │ 后台任务 │ │ 提交/diff│ │ 补全/跳转│ │ 格式化   │ │ 搜索     │        │
-│  │ 安全过滤 │ │ 安全协议 │ │ 重命名   │ │ 类型检查 │ │ 抓取     │        │
+│  │ Shell    │ │ Git Flow │ │ LSP      │ │ Lint     │ │ Web      │        │
+│  │ 执行命令 │ │ shell git│ │ 语言服务 │ │ 代码检查 │ │ 网络请求 │        │
+│  │ 后台任务 │ │ /commit  │ │ 补全/跳转│ │ 格式化   │ │ 搜索     │        │
+│  │ 安全过滤 │ │ /review  │ │ 重命名   │ │ 类型检查 │ │ 抓取     │        │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘        │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐        │
 │  │ Notebook │ │ Semantic │ │ Memory   │ │ Task     │ │ Database │        │
 │  │ 读写单元 │ │ 语义搜索 │ │ 笔记系统 │ │ 任务管理 │ │ SQL操作  │        │
-│  │ 多格式   │ │ ChromaDB │ │ 向量存储 │ │ 状态跟踪 │ │ 多数据库 │        │
+│  │ 多格式   │ │ 索引/检索│ │ 文件为主 │ │ 状态跟踪 │ │ 多数据库 │        │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘        │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -199,7 +209,7 @@ doraemon
          │
          ▼
 ┌─────────────────┐
-│ 4. 构建 Prompt  │  System Prompt + Rules + Memory + Skills + History
+│ 4. 构建 Prompt  │  System Prompt + AGENTS.md + MEMORY.md + notes/persona + Skills + History
 └────────┬────────┘
          │
          ▼
@@ -375,8 +385,8 @@ doraemon
 │   │ {                                                                   │  │
 │   │   "rules": [                                                        │  │
 │   │     {"action": "DENY",  "paths": ["**/.env", "**/secrets/*"]},     │  │
-│   │     {"action": "ASK",   "tools": ["shell_execute", "write"]},      │  │
-│   │     {"action": "WARN",  "tools": ["git_commit"]},                  │  │
+│   │     {"action": "ASK",   "tools": ["run", "write"]},                │  │
+│   │     {"action": "WARN",  "tools": ["db_write_query"]},              │  │
 │   │     {"action": "ALLOW", "tools": ["read", "search"]}               │  │
 │   │   ]                                                                 │  │
 │   │ }                                                                   │  │
@@ -395,7 +405,7 @@ doraemon
 
 ## 🔧 工具架构详解
 
-### 39 个内置工具分类
+### 当前内置工具分类（47 个注册工具）
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -407,7 +417,7 @@ doraemon
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  read(path, mode, offset, limit)                                           │
-│  ├── mode="file"      读取文件内容 (支持 PDF/DOCX/图片)                    │
+│  ├── mode="file"      读取文件内容                                          │
 │  ├── mode="directory" 列出目录内容                                         │
 │  ├── mode="outline"   获取代码结构 (类/函数)                               │
 │  └── mode="tree"      显示目录树                                           │
@@ -431,22 +441,16 @@ doraemon
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Shell & 执行 (4个)                                                          │
+│ 统一执行 (5个)                                                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  shell_execute(command, timeout)     执行命令 (带安全检查)                 │
-│  shell_background(command)           后台执行                              │
-│  execute_python(code, timeout)       执行 Python 代码                      │
-│  install_package(package)            pip install                           │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Git 操作 (5个)                                                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  git_status(path)                    查看状态                              │
-│  git_diff(path, staged, file)        查看差异                              │
-│  git_log(path, count, oneline)       查看历史                              │
-│  git_add(files, path)                暂存文件                              │
-│  git_commit(message, path)           提交 (带安全检查)                     │
+│  run(command, mode, timeout)         主执行入口                            │
+│  ├── mode="shell"                    Shell 命令                            │
+│  ├── mode="background"               后台命令                              │
+│  ├── mode="python"                   Python 代码                           │
+│  └── mode="install"                  安装依赖                              │
+│                                                                             │
+│  shell_execute / shell_background / execute_python / install_package        │
+│  仍可用，但现在都是 run(...) 的兼容别名                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -474,18 +478,22 @@ doraemon
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ 其他工具 (10个)                                                             │
+│ 其他工具 (示例)                                                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  semantic_search(query)              语义搜索 (ChromaDB)                   │
+│  semantic_search(query)              语义搜索                               │
 │  index_codebase(path)                索引代码库                            │
 │  fetch_url(url)                      获取网页内容                          │
 │  web_search(query)                   网络搜索                              │
+│  note(...)                           结构化记忆入口                        │
 │  save_note(title, content)           保存笔记                              │
 │  search_notes(query)                 搜索笔记                              │
 │  task_create(title, description)     创建任务                              │
 │  task_list()                         列出任务                              │
 │  task_update_status(id, status)      更新任务状态                          │
 │  switch_mode(mode)                   切换模式                              │
+│                                                                             │
+│  Git 不再暴露独立 git_* 工具；默认通过 run 执行 git，CLI 继续提供          │
+│  /commit 和 /review-pr 工作流。                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -549,7 +557,7 @@ doraemon [OPTIONS]
   /clear             清空对话 (保留摘要)
   /compact           强制压缩上下文
   /reset             完全重置
-  /memory            编辑 MEMORY.md
+  /memory            管理 MEMORY.md / notes / persona
 
 会话管理:
   /sessions          列出会话
@@ -633,10 +641,10 @@ doraemon-code/
 │   │   │   └── initialization.py  # 管理器初始化
 │   │   └── tools.py               # 工具注册表
 │   │
-│   ├── servers/                   # MCP 服务器 (能力)
+│   ├── servers/                   # 工具模块 (默认直调, 保持 MCP 兼容)
 │   │   ├── filesystem_unified.py  # read/write/search
-│   │   ├── shell.py               # Shell + 安全
-│   │   ├── git.py                 # Git 操作
+│   │   ├── run_unified.py         # run + 兼容别名
+│   │   ├── shell.py               # Shell + 安全实现
 │   │   ├── lsp.py                 # 语言服务
 │   │   ├── lint.py                # 代码检查
 │   │   ├── web.py                 # 网络请求
@@ -654,6 +662,8 @@ doraemon-code/
 └── .agent/                        # 项目配置
     ├── config.json                # 配置
     ├── MEMORY.md                  # 项目记忆
+    ├── memory.json                # persona / 结构化记忆
+    ├── memory/notes/              # 项目笔记库
     ├── permissions.json           # 权限规则
     ├── hooks.json                 # 事件钩子
     ├── sessions/                  # 会话存储
@@ -681,7 +691,7 @@ doraemon-code/
 │ @file 文件引用                │     ✅      │      ✅       │              │
 ├───────────────────────────────┼─────────────┼───────────────┼──────────────┤
 │ /doctor 诊断                  │     ✅      │      ✅       │              │
-│ /memory 编辑                  │     ✅      │      ✅       │              │
+│ /memory 记忆管理              │     ✅      │      ✅       │ notes/persona│
 │ /config 配置                  │     ✅      │      ✅       │              │
 │ /status 状态                  │     ✅      │      ✅       │              │
 ├───────────────────────────────┼─────────────┼───────────────┼──────────────┤
