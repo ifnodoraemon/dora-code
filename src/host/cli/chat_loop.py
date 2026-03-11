@@ -502,7 +502,6 @@ async def stream_model_response(
 
 async def process_tool_calls(
     response,
-    project: str,
     registry,
     sensitive_tools: set,
     checkpoint_mgr,
@@ -516,6 +515,7 @@ async def process_tool_calls(
     tool_definitions=None,
     system_prompt: str = "",
     permission_mgr=None,
+    project: str | None = None,
 ) -> tuple[str, list[str], list[Message]]:
     """
     Process tool calls from model response with agentic loop.
@@ -526,6 +526,7 @@ async def process_tool_calls(
     Returns:
         tuple of (accumulated_text, files_modified, tool_results_messages)
     """
+    project = project or Path.cwd().name
     accumulated_text = ""
     files_modified = []
     tool_steps = 0

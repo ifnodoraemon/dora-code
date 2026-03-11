@@ -6,8 +6,8 @@ Tests linting, formatting, and code quality analysis.
 
 import json
 import os
-import shutil
 import subprocess
+import tempfile
 from unittest import mock
 
 import pytest
@@ -33,17 +33,11 @@ from src.servers.lint import (
 
 @pytest.fixture
 def test_files_dir():
-    """Create a test directory inside project."""
-    # Save original working directory
+    """Create an isolated temporary directory for lint test files."""
     original_cwd = os.getcwd()
-
-    test_dir = os.path.join(original_cwd, ".test_lint_files")
-    os.makedirs(test_dir, exist_ok=True)
-    yield test_dir
-
-    # Restore original working directory before cleanup
-    os.chdir(original_cwd)
-    shutil.rmtree(test_dir, ignore_errors=True)
+    with tempfile.TemporaryDirectory(prefix="lint_test_files_") as test_dir:
+        yield test_dir
+        os.chdir(original_cwd)
 
 
 @pytest.fixture
@@ -831,4 +825,3 @@ class TestIntegration:
 
         complexity = code_complexity(python_file_issues)
         assert isinstance(complexity, str)
-

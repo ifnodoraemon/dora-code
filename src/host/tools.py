@@ -263,9 +263,9 @@ class ToolRegistry:
         """Get list of registered tool names."""
         return list(self._tools.keys())
 
-    def get_sensitive_tools(self) -> set[str]:
-        """Get set of sensitive tool names."""
-        return {name for name, tool in self._tools.items() if tool.sensitive}
+    def get_sensitive_tools(self) -> list[str]:
+        """Get sensitive tool names in registration order."""
+        return [name for name, tool in self._tools.items() if tool.sensitive]
 
     def is_sensitive(self, tool_name: str) -> bool:
         """Check if a tool is sensitive."""
