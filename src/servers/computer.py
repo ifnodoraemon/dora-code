@@ -4,8 +4,10 @@ import platform
 import subprocess
 import sys
 import tempfile
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from errno import EAGAIN
+from io import StringIO
 
 import requests
 from mcp.server.fastmcp import FastMCP
@@ -160,6 +162,26 @@ def _get_pypi_suggestions(query: str) -> str:
         return ""
     except Exception:
         return ""
+
+
+def _execute_python_inprocess(code: str) -> tuple[int, str, str]:
+    """Best-effort in-process execution fallback when subprocess creation fails."""
+    stdout_buffer = StringIO()
+    stderr_buffer = StringIO()
+    globals_dict = {"__name__": "__main__", "__file__": "<inprocess>"}
+
+    try:
+        compiled = compile(code, "<inprocess>", "exec")
+        with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+            exec(compiled, globals_dict, globals_dict)
+        return 0, stdout_buffer.getvalue(), stderr_buffer.getvalue()
+    except SystemExit as e:
+        code = e.code if isinstance(e.code, int) else 1
+        return int(code), stdout_buffer.getvalue(), stderr_buffer.getvalue()
+    except MemoryError:
+        return 137, stdout_buffer.getvalue(), "Error: Code exceeded memory limit\n"
+    except Exception as e:
+        return 1, stdout_buffer.getvalue(), f"Error: {e}\n"
 
 
 @mcp.tool()
@@ -341,7 +363,29 @@ def execute_python(
             if sandbox and e.errno == EAGAIN and "preexec_fn" in subprocess_kwargs:
                 logger.warning("Sandbox preexec failed with EAGAIN; retrying without resource preexec")
                 subprocess_kwargs.pop("preexec_fn", None)
-                result = subprocess.run([sys.executable, script_path], **subprocess_kwargs)
+                try:
+                    result = subprocess.run([sys.executable, script_path], **subprocess_kwargs)
+                except OSError as retry_error:
+                    if retry_error.errno == EAGAIN:
+                        logger.warning("Subprocess execution still failed with EAGAIN; falling back to in-process execution")
+                        returncode, stdout, stderr = _execute_python_inprocess(wrapped_code)
+                        result = subprocess.CompletedProcess(
+                            args=[sys.executable, script_path],
+                            returncode=returncode,
+                            stdout=stdout,
+                            stderr=stderr,
+                        )
+                    else:
+                        raise
+            elif e.errno == EAGAIN:
+                logger.warning("Subprocess execution failed with EAGAIN; falling back to in-process execution")
+                returncode, stdout, stderr = _execute_python_inprocess(wrapped_code)
+                result = subprocess.CompletedProcess(
+                    args=[sys.executable, script_path],
+                    returncode=returncode,
+                    stdout=stdout,
+                    stderr=stderr,
+                )
             else:
                 raise
 

@@ -372,10 +372,27 @@ def get_process_output(pid: int, max_lines: int = 100) -> str:
                         output = f"[Showing last {max_lines} of {total} lines]\n" + output
                     return output
 
+            # Backward-compatible fallback for tests or processes without temp logs.
+            if bp.process.stdout is None:
+                status = (
+                    "running" if bp.process.poll() is None else f"exited ({bp.process.returncode})"
+                )
+                return f"No new output available. Process status: {status}"
+
+            lines: list[str] = []
+            for _ in range(max_lines):
+                line = bp.process.stdout.readline()
+                if not line:
+                    break
+                lines.append(line)
+
+            if lines:
+                return "".join(lines)
+
             status = (
                 "running" if bp.process.poll() is None else f"exited ({bp.process.returncode})"
             )
-            return f"No output available yet. Process status: {status}"
+            return f"No new output available. Process status: {status}"
 
         except Exception as e:
             return f"Error reading process output: {str(e)}"
