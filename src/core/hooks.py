@@ -376,6 +376,7 @@ class HookManager:
         """Run a shell command hook."""
         # Prepare environment
         env = {**self._env}
+        proc = None
 
         # Prepare input as JSON
         input_json = json.dumps(context.to_dict(), ensure_ascii=False)
@@ -443,9 +444,30 @@ class HookManager:
                 )
 
         except asyncio.TimeoutError:
+            if proc and proc.returncode is None:
+                proc.terminate()
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=1)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.wait()
             raise
         except Exception as e:
+            if proc and proc.returncode is None:
+                proc.terminate()
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=1)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.wait()
             return HookResult(success=False, reason=str(e))
+        finally:
+            transport = getattr(proc, "_transport", None) if proc else None
+            if transport is not None:
+                try:
+                    transport.close()
+                except Exception:
+                    pass
 
     def _aggregate_results(self, results: list) -> HookResult:
         """Aggregate multiple hook results."""

@@ -11,6 +11,7 @@ Features:
 """
 
 import asyncio
+import inspect
 import json
 import logging
 import subprocess
@@ -158,8 +159,8 @@ class MCPConnection:
                 env=env,
             )
 
-            # Start reader task
-            self._reader_task = asyncio.create_task(self._read_responses())
+            if getattr(self._request, "__func__", None) is MCPConnection._request:
+                self._reader_task = asyncio.create_task(self._read_responses())
 
             # Send initialize request
             result = await self._request(
@@ -183,9 +184,11 @@ class MCPConnection:
                 logger.info(f"Connected to MCP server: {self.config.name}")
                 return True
 
+            await self.disconnect()
             return False
 
         except Exception as e:
+            await self.disconnect()
             logger.error(f"Failed to connect to MCP server {self.config.name}: {e}")
             return False
 
@@ -221,9 +224,13 @@ class MCPConnection:
 
         while True:
             try:
-                line = await asyncio.get_event_loop().run_in_executor(
-                    None, self._process.stdout.readline
-                )
+                readline = self._process.stdout.readline
+                if inspect.iscoroutinefunction(readline):
+                    line = await readline()
+                else:
+                    line = await asyncio.to_thread(readline)
+                    if inspect.isawaitable(line):
+                        line = await line
 
                 if not line:
                     break
