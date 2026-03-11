@@ -1,4 +1,6 @@
+import json
 import logging
+import os
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -13,6 +15,42 @@ from .paths import logs_dir
 # ================================
 
 
+def _resolve_log_level(level: str | None = None) -> str:
+    """Resolve the effective log level from args/env/defaults."""
+    return (level or os.getenv("AGENT_LOG_LEVEL") or "INFO").upper()
+
+
+def _build_file_handler(log_path: Path) -> logging.FileHandler:
+    """Create a UTF-8 file handler with a consistent formatter."""
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
+    return file_handler
+
+
+def configure_root_logger(level: str | None = None, log_file: str | None = None) -> logging.Logger:
+    """Configure root logging so unconfigured modules still emit project-local logs."""
+    effective_level = _resolve_log_level(level)
+    root = logging.getLogger()
+
+    root.setLevel(getattr(logging, effective_level, logging.INFO))
+    root.handlers.clear()
+
+    console_handler = RichHandler(rich_tracebacks=True, markup=True, show_time=True, show_path=False)
+    console_handler.setLevel(getattr(logging, effective_level, logging.INFO))
+    root.addHandler(console_handler)
+
+    file_target = Path(log_file or os.getenv("AGENT_LOG_FILE") or (logs_dir() / "agent.log"))
+    root.addHandler(_build_file_handler(file_target))
+    return root
+
+
 def setup_logger(name: str, level: str = "INFO", log_file: str | None = None) -> logging.Logger:
     """
     Setup a standard logger with console and optional file output.
@@ -25,32 +63,23 @@ def setup_logger(name: str, level: str = "INFO", log_file: str | None = None) ->
     Returns:
         Configured logger instance
     """
+    effective_level = _resolve_log_level(level)
     logger = logging.getLogger(name)
-    logger.setLevel(getattr(logging, level.upper()))
+    logger.setLevel(getattr(logging, effective_level, logging.INFO))
 
     # Remove existing handlers to avoid duplicates
     logger.handlers.clear()
+    logger.propagate = False
 
     # Console handler with Rich formatting
-    console_handler = RichHandler(
-        rich_tracebacks=True, markup=True, show_time=True, show_path=False
-    )
-    console_handler.setLevel(logging.INFO)
+    console_handler = RichHandler(rich_tracebacks=True, markup=True, show_time=True, show_path=False)
+    console_handler.setLevel(getattr(logging, effective_level, logging.INFO))
     logger.addHandler(console_handler)
 
     # File handler (if specified)
-    if log_file:
-        log_path = Path(log_file)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-
-        file_handler = logging.FileHandler(log_path, encoding="utf-8")
-        file_handler.setLevel(logging.DEBUG)  # File gets all levels
-        file_handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-            )
-        )
-        logger.addHandler(file_handler)
+    file_target = log_file or os.getenv("AGENT_LOG_FILE")
+    if file_target:
+        logger.addHandler(_build_file_handler(Path(file_target)))
 
     return logger
 
@@ -64,9 +93,9 @@ def get_logger(name: str) -> logging.Logger:
 
     # Auto-configure
     log_dir = logs_dir()
-    log_file = log_dir / f"{name.split('.')[-1]}.log"
+    log_file = os.getenv("AGENT_LOG_FILE") or str(log_dir / f"{name.split('.')[-1]}.log")
 
-    return setup_logger(name, level="INFO", log_file=str(log_file))
+    return setup_logger(name, log_file=log_file)
 
 
 # ================================
@@ -97,7 +126,8 @@ class TraceLogger:
         self.events.append(event)
 
         # Also log to standard logger
-        self.logger.debug(f"Trace: {type} - {name} ({duration_ms}ms)", extra={"data": data})
+        payload = json.dumps(data, ensure_ascii=False, default=str)
+        self.logger.debug(f"Trace: {type} - {name} ({duration_ms}ms) | data={payload}")
 
     def export(self) -> list[dict]:
         return [asdict(e) for e in self.events]

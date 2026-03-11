@@ -22,14 +22,14 @@ class GatewayConfig:
     @classmethod
     def from_env(cls) -> "GatewayConfig":
         return cls(
-            base_url=os.getenv("DORAEMON_GATEWAY_URL", "http://localhost:8000"),
-            api_key=os.getenv("DORAEMON_GATEWAY_KEY"),
-            timeout=float(os.getenv("DORAEMON_GATEWAY_TIMEOUT", "120")),
+            base_url=os.getenv("AGENT_GATEWAY_URL", "http://localhost:8000"),
+            api_key=os.getenv("AGENT_API_KEY"),
+            timeout=float(os.getenv("AGENT_GATEWAY_TIMEOUT", "120")),
         )
 
 
 class GatewayClient:
-    """Client for the Doraemon Model Gateway."""
+    """Client for the model gateway."""
 
     def __init__(self, config: GatewayConfig | None = None):
         self.config = config or GatewayConfig.from_env()

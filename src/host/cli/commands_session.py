@@ -20,18 +20,10 @@ class SessionCommandHandler:
 
     def __init__(self, cc: CommandContext):
         self.cc = cc
-        self.ctx = cc.ctx
-        self.tool_selector = cc.tool_selector
-        self.registry = cc.registry
-        self.skill_mgr = cc.skill_mgr
-        self.checkpoint_mgr = cc.checkpoint_mgr
-        self.task_mgr = cc.task_mgr
-        self.cost_tracker = cc.cost_tracker
-        self.cmd_history = cc.cmd_history
-        self.session_mgr = cc.session_mgr
-        self.hook_mgr = cc.hook_mgr
-        self.model_name = cc.model_name
-        self.project = cc.project
+
+    def __getattr__(self, name):
+        """Proxy attribute access to the underlying CommandContext."""
+        return getattr(self.cc, name)
 
     async def handle_session_command(
         self,

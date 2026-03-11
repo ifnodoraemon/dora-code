@@ -11,11 +11,12 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from src.core.logger import configure_root_logger
 from src.webui.dashboard.api import router as dashboard_router
 from src.webui.routes import chat, sessions, tools
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+configure_root_logger()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(

@@ -10,14 +10,15 @@ import os
 
 from mcp.server.fastmcp import FastMCP
 
+from src.core.logger import configure_root_logger
 from src.core.security import validate_path
 from src.services import office
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+configure_root_logger()
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("DoraemonOffice")
+mcp = FastMCP("AgentOffice")
 
 @mcp.tool()
 def create_word_document(path: str, content: str, title: str = "") -> str:

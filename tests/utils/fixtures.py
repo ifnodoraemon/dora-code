@@ -48,7 +48,7 @@ def temp_dir() -> Generator[Path, None, None]:
 @pytest.fixture
 def temp_config_file(temp_dir: Path) -> Path:
     """Fixture for a temporary config file."""
-    config_dir = temp_dir / ".doraemon"
+    config_dir = temp_dir / ".agent"
     config_dir.mkdir(parents=True, exist_ok=True)
     config_file = config_dir / "config.json"
     return config_file

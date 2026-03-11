@@ -1,5 +1,5 @@
 """
-Doraemon Model Gateway
+Model Gateway
 
 A unified API gateway for multiple AI model providers.
 
@@ -16,8 +16,8 @@ Usage:
     python -m src.gateway.server
 
     # CLI only needs:
-    DORAEMON_GATEWAY_URL=http://localhost:8000
-    DORAEMON_API_KEY=your-gateway-key
+    AGENT_GATEWAY_URL=http://localhost:8000
+    AGENT_API_KEY=your-gateway-key
 """
 
 from .client import GatewayClient, GatewayConfig, create_client

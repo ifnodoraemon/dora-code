@@ -244,13 +244,13 @@ python -m src.gateway.server
 - Supports two modes:
   - **Gateway mode**: Routes through unified API server
   - **Direct mode**: Calls provider APIs directly
-- Auto-detects mode from environment (DORAEMON_GATEWAY_URL vs API keys)
+- Auto-detects mode from environment (AGENT_GATEWAY_URL vs API keys)
 - Always use this for LLM calls, never call providers directly
 
 **2. ContextManager** (`src/core/context_manager.py`)
 - Manages conversation history with automatic summarization
 - Summarizes at 70% of context window to prevent overflow
-- Persists to `.doraemon/conversations/`
+- Persists to `.agent/conversations/`
 - Keeps recent messages always to maintain context
 
 **3. ToolRegistry** (`src/host/tools.py`)
@@ -409,9 +409,9 @@ class MyAdapter(BaseAdapter):
 
 ```bash
 # Model Selection
-DORAEMON_MODEL=gemini-3-pro-preview
-DORAEMON_GATEWAY_URL=http://localhost:8000  # Enable gateway mode
-DORAEMON_GATEWAY_KEY=...                     # Optional API key
+AGENT_MODEL=gemini-3-pro-preview
+AGENT_GATEWAY_URL=http://localhost:8000  # Enable gateway mode
+AGENT_API_KEY=...                        # Optional API key
 
 # Direct Mode (at least one required if not using gateway)
 GOOGLE_API_KEY=...
@@ -419,16 +419,16 @@ OPENAI_API_KEY=...
 ANTHROPIC_API_KEY=...
 
 # Budget Control
-DORAEMON_DAILY_BUDGET=10.0
-DORAEMON_SESSION_BUDGET=5.0
+AGENT_DAILY_BUDGET=10.0
+AGENT_SESSION_BUDGET=5.0
 
 # Logging
-DORAEMON_LOG_LEVEL=INFO
+AGENT_LOG_LEVEL=INFO
 ```
 
 ### Project Configuration
 
-`.doraemon/config.json`:
+`.agent/config.json`:
 ```json
 {
   "mcpServers": {
@@ -498,7 +498,7 @@ src/
 **Checkpoint System**:
 - Automatic file snapshots before modifications
 - Rollback capability with `/rewind`
-- Stored in `.doraemon/checkpoints/`
+- Stored in `.agent/checkpoints/`
 
 ## Extension Points
 
@@ -506,7 +506,7 @@ src/
 1. New tools → Register in `ToolRegistry`
 2. New servers → Create in `src/servers/`
 3. New adapters → Implement `BaseAdapter`
-4. New skills → Add SKILL.md in `.doraemon/skills/`
+4. New skills → Add SKILL.md in `.agent/skills/`
 5. New hooks → Define in `hooks.json`
 6. New commands → Add handler in `CommandHandler`
 

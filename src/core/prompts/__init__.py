@@ -1,5 +1,5 @@
 """
-Doraemon Code — System Prompts Package
+Code Agent — System Prompts Package
 
 Modular, composable prompt system for different agent modes.
 
@@ -41,7 +41,7 @@ def get_system_prompt(
 
     Args:
         mode: One of 'plan', 'build'. Falls back to 'build' for unknown modes.
-        persona_config: Optional dict with 'name' key to replace 'Doraemon'.
+        persona_config: Optional dict with 'name' key to replace the default agent name.
 
     Returns:
         The assembled system prompt string.
@@ -49,7 +49,8 @@ def get_system_prompt(
     base = PROMPTS.get(mode, PROMPTS[DEFAULT_MODE])
 
     if persona_config:
-        name = persona_config.get("name", "Doraemon")
+        name = persona_config.get("name", "Agent")
+        base = base.replace("Code Agent", name)
         base = base.replace("Doraemon", name)
 
     return base

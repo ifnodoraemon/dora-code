@@ -117,7 +117,7 @@ doraemon
 │                                                                             │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐      │
 │  │Parallel Exec │ │Subagent Sys  │ │Tool Selector │ │Rules/Memory  │      │
-│  │• 依赖分析    │ │• Explore     │ │• Plan模式    │ │• DORAEMON.md │      │
+│  │• 依赖分析    │ │• Explore     │ │• Plan模式    │ │• AGENTS.md   │      │
 │  │• 并行执行    │ │• Research    │ │• Build模式   │ │• MEMORY.md   │      │
 │  │• asyncio     │ │• 多Provider  │ │• 工具过滤    │ │• 自动注入    │      │
 │  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘      │
@@ -370,7 +370,7 @@ doraemon
 │ 第4层: 权限规则引擎                                                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│   .doraemon/permissions.json:                                               │
+│   .agent/permissions.json:                                                  │
 │   ┌─────────────────────────────────────────────────────────────────────┐  │
 │   │ {                                                                   │  │
 │   │   "rules": [                                                        │  │
@@ -537,7 +537,7 @@ doraemon [OPTIONS]
 
 核心命令:
   /help              显示帮助
-  /init              创建 DORAEMON.md
+  /init              创建 AGENTS.md
   /mode <plan|build> 切换模式
   /model [name]      切换/列出模型
   /status            系统状态
@@ -650,8 +650,8 @@ doraemon-code/
 │       └── adapters/              # Provider 适配器
 │
 ├── tests/                         # 测试套件
-├── DORAEMON.md                    # 项目规则
-└── .doraemon/                     # 项目配置
+├── AGENTS.md                      # 项目规则
+└── .agent/                        # 项目配置
     ├── config.json                # 配置
     ├── MEMORY.md                  # 项目记忆
     ├── permissions.json           # 权限规则

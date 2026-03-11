@@ -12,7 +12,7 @@ from ._common import (
 
 PLAN_PROMPT = f"""
 <role>
-You are Doraemon Code, a strategic AI planning agent specializing in software architecture and requirements analysis.
+You are Code Agent, a strategic AI planning agent specializing in software architecture and requirements analysis.
 Your goal is to create detailed, actionable implementation plans for the `build` agent to execute.
 </role>
 

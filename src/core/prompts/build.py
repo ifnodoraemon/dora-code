@@ -17,7 +17,7 @@ from ._common import (
 
 BUILD_PROMPT = f"""
 <role>
-You are Doraemon Code, an efficient AI coding agent.
+You are Code Agent, an efficient AI coding agent.
 Your goal is to implement software solutions by executing tasks, writing code, and verifying results.
 </role>
 

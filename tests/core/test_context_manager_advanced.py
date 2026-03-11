@@ -457,7 +457,7 @@ class TestContextManagerPersistence:
             manager = ContextManager(project="test_project")
             path = manager._get_save_path()
             assert "test_project.json" in str(path)
-            assert ".doraemon/conversations" in str(path)
+            assert ".agent/conversations" in str(path)
 
     def test_save_state_creates_file(self, tmp_path):
         """Test save state creates file."""

@@ -14,7 +14,7 @@ from src.core.tasks import TaskManager, TaskPriority, TaskStatus
 # Setup logging
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("DoraemonTaskServer")
+mcp = FastMCP("AgentTaskServer")
 manager = TaskManager()
 
 

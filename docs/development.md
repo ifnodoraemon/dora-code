@@ -177,7 +177,7 @@ if __name__ == "__main__":
 
 ### Step 2: Register in Configuration
 
-Add to `.doraemon/config.json`:
+Add to `.agent/config.json`:
 
 ```json
 {
@@ -289,44 +289,39 @@ ctx.set("key", v) # Set context value
 
 ---
 
-## Adding New Metrics
+## Adding Trace Logging
 
-### Define Custom Metrics
+### Define Custom Trace Events
 
 ```python
-from src.core.metrics import get_metrics, DoraemonMetrics
+from src.core.logger import TraceLogger
 
-class MyFeatureMetrics:
-    def __init__(self):
-        self.registry = get_metrics()
-    
-    def feature_used(self, feature_name: str):
-        self.registry.increment(
-            "myfeature_usage_total",
-            feature=feature_name
-        )
-    
-    def feature_duration(self, feature_name: str, duration: float):
-        self.registry.observe(
-            "myfeature_duration_seconds",
-            duration,
-            feature=feature_name
-        )
+trace = TraceLogger()
+
+def feature_used(feature_name: str):
+    trace.log("feature_used", feature_name, {"feature": feature_name})
+
+def feature_duration(feature_name: str, duration: float):
+    trace.log(
+        "feature_duration",
+        feature_name,
+        {"feature": feature_name, "duration_seconds": duration},
+        duration_ms=duration * 1000,
+    )
 ```
 
 ### Use in Code
 
 ```python
-metrics = MyFeatureMetrics()
+import time
 
 def my_feature():
-    import time
     start = time.time()
-    
-    metrics.feature_used("process")
+
+    feature_used("process")
     # ... do work ...
-    
-    metrics.feature_duration("process", time.time() - start)
+
+    feature_duration("process", time.time() - start)
 ```
 
 ---
@@ -471,7 +466,7 @@ def my_function(param1: str, param2: int) -> bool:
 
 ```python
 # Use specific exceptions
-from src.core.errors import DoraemonException, TransientError
+from src.core.errors import AgentError, ConfigurationError, TransientError
 
 # Provide context
 raise ConfigurationError(
@@ -486,18 +481,13 @@ logger.error("Operation failed", exception=e, operation="fetch")
 ### Logging
 
 ```python
-from src.core.telemetry import get_logger
+from src.core.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Use structured logging
-logger.info("User action", user_id="123", action="login")
-logger.error("Failed to process", exception=e, item_id="456")
-
-# Use operation scopes
-with logger.operation("process_batch", batch_size=100):
-    for item in items:
-        logger.debug("Processing item", item_id=item.id)
+# Use standard logging
+logger.info("User action started")
+logger.error("Failed to process item")
 ```
 
 ---
@@ -507,7 +497,7 @@ with logger.operation("process_batch", batch_size=100):
 ### Enable Debug Logging
 
 ```bash
-export DORAEMON_LOG_LEVEL=DEBUG
+export AGENT_LOG_LEVEL=DEBUG
 dora start
 ```
 
@@ -526,14 +516,14 @@ Shows:
 ### Trace Tool Calls
 
 Tool calls are automatically logged with timing information.
-Check `~/.doraemon/logs/doraemon.log` for detailed traces.
+Check `.agent/logs/*.log` for detailed traces.
 
 ### Common Issues
 
 1. **Server not connecting**: Check if the server script exists and is executable
 2. **Tool not found**: Verify the server registered the tool correctly
 3. **Path errors**: Ensure paths are relative to the workspace root
-4. **Memory errors**: Reduce `DORAEMON_MAX_MEMORY_MB` for constrained environments
+4. **Memory errors**: Reduce `AGENT_MAX_MEMORY_MB` for constrained environments
 
 ---
 

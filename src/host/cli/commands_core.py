@@ -15,6 +15,17 @@ from src.core.config import load_config
 from src.core.paths import config_path, memory_path, skills_dir
 from src.core.rules import create_default_rules
 from src.core.schema import get_default_config
+from src.servers.memory import (
+    delete_note,
+    export_notes,
+    get_note,
+    get_note_file_path,
+    get_user_persona,
+    list_notes,
+    save_note,
+    search_notes,
+    update_user_persona,
+)
 from src.host.cli.command_context import CommandContext
 
 console = Console()
@@ -205,7 +216,7 @@ class CoreCommandHandler:
   /tools          - List available tools
   /debug          - Show debug info
   /doctor         - Run diagnostic checks
-  /memory         - Edit MEMORY.md files
+  /memory         - Manage MEMORY.md, notes, and persona
 
 [bold]Git Commands:[/bold]
   /commit [msg]   - Smart commit (auto-generates message if not provided)
@@ -860,11 +871,18 @@ class CoreCommandHandler:
 
     async def _handle_memory(self, cmd_args: list[str]):
         """
-        Handle /memory command - edit MEMORY.md files.
+        Handle /memory command - edit MEMORY.md files and inspect note memory.
 
         Usage:
-            /memory              - Edit project MEMORY.md
-            /memory show         - Show current memory content
+            /memory                - Edit project MEMORY.md
+            /memory show           - Show current MEMORY.md
+            /memory notes          - List note memory for this project
+            /memory search <query> - Search note memory for this project
+            /memory open <title>   - Open a note file in $EDITOR
+            /memory delete <title> - Delete a note from this project
+            /memory export [path]  - Export note memory JSON for this project
+            /memory persona        - Show current persona JSON
+            /memory persona set <key> <value> - Update persona JSON
         """
         import os
 
@@ -880,8 +898,74 @@ class CoreCommandHandler:
             else:
                 console.print("[dim](not found)[/dim]")
             return
+        elif cmd_args[0] == "notes":
+            console.print(list_notes(collection_name=self.project))
+            return
+        elif cmd_args[0] == "search":
+            if len(cmd_args) < 2:
+                console.print("[red]Usage: /memory search <query>[/red]")
+                return
+            console.print(search_notes(query=" ".join(cmd_args[1:]), collection_name=self.project))
+            return
+        elif cmd_args[0] == "save":
+            if len(cmd_args) < 3:
+                console.print("[red]Usage: /memory save <title> <content>[/red]")
+                return
+            console.print(
+                save_note(
+                    title=cmd_args[1],
+                    content=" ".join(cmd_args[2:]),
+                    collection_name=self.project,
+                )
+            )
+            return
+        elif cmd_args[0] == "open":
+            if len(cmd_args) < 2:
+                console.print("[red]Usage: /memory open <title>[/red]")
+                return
+            title = " ".join(cmd_args[1:])
+            note_path = Path(get_note_file_path(title=title, collection_name=self.project))
+            if not note_path.exists():
+                console.print(get_note(title=title, collection_name=self.project))
+                return
+            editor = os.getenv("EDITOR", "nano")
+            console.print(f"[dim]Opening {note_path} in {editor}...[/dim]")
+            try:
+                subprocess.run([editor, str(note_path)], timeout=600)
+                console.print("[green]Note file saved.[/green]")
+            except Exception as e:
+                console.print(f"[red]Failed to open editor: {e}[/red]")
+                console.print(f"[dim]Edit manually: {note_path}[/dim]")
+            return
+        elif cmd_args[0] == "delete":
+            if len(cmd_args) < 2:
+                console.print("[red]Usage: /memory delete <title>[/red]")
+                return
+            console.print(delete_note(title=" ".join(cmd_args[1:]), collection_name=self.project))
+            return
+        elif cmd_args[0] == "export":
+            export_data = export_notes(collection_name=self.project, export_format="json")
+            if len(cmd_args) == 1:
+                console.print(export_data)
+                return
+            output_path = Path(cmd_args[1])
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(export_data, encoding="utf-8")
+            console.print(f"[green]Exported notes to {output_path}[/green]")
+            return
+        elif cmd_args[0] == "persona":
+            if len(cmd_args) == 1 or cmd_args[1] == "show":
+                console.print(get_user_persona())
+                return
+            if len(cmd_args) >= 4 and cmd_args[1] == "set":
+                console.print(update_user_persona(key=cmd_args[2], value=" ".join(cmd_args[3:])))
+                return
+            console.print("[red]Usage: /memory persona [show|set <key> <value>][/red]")
+            return
         else:
-            console.print("[red]Usage: /memory [project|show][/red]")
+            console.print(
+                "[red]Usage: /memory [project|show|notes|search <query>|save <title> <content>|open <title>|delete <title>|export [path]|persona ...][/red]"
+            )
             return
 
         # Create file if not exists

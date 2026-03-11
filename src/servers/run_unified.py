@@ -23,6 +23,7 @@ from typing import Literal
 
 from mcp.server.fastmcp import FastMCP
 
+from src.core.logger import configure_root_logger
 from src.core.security import validate_path
 from src.core.shell_security import (
     DEFAULT_CONFIG as DEFAULT_SHELL_CONFIG,
@@ -33,10 +34,10 @@ from src.core.shell_security import (
 )
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+configure_root_logger()
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("DoraemonRunUnified")
+mcp = FastMCP("AgentRunUnified")
 
 
 # ========================================
@@ -55,10 +56,10 @@ class ResourceLimits:
 
 
 DEFAULT_LIMITS = ResourceLimits(
-    max_memory_mb=int(os.getenv("DORAEMON_MAX_MEMORY_MB", "512")),
-    max_cpu_time_seconds=int(os.getenv("DORAEMON_MAX_CPU_TIME", "30")),
-    max_file_size_mb=int(os.getenv("DORAEMON_MAX_FILE_SIZE_MB", "50")),
-    max_processes=int(os.getenv("DORAEMON_MAX_PROCESSES", "10")),
+    max_memory_mb=int(os.getenv("AGENT_MAX_MEMORY_MB", "512")),
+    max_cpu_time_seconds=int(os.getenv("AGENT_MAX_CPU_TIME", "30")),
+    max_file_size_mb=int(os.getenv("AGENT_MAX_FILE_SIZE_MB", "50")),
+    max_processes=int(os.getenv("AGENT_MAX_PROCESSES", "10")),
 )
 
 
@@ -410,7 +411,8 @@ def _run_background(command: str, working_dir: str | None) -> str:
 
 def _run_install(package_name: str) -> str:
     """Install a Python package via pip."""
-    import requests
+    from urllib.error import URLError
+    from urllib.request import urlopen
 
     logger.info(f"Installing package: {package_name}")
 
@@ -419,12 +421,14 @@ def _run_install(package_name: str) -> str:
         return f"Error: Invalid package name: {error_msg}"
 
     try:
-        # Check if package exists on PyPI
-        check_url = f"https://pypi.org/pypi/{package_name}/json"
-        check_resp = requests.get(check_url, timeout=5)
-
-        if check_resp.status_code != 200:
-            return f"Error: Package '{package_name}' not found on PyPI."
+        # Check if package exists on PyPI (best-effort, skip on network error)
+        try:
+            check_url = f"https://pypi.org/pypi/{package_name}/json"
+            resp = urlopen(check_url, timeout=5)  # noqa: S310
+            if resp.status != 200:
+                return f"Error: Package '{package_name}' not found on PyPI."
+        except URLError:
+            logger.debug(f"PyPI check skipped for {package_name} (network unavailable)")
 
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", package_name],

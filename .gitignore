@@ -51,10 +51,8 @@ htmlcov/
 *.cover
 *.log
 
-# Doraemon Code specific
-.doraemon/chroma_db/
-.doraemon/memory.json
-.doraemon/tasks.json
+# Agent runtime state
+.agent/
 
 # Environment variables (contains API keys)
 .env

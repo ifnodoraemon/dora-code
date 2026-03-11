@@ -1,1 +1,1 @@
-"""MCP Servers for Doraemon Code."""
+"""MCP servers for the agent."""

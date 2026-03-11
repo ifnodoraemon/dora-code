@@ -225,7 +225,7 @@ def is_command_blocked(command: str, config: ShellConfig = DEFAULT_CONFIG) -> bo
     dangerous_patterns = [
         r">\s*/dev/sd",                    # Write to disk device
         r"\|\s*(bash|sh|zsh)\b",           # Pipe to shell
-        r"eval\s+",                        # eval execution
+        r"eval\s*[\s(]",                       # eval execution (with space or parens)
         r"exec\s+\d*[<>]",                 # exec redirection
         r"\$\([^)]*(?:rm|mkfs|dd|shred)",  # $() command substitution with dangerous cmds
         r"`[^`]*(?:rm|mkfs|dd|shred)",     # backtick substitution with dangerous cmds

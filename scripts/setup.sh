@@ -29,9 +29,9 @@ pip install --upgrade pip
 pip install -e ".[dev]"
 
 # 4. Initialize configuration directory
-if [ ! -d ".doraemon" ]; then
-    echo "Creating .doraemon directory..."
-    mkdir -p .doraemon
+if [ ! -d ".agent" ]; then
+    echo "Creating .agent directory..."
+    mkdir -p .agent
 fi
 
 # 5. Create basic folders

@@ -1,4 +1,4 @@
-# Doraemon Model Gateway
+# Model Gateway
 
 统一的 AI 模型网关，支持多家模型提供商。
 
@@ -9,7 +9,7 @@
 
 ```
 ┌─────────────────┐
-│  Doraemon CLI   │
+│   Agent CLI     │
 │  ┌───────────┐  │
 │  │ModelClient│──┼──► Google API (GOOGLE_API_KEY)
 │  │ (Direct)  │──┼──► OpenAI API (OPENAI_API_KEY)
@@ -24,7 +24,7 @@
 
 ```
 ┌─────────────────┐     ┌─────────────────────────────────┐
-│  Doraemon CLI   │     │       Model Gateway Server      │
+│   Agent CLI     │     │       Model Gateway Server      │
 │  ┌───────────┐  │     │  ┌─────────────────────────┐    │
 │  │ModelClient│──┼────►│  │  Provider Adapters      │    │
 │  │ (Gateway) │  │     │  │  ├─► Google (API Key)   │    │
@@ -40,8 +40,8 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        Doraemon CLI                                  │
-│          只需配置: DORAEMON_GATEWAY_URL + DORAEMON_API_KEY           │
+│                         Agent CLI                                    │
+│          只需配置: AGENT_GATEWAY_URL + AGENT_API_KEY                 │
 └─────────────────────────────────────────────────────────────────────┘
                                  │
                                  ▼
@@ -81,8 +81,8 @@ export OPENAI_API_KEY="your-openai-key"
 export ANTHROPIC_API_KEY="your-anthropic-key"
 export OLLAMA_ENABLED="true"
 
-# 可选：设置 Gateway 自己的 API Key
-export DORAEMON_GATEWAY_KEY="your-gateway-key"
+# 可选：设置 Gateway 的 API Key
+export AGENT_API_KEY="your-gateway-key"
 ```
 
 ### 3. 启动 Gateway Server
@@ -101,8 +101,8 @@ CLI 只需要两个配置：
 
 ```bash
 # .env 文件
-DORAEMON_GATEWAY_URL=http://localhost:8000
-DORAEMON_API_KEY=your-gateway-key
+AGENT_GATEWAY_URL=http://localhost:8000
+AGENT_API_KEY=your-gateway-key
 ```
 
 ## API 使用
@@ -191,7 +191,7 @@ Gateway 根据模型 ID 前缀自动路由：
 | `ANTHROPIC_API_KEY` | Anthropic API Key | - |
 | `OLLAMA_ENABLED` | 启用 Ollama | true |
 | `OLLAMA_API_BASE` | Ollama 地址 | http://localhost:11434 |
-| `DORAEMON_GATEWAY_KEY` | Gateway API Key | - |
+| `AGENT_API_KEY` | Gateway API Key | - |
 | `GATEWAY_HOST` | 监听地址 | 0.0.0.0 |
 | `GATEWAY_PORT` | 监听端口 | 8000 |
 
@@ -199,9 +199,9 @@ Gateway 根据模型 ID 前缀自动路由：
 
 | 变量 | 描述 | 默认值 |
 |------|------|--------|
-| `DORAEMON_GATEWAY_URL` | Gateway 地址 | http://localhost:8000 |
-| `DORAEMON_API_KEY` | Gateway API Key | - |
-| `DORAEMON_GATEWAY_TIMEOUT` | 请求超时(秒) | 120 |
+| `AGENT_GATEWAY_URL` | Gateway 地址 | http://localhost:8000 |
+| `AGENT_API_KEY` | Gateway API Key | - |
+| `AGENT_GATEWAY_TIMEOUT` | 请求超时(秒) | 120 |
 
 ## 扩展
 

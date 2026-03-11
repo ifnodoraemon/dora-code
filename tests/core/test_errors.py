@@ -13,8 +13,8 @@ from src.core.errors import (
     CircuitBreakerConfig,
     CircuitBreakerOpenError,
     CircuitState,
+    AgentError,
     ConfigurationError,
-    DoraemonException,
     ErrorCategory,
     ErrorHandler,
     RateLimitError,
@@ -32,12 +32,12 @@ class _CircuitBreakerError(Exception):
     pass
 
 
-class TestDoraemonExceptions:
+class TestAgentErrors:
     """Tests for custom exception classes"""
 
-    def test_doraemon_exception(self):
-        """Test base DoraemonException"""
-        exc = DoraemonException("Test error", ErrorCategory.NETWORK, {"key": "value"})
+    def test_agent_error(self):
+        """Test base AgentError"""
+        exc = AgentError("Test error", ErrorCategory.NETWORK, {"key": "value"})
 
         assert str(exc) == "Test error"
         assert exc.category == ErrorCategory.NETWORK
@@ -326,7 +326,7 @@ class TestErrorHandler:
     """Tests for ErrorHandler class"""
 
     def test_categorize_doraemon_exception(self):
-        """Test categorization of DoraemonException"""
+        """Test categorization of AgentError"""
         handler = ErrorHandler()
 
         transient = TransientError("temp")

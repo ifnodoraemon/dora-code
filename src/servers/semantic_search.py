@@ -15,25 +15,25 @@ from typing import Any
 import chromadb
 from mcp.server.fastmcp import FastMCP
 
-from src.core.paths import chroma_dir, state_dir
+from src.core.logger import configure_root_logger
 from src.core.security import validate_path
 from src.services.embeddings import RemoteEmbeddingFunction
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+configure_root_logger()
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("DoraemonSemanticSearch")
+mcp = FastMCP("AgentSemanticSearch")
 
 # ========================================
 # Configuration
 # ========================================
 
-PERSIST_DIR = str(chroma_dir())
+PERSIST_DIR = ".agent/chroma_db"
 COLLECTION_NAME = "codebase_index_remote"
 
 # Ensure directory exists
-state_dir().mkdir(parents=True, exist_ok=True)
+os.makedirs(".agent", exist_ok=True)
 
 # Initialize ChromaDB
 try:

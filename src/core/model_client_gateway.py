@@ -72,10 +72,10 @@ class GatewayModelClient(BaseModelClient):
         Raises:
             RateLimitError: When rate limited
             TransientError: When server error occurs
-            DoraemonException: For other API errors
+            AgentError: For other API errors
         """
         from src.core.errors import (
-            DoraemonException,
+            AgentError,
             ErrorCategory,
             RateLimitError,
             TransientError,
@@ -85,7 +85,7 @@ class GatewayModelClient(BaseModelClient):
         @retry(
             max_attempts=3,
             initial_delay=1.0,
-            max_delay=60.0,
+            max_delay=2.0,
             exceptions=(TransientError, RateLimitError),
         )
         async def _call():
@@ -118,7 +118,7 @@ class GatewayModelClient(BaseModelClient):
                         context={"endpoint": endpoint, "status": e.response.status_code},
                     ) from e
                 else:
-                    raise DoraemonException(
+                    raise AgentError(
                         f"API error: {e.response.status_code} - {e.response.text}",
                         category=ErrorCategory.PERMANENT,
                         context={"endpoint": endpoint, "status": e.response.status_code},

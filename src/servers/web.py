@@ -6,11 +6,13 @@ from duckduckgo_search import DDGS
 from duckduckgo_search.exceptions import DuckDuckGoSearchException
 from mcp.server.fastmcp import FastMCP
 
+from src.core.logger import configure_root_logger
+
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+configure_root_logger()
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("DoraemonWeb")
+mcp = FastMCP("AgentWeb")
 
 
 @mcp.tool()

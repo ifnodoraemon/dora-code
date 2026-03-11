@@ -2,7 +2,7 @@
 import pytest
 import asyncio
 from src.core.errors import (
-    ErrorCategory, ErrorInfo, DoraemonException,
+    AgentError, ErrorCategory, ErrorInfo,
     ConfigurationError, TransientError, RateLimitError,
     RetryConfig, RetryPolicy, retry
 )
@@ -32,9 +32,9 @@ class TestErrorCategories:
 class TestCustomExceptions:
     """Tests for custom exceptions."""
 
-    def test_doraemon_exception(self):
-        """Test DoraemonException."""
-        exc = DoraemonException("Test", category=ErrorCategory.PERMANENT)
+    def test_agent_error(self):
+        """Test AgentError."""
+        exc = AgentError("Test", category=ErrorCategory.PERMANENT)
         assert exc.message == "Test"
         assert exc.category == ErrorCategory.PERMANENT
 

@@ -69,7 +69,7 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="Doraemon Model Gateway",
+    title="Model Gateway",
     description="Unified API for multiple AI model providers",
     version="1.0.0",
     lifespan=lifespan,
@@ -77,7 +77,7 @@ app = FastAPI(
 
 # CORS middleware - restrict to configured origins
 ALLOWED_ORIGINS = os.getenv(
-    "DORAEMON_CORS_ORIGINS",
+    "AGENT_CORS_ORIGINS",
     "http://localhost:5173,http://localhost:8000,http://127.0.0.1:5173,http://127.0.0.1:8000",
 ).split(",")
 
@@ -90,7 +90,7 @@ app.add_middleware(
 )
 
 # Request body size limit (default 10 MB)
-MAX_REQUEST_BODY_BYTES = int(os.getenv("DORAEMON_MAX_REQUEST_BYTES", str(10 * 1024 * 1024)))
+MAX_REQUEST_BODY_BYTES = int(os.getenv("AGENT_MAX_REQUEST_BYTES", str(10 * 1024 * 1024)))
 
 
 @app.middleware("http")
@@ -123,7 +123,7 @@ async def limit_request_body(request: Request, call_next):
     return await call_next(request)
 
 # Gateway API key (optional)
-GATEWAY_API_KEY = os.getenv("DORAEMON_GATEWAY_KEY")
+GATEWAY_API_KEY = os.getenv("AGENT_API_KEY")
 
 
 def verify_api_key(authorization: str | None) -> bool:
@@ -389,10 +389,10 @@ def main():
     """Run the gateway server."""
     import uvicorn
 
-    host = os.getenv("DORAEMON_GATEWAY_HOST", "0.0.0.0")
-    port = int(os.getenv("DORAEMON_GATEWAY_PORT", "8000"))
+    host = os.getenv("AGENT_GATEWAY_HOST", "0.0.0.0")
+    port = int(os.getenv("AGENT_GATEWAY_PORT", "8000"))
 
-    print(f"Starting Doraemon Model Gateway on {host}:{port}")
+    print(f"Starting Model Gateway on {host}:{port}")
     uvicorn.run(app, host=host, port=port)
 
 

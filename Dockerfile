@@ -22,8 +22,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY src/ ./src/
 
-# Create directory for doraemon data
-RUN mkdir -p /root/.doraemon
+# Create directory for agent data
+RUN mkdir -p /app/.agent
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

@@ -118,6 +118,8 @@ class LayeredMemory:
         organization_id: str | None = None,
         project_id: str | None = None,
         user_id: str | None = None,
+        layer_paths: dict[MemoryLayer, Path] | None = None,
+        simple_layers: set[MemoryLayer] | None = None,
     ):
         """
         Initialize layered memory.
@@ -134,6 +136,8 @@ class LayeredMemory:
         self._organization_id = organization_id
         self._project_id = project_id
         self._user_id = user_id
+        self._layer_paths = layer_paths or {}
+        self._simple_layers = simple_layers or set()
 
         # Memory storage per layer
         self._memory: dict[MemoryLayer, dict[str, MemoryEntry]] = {
@@ -334,6 +338,8 @@ class LayeredMemory:
 
     def _get_layer_path(self, layer: MemoryLayer) -> Path:
         """Get storage path for a layer."""
+        if layer in self._layer_paths:
+            return self._layer_paths[layer]
         if layer == MemoryLayer.GLOBAL:
             return self._storage_dir / "global.json"
         elif layer == MemoryLayer.ORGANIZATION:
@@ -354,14 +360,25 @@ class LayeredMemory:
             return  # Don't persist session
 
         path = self._get_layer_path(layer)
-        data = {
-            k: v.to_dict()
-            for k, v in self._memory[layer].items()
-            if not v.is_expired()
-        }
+        if layer in self._simple_layers:
+            data = {
+                k: v.value
+                for k, v in self._memory[layer].items()
+                if not v.is_expired()
+            }
+        else:
+            data = {
+                k: v.to_dict()
+                for k, v in self._memory[layer].items()
+                if not v.is_expired()
+            }
 
         try:
-            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(data, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
         except Exception as e:
             logger.error(f"Failed to save memory layer {layer.value}: {e}")
 
@@ -377,7 +394,17 @@ class LayeredMemory:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             for key, entry_data in data.items():
-                entry = MemoryEntry.from_dict(entry_data)
+                if isinstance(entry_data, dict) and "layer" in entry_data:
+                    entry = MemoryEntry.from_dict(entry_data)
+                else:
+                    now = time.time()
+                    entry = MemoryEntry(
+                        key=key,
+                        value=entry_data,
+                        layer=layer,
+                        created_at=now,
+                        updated_at=now,
+                    )
                 if not entry.is_expired():
                     self._memory[layer][key] = entry
         except Exception as e:

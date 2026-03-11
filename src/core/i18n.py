@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 BUILTIN_TRANSLATIONS = {
     "en": {
         # General
-        "welcome": "Welcome to Doraemon!",
+        "welcome": "Welcome to the agent!",
         "goodbye": "Goodbye!",
         "yes": "Yes",
         "no": "No",
@@ -111,7 +111,7 @@ BUILTIN_TRANSLATIONS = {
 
     "zh": {
         # 通用
-        "welcome": "欢迎使用 Doraemon！",
+        "welcome": "欢迎使用智能体！",
         "goodbye": "再见！",
         "yes": "是",
         "no": "否",
@@ -196,7 +196,7 @@ BUILTIN_TRANSLATIONS = {
 
     "ja": {
         # 一般
-        "welcome": "Doraemonへようこそ！",
+        "welcome": "エージェントへようこそ！",
         "goodbye": "さようなら！",
         "yes": "はい",
         "no": "いいえ",
@@ -275,7 +275,7 @@ class I18n:
     def _detect_locale(self):
         """Detect system locale."""
         # Check environment variable
-        lang = os.getenv("DORAEMON_LANG") or os.getenv("LANG") or os.getenv("LANGUAGE")
+        lang = os.getenv("AGENT_LANG") or os.getenv("LANG") or os.getenv("LANGUAGE")
 
         if lang:
             # Extract language code (e.g., "en_US.UTF-8" -> "en")

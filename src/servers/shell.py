@@ -22,6 +22,7 @@ import time
 
 from mcp.server.fastmcp import FastMCP
 
+from src.core.logger import configure_root_logger
 from src.core.security import validate_path
 from src.core.shell_security import (
     DEFAULT_CONFIG,
@@ -39,10 +40,10 @@ from src.core.shell_security import (
 from src.core.subprocess_utils import prepare_safe_env
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+configure_root_logger()
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("DoraemonShell")
+mcp = FastMCP("AgentShell")
 
 # ========================================
 # Backward-compatible aliases (used by tests)

@@ -218,21 +218,23 @@ class DirectModelClient(BaseModelClient):
 
     def _detect_provider(self, model: str) -> Provider:
         """Detect provider from model name."""
-        matched_provider = None
+        if not self._providers:
+            raise RuntimeError("No providers available. Check your API keys.")
+
         for provider, patterns in self.PROVIDER_PATTERNS.items():
             for pattern in patterns:
                 if model.startswith(pattern):
                     if provider in self._providers:
                         return provider
-                    matched_provider = provider
-        if matched_provider is not None:
-            raise RuntimeError(
-                f"Model '{model}' matched provider '{matched_provider.value}' "
-                f"but it is not configured. Check your API keys."
-            )
+                    logger.warning(
+                        "Model '%s' matched provider '%s' but it is not configured; "
+                        "falling back to the first available provider.",
+                        model,
+                        provider.value,
+                    )
+                    return next(iter(self._providers.keys()))
+
         # Default to first available
-        if not self._providers:
-            raise RuntimeError("No providers available. Check your API keys.")
         return next(iter(self._providers.keys()))
 
     async def chat(

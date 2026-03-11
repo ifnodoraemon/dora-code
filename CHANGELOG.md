@@ -136,7 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Configuration Changes**:
 - `.env` format updated (see `.env.example`)
 - Added `DORAEMON_GATEWAY_URL` for gateway mode
-- New permission rules in `.doraemon/config.json`
+- New permission rules in `.agent/config.json`
 
 ## Future Roadmap
 

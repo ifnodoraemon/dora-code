@@ -84,7 +84,7 @@ def sample_plugin_manifest():
                 "description": "Test agent",
             }
         ],
-        doraemon_version=">=0.6.0",
+        agent_version=">=0.6.0",
         dependencies=["requests>=2.0.0"],
     )
 
@@ -275,9 +275,9 @@ class TestPluginDependencies:
         """Test plugin manifest stores dependencies."""
         assert "requests>=2.0.0" in sample_plugin_manifest.dependencies
 
-    def test_plugin_manifest_doraemon_version(self, sample_plugin_manifest):
-        """Test plugin manifest stores doraemon version requirement."""
-        assert sample_plugin_manifest.doraemon_version == ">=0.6.0"
+    def test_plugin_manifest_agent_version(self, sample_plugin_manifest):
+        """Test plugin manifest stores agent version requirement."""
+        assert sample_plugin_manifest.agent_version == ">=0.6.0"
 
     def test_plugin_manifest_to_dict(self, sample_plugin_manifest):
         """Test converting manifest to dictionary."""
@@ -293,7 +293,7 @@ class TestPluginDependencies:
             "version": "1.0.0",
             "description": "Test",
             "dependencies": ["requests>=2.0.0"],
-            "doraemon_version": ">=0.6.0",
+            "agent_version": ">=0.6.0",
         }
         manifest = PluginManifest.from_dict(data)
         assert manifest.name == "test-plugin"

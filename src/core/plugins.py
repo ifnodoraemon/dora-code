@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 class PluginScope(Enum):
     """Plugin installation scope."""
 
-    USER = "user"  # Legacy alias for project plugins
+    USER = "user"  # Shared user-level plugins
     PROJECT = "project"  # .agent/plugins
     LOCAL = "local"  # .agent/plugins.local (not committed)
 
@@ -55,7 +55,7 @@ class PluginManifest:
     agents: list[dict[str, Any]] = field(default_factory=list)
 
     # Requirements
-    doraemon_version: str = ">=0.6.0"
+    agent_version: str = ">=0.6.0"
     dependencies: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -70,7 +70,7 @@ class PluginManifest:
             "tools": self.tools,
             "hooks": self.hooks,
             "agents": self.agents,
-            "doraemon_version": self.doraemon_version,
+            "agent_version": self.agent_version,
             "dependencies": self.dependencies,
         }
 
@@ -87,7 +87,7 @@ class PluginManifest:
             tools=data.get("tools", []),
             hooks=data.get("hooks", {}),
             agents=data.get("agents", []),
-            doraemon_version=data.get("doraemon_version", ">=0.6.0"),
+            agent_version=data.get("agent_version", ">=0.6.0"),
             dependencies=data.get("dependencies", []),
         )
 
@@ -160,12 +160,13 @@ class PluginManager:
         self.project_dir = project_dir or Path.cwd()
 
         # Plugin directories
-        self._user_dir = self.project_dir / ".agent" / "plugins"
+        self._user_dir = self.project_dir / ".agent" / "plugins.user"
         self._project_dir = self.project_dir / ".agent" / "plugins"
         self._local_dir = self.project_dir / ".agent" / "plugins.local"
 
         # Ensure directories exist
         self._user_dir.mkdir(parents=True, exist_ok=True)
+        self._project_dir.mkdir(parents=True, exist_ok=True)
 
         # Loaded plugins
         self._plugins: dict[str, InstalledPlugin] = {}
@@ -187,6 +188,11 @@ class PluginManager:
         # Project
         if self._project_dir.exists() and self._project_dir.resolve() not in seen:
             dirs.append((self._project_dir, PluginScope.PROJECT))
+            seen.add(self._project_dir.resolve())
+
+        # User (lowest precedence)
+        if self._user_dir.exists() and self._user_dir.resolve() not in seen:
+            dirs.append((self._user_dir, PluginScope.USER))
 
         return dirs
 
@@ -291,7 +297,9 @@ class PluginManager:
             Installed plugin or None if failed
         """
         # Determine target directory
-        if scope in (PluginScope.USER, PluginScope.PROJECT):
+        if scope == PluginScope.USER:
+            target_base = self._user_dir
+        elif scope == PluginScope.PROJECT:
             target_base = self._project_dir
         else:
             target_base = self._local_dir
@@ -425,6 +433,8 @@ class PluginManager:
         """Get scope for a plugin path."""
         if path == self._local_dir:
             return PluginScope.LOCAL
+        if path == self._user_dir:
+            return PluginScope.USER
         return PluginScope.PROJECT
 
     def uninstall(self, name: str) -> bool:

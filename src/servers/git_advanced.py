@@ -12,15 +12,16 @@ import re
 
 from mcp.server.fastmcp import FastMCP
 
+from src.core.logger import configure_root_logger
 from src.core.security import validate_path
 from src.servers.git_common import check_ref, require_repo
 from src.servers.git_common import run_gh_command as _run_gh_command
 from src.servers.git_common import run_git_command as _run_git_command
 
-logging.basicConfig(level=logging.INFO)
+configure_root_logger()
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("DoraemonGitAdvanced")
+mcp = FastMCP("AgentGitAdvanced")
 
 
 # ========================================

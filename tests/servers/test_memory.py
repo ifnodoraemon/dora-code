@@ -19,10 +19,13 @@ import pytest
 
 # Import the memory server functions
 from src.servers.memory import (
+    delete_note,
+    get_note,
+    get_note_file_path,
+    get_user_persona,
     save_note,
     search_notes,
     update_user_persona,
-    get_user_persona,
 )
 
 
@@ -142,19 +145,21 @@ class TestSaveNote:
         assert metadata["project"] == "my_project"
 
     @patch("src.servers.memory.collection", None)
-    def test_save_note_collection_not_initialized(self):
-        """Test saving a note when collection is not initialized."""
+    def test_save_note_without_vector_index_still_persists_file(self, temp_memory_dir):
+        """Test saving a note still works when vector indexing is unavailable."""
         result = save_note(
             title="Test",
             content="Content",
             collection_name="default"
         )
 
-        assert "not initialized" in result.lower()
+        assert "saved" in result.lower()
+        note_file = os.path.join(temp_memory_dir, ".agent", "memory", "notes", "default", "test.md")
+        assert os.path.exists(note_file)
 
     @patch("src.servers.memory.collection")
     def test_save_note_with_exception(self, mock_collection):
-        """Test saving a note when an exception occurs."""
+        """Test saving a note still succeeds when vector sync fails."""
         mock_collection.add.side_effect = Exception("Database error")
 
         result = save_note(
@@ -163,8 +168,7 @@ class TestSaveNote:
             collection_name="default"
         )
 
-        assert "失败" in result or "failed" in result.lower()
-        assert "Database error" in result
+        assert "已保存" in result or "saved" in result.lower()
 
     @patch("src.servers.memory.collection")
     def test_save_note_empty_tags(self, mock_collection):
@@ -254,6 +258,24 @@ class TestSaveNote:
         assert note_id.startswith("project1_Test_")
         # ID should include hash of content
         assert len(note_id) > len("project1_Test_")
+
+    @patch("src.servers.memory.collection", None)
+    def test_save_note_slug_collision_uses_distinct_files(self, temp_memory_dir):
+        """Test notes with colliding slugs do not overwrite each other."""
+        first = save_note(title="A/B", content="first", collection_name="default")
+        second = save_note(title="A B", content="second", collection_name="default")
+
+        assert "saved" in first.lower()
+        assert "saved" in second.lower()
+
+        notes_dir = os.path.join(temp_memory_dir, ".agent", "memory", "notes", "default")
+        saved_files = sorted(os.listdir(notes_dir))
+        assert len(saved_files) == 2
+        assert "a-b.md" in saved_files
+        assert any(name.startswith("a-b-") and name.endswith(".md") for name in saved_files)
+
+        assert "first" in get_note("A/B", collection_name="default")
+        assert "second" in get_note("A B", collection_name="default")
 
 
 # ========================================
@@ -353,7 +375,7 @@ class TestSearchNotes:
 
     @patch("src.servers.memory.collection")
     def test_search_notes_exception(self, mock_collection):
-        """Test searching when an exception occurs."""
+        """Test searching degrades gracefully when vector query fails."""
         mock_collection.query.side_effect = Exception("Query error")
 
         result = search_notes(
@@ -361,18 +383,38 @@ class TestSearchNotes:
             collection_name="default"
         )
 
-        assert "失败" in result or "failed" in result.lower()
-        assert "Query error" in result
+        assert "not found" in result.lower()
 
     @patch("src.servers.memory.collection", None)
-    def test_search_notes_collection_not_initialized(self):
-        """Test searching when collection is not initialized."""
-        result = search_notes(
-            query="search",
+    def test_search_notes_without_vector_index_uses_files(self, temp_memory_dir):
+        """Test searching falls back to persisted note files without vectors."""
+        save_note(
+            title="Searchable",
+            content="search fallback content",
             collection_name="default"
         )
 
-        assert "not initialized" in result.lower()
+        result = search_notes(
+            query="fallback",
+            collection_name="default"
+        )
+
+        assert "Searchable" in result
+        assert "fallback content" in result
+
+    @patch("src.servers.memory.collection")
+    def test_search_notes_prefers_file_content_over_stale_vector(self, mock_collection, temp_memory_dir):
+        """Test search uses file-backed content when vector content is stale."""
+        save_note(title="Release Plan", content="updated file content", collection_name="default")
+        mock_collection.query.return_value = {
+            "documents": [["outdated vector content"]],
+            "metadatas": [[{"title": "Release Plan", "tags": "", "project": "default"}]],
+        }
+
+        result = search_notes(query="release", collection_name="default")
+
+        assert "updated file content" in result
+        assert "outdated vector content" not in result
 
     @patch("src.servers.memory.collection")
     def test_search_notes_multiple_results(self, mock_collection):
@@ -657,6 +699,35 @@ class TestGetUserPersona:
         assert isinstance(result, str)
         assert "key" in result
         assert "value" in result
+
+
+class TestGetAndDeleteNote:
+    """Tests for note helpers that resolve exact titles."""
+
+    @patch("src.servers.memory.collection", None)
+    def test_get_note_file_path_resolves_exact_title_collision(self, temp_memory_dir):
+        """Test file path lookup returns the exact note path when slugs collide."""
+        save_note(title="A/B", content="first", collection_name="default")
+        save_note(title="A B", content="second", collection_name="default")
+
+        first_path = get_note_file_path("A/B", collection_name="default")
+        second_path = get_note_file_path("A B", collection_name="default")
+
+        assert first_path != second_path
+        assert first_path.endswith("a-b.md")
+        assert os.path.basename(second_path).startswith("a-b-")
+
+    @patch("src.servers.memory.collection", None)
+    def test_delete_note_uses_exact_title_when_slugs_collide(self, temp_memory_dir):
+        """Test deleting one colliding title does not remove the other."""
+        save_note(title="A/B", content="first", collection_name="default")
+        save_note(title="A B", content="second", collection_name="default")
+
+        result = delete_note("A/B", collection_name="default")
+
+        assert "deleted" in result.lower()
+        assert "not found" in get_note("A/B", collection_name="default").lower()
+        assert "second" in get_note("A B", collection_name="default")
 
 
 # ========================================
