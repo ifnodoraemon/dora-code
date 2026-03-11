@@ -5,12 +5,12 @@ Handles initialization of all managers and components needed for the chat loop.
 Extracted from main.py for better maintainability.
 """
 
-import os
 from pathlib import Path
 
 from src.core.background_tasks import get_task_manager
 from src.core.checkpoint import CheckpointConfig, CheckpointManager
 from src.core.command_history import BashModeExecutor, CommandHistory
+from src.core.config import get_optional_config_value, get_required_config_value
 from src.core.context_manager import ContextConfig, ContextManager, get_context_window_for_model
 from src.core.cost_tracker import BudgetConfig, CostTracker
 from src.core.hooks import HookManager
@@ -40,7 +40,7 @@ def initialize_tool_selector() -> ToolSelector:
 
 def initialize_context_manager(project: str) -> ContextManager:
     """Initialize the context manager with model-aware context window."""
-    model_name = os.getenv("DORAEMON_MODEL", "gemini-3-pro-preview")
+    model_name = get_required_config_value("model")
     max_tokens = get_context_window_for_model(model_name)
 
     ctx_config = ContextConfig(
@@ -86,8 +86,8 @@ def initialize_hook_manager(ctx: ContextManager) -> HookManager:
 def initialize_cost_tracker(project: str, ctx: ContextManager) -> CostTracker:
     """Initialize the cost tracker."""
     budget_config = BudgetConfig(
-        daily_limit_usd=float(os.getenv("DORAEMON_DAILY_BUDGET", "0")) or None,
-        session_limit_usd=float(os.getenv("DORAEMON_SESSION_BUDGET", "0")) or None,
+        daily_limit_usd=get_optional_config_value("daily_budget_usd"),
+        session_limit_usd=get_optional_config_value("session_budget_usd"),
     )
     return CostTracker(
         project=project,

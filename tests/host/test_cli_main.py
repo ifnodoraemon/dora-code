@@ -439,7 +439,7 @@ def _chat_loop_patches(
     # Mock load_config (called by build_system_prompt)
     patches["load_config"] = patch(
         "src.host.cli.chat_loop.load_config",
-        return_value={"persona": {}},
+        return_value={"model": "test-model", "persona": {}},
     )
 
     # Mock get_system_prompt (called by build_system_prompt)
@@ -553,7 +553,7 @@ class TestChatLoopInitialization:
             mock_console = mocks["console"]
             mock_console.print.assert_called()
             calls = [str(c) for c in mock_console.print.call_args_list]
-            assert any("DORAEMON_GATEWAY_URL" in str(c) for c in calls)
+            assert any("gateway_url" in str(c) for c in calls)
 
     async def test_chat_loop_model_client_creation_failure(self):
         """Test chat loop handles model client creation failure."""

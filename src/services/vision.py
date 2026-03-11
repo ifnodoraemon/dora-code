@@ -1,11 +1,12 @@
 import base64
 import logging
-import os
 from abc import ABC, abstractmethod
 
 from google import genai
 from google.genai import types
 from openai import OpenAI
+
+from src.core.config import load_config
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -24,14 +25,18 @@ class GoogleAdapter(VisionAdapter):
     """Google Gemini Vision adapter."""
 
     def __init__(self):
-        api_key = os.getenv("GOOGLE_API_KEY")
+        config = load_config(validate=False)
+        api_key = config.get("google_api_key")
         self.client = genai.Client(api_key=api_key) if api_key else None
-        self.model_name = os.getenv("VISION_MODEL", "gemini-2.0-flash")
+        self.model_name = config.get("model")
 
     def process(self, image_path: str, prompt: str) -> str:
         if not self.client:
             logger.warning("GOOGLE_API_KEY not set, cannot process image")
             return "[Error: GOOGLE_API_KEY not set]"
+        if not self.model_name:
+            logger.warning("No Google vision model configured")
+            return "[Error: No Google vision model configured in .agent/config.json]"
         try:
             # Read image as bytes
             with open(image_path, "rb") as f:
@@ -76,9 +81,10 @@ class OpenAIAdapter(VisionAdapter):
     """OpenAI GPT-4 Vision adapter."""
 
     def __init__(self):
-        api_key = os.getenv("OPENAI_API_KEY")
+        config = load_config(validate=False)
+        api_key = config.get("openai_api_key")
         self.client = OpenAI(api_key=api_key) if api_key else None
-        self.model_name = os.getenv("OPENAI_VISION_MODEL", "gpt-4o")
+        self.model_name = config.get("model")
 
     def _encode_image(self, image_path: str) -> str:
         """Encode image to base64."""
@@ -101,6 +107,9 @@ class OpenAIAdapter(VisionAdapter):
         if not self.client:
             logger.warning("OPENAI_API_KEY not set, cannot process image")
             return "[Error: OPENAI_API_KEY not set]"
+        if not self.model_name:
+            logger.warning("No OpenAI vision model configured")
+            return "[Error: No OpenAI vision model configured in .agent/config.json]"
         try:
             base64_image = self._encode_image(image_path)
             response = self.client.chat.completions.create(
@@ -132,7 +141,13 @@ class OpenAIAdapter(VisionAdapter):
 
 
 def get_vision_adapter() -> VisionAdapter:
-    provider = os.getenv("VISION_PROVIDER", "google").lower()
+    config = load_config(validate=False)
+    provider = "google"
+    model_name = (config.get("model") or "").lower()
+    if model_name.startswith(("gpt-", "o1", "o3", "o4")):
+        provider = "openai"
+    elif config.get("openai_api_key") and not config.get("google_api_key"):
+        provider = "openai"
     if provider == "openai":
         return OpenAIAdapter()
     return GoogleAdapter()

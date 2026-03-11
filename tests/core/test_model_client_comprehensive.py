@@ -268,7 +268,7 @@ class TestClientConfig:
         """Test default ClientConfig values."""
         config = ClientConfig()
         assert config.mode == ClientMode.DIRECT
-        assert config.model == "gemini-2.5-flash-preview"
+        assert config.model is None
         assert config.temperature == 0.7
         assert config.max_tokens is None
         assert config.system_prompt is None
@@ -289,12 +289,12 @@ class TestClientConfig:
         assert config.system_prompt == "You are helpful"
 
     def test_client_config_from_env_gateway_mode(self):
-        """Test loading config from environment in gateway mode."""
-        with patch.dict(os.environ, {
-            "DORAEMON_GATEWAY_URL": "http://localhost:8000",
-            "DORAEMON_API_KEY": "test_key",
-            "DORAEMON_MODEL": "gpt-4",
-        }, clear=True):
+        """Test loading config from project config in gateway mode."""
+        with patch("src.core.config.load_config", return_value={
+            "model": "gpt-4",
+            "gateway_url": "http://localhost:8000",
+            "gateway_key": "test_key",
+        }):
             config = ClientConfig.from_env()
             assert config.mode == ClientMode.GATEWAY
             assert config.gateway_url == "http://localhost:8000"
@@ -302,13 +302,13 @@ class TestClientConfig:
             assert config.model == "gpt-4"
 
     def test_client_config_from_env_direct_mode(self):
-        """Test loading config from environment in direct mode."""
-        with patch.dict(os.environ, {
-            "GOOGLE_API_KEY": "google_key",
-            "OPENAI_API_KEY": "openai_key",
-            "ANTHROPIC_API_KEY": "anthropic_key",
-            "DORAEMON_MODEL": "gemini-2.5-flash",
-        }, clear=True):
+        """Test loading config from project config in direct mode."""
+        with patch("src.core.config.load_config", return_value={
+            "model": "gemini-2.5-flash",
+            "google_api_key": "google_key",
+            "openai_api_key": "openai_key",
+            "anthropic_api_key": "anthropic_key",
+        }):
             config = ClientConfig.from_env()
             assert config.mode == ClientMode.DIRECT
             assert config.google_api_key == "google_key"
@@ -317,24 +317,23 @@ class TestClientConfig:
             assert config.model == "gemini-2.5-flash"
 
     def test_client_config_from_env_no_env_vars(self):
-        """Test loading config with no environment variables."""
-        with patch.dict(os.environ, {}, clear=True):
-            config = ClientConfig.from_env()
-            assert config.mode == ClientMode.DIRECT
-            assert config.gateway_url is None
-            assert config.google_api_key is None
+        """Test loading config fails when model is missing."""
+        with patch("src.core.config.load_config", return_value={}):
+            with pytest.raises(ValueError, match="required 'model'"):
+                ClientConfig.from_env()
 
     def test_client_config_from_env_ollama_base_url(self):
-        """Test loading Ollama base URL from environment."""
-        with patch.dict(os.environ, {
-            "OLLAMA_API_BASE": "http://custom:11434",
-        }, clear=True):
+        """Test loading Ollama base URL from project config."""
+        with patch("src.core.config.load_config", return_value={
+            "model": "llama2",
+            "ollama_base_url": "http://custom:11434",
+        }):
             config = ClientConfig.from_env()
             assert config.ollama_base_url == "http://custom:11434"
 
     def test_client_config_from_env_ollama_default(self):
         """Test default Ollama base URL."""
-        with patch.dict(os.environ, {}, clear=True):
+        with patch("src.core.config.load_config", return_value={"model": "llama2"}):
             config = ClientConfig.from_env()
             assert config.ollama_base_url == "http://localhost:11434"
 
@@ -1073,7 +1072,7 @@ class TestGatewayModelClientAPICall:
         )
         client = GatewayModelClient(config)
 
-        from src.core.errors import DoraemonException
+        from src.core.errors import AgentError
         import httpx
 
         mock_http_response = MagicMock()
@@ -1084,7 +1083,7 @@ class TestGatewayModelClientAPICall:
         mock_http_client.post = AsyncMock(side_effect=httpx.HTTPStatusError("400", request=MagicMock(), response=mock_http_response))
         client._client = mock_http_client
 
-        with pytest.raises(DoraemonException):
+        with pytest.raises(AgentError):
             await client._make_api_call("/test", {})
 
     @pytest.mark.asyncio
@@ -1547,10 +1546,11 @@ class TestModelClientFactory:
 
     @pytest.mark.asyncio
     async def test_model_client_create_from_env(self):
-        """Test creating client from environment."""
-        with patch.dict(os.environ, {
-            "DORAEMON_GATEWAY_URL": "http://localhost:8000"
-        }, clear=True):
+        """Test creating client from project config."""
+        with patch("src.core.config.load_config", return_value={
+            "model": "gpt-4o",
+            "gateway_url": "http://localhost:8000",
+        }):
             with patch.object(GatewayModelClient, "connect", new_callable=AsyncMock):
                 client = await ModelClient.create()
                 assert isinstance(client, GatewayModelClient)
@@ -1569,24 +1569,26 @@ class TestModelClientFactory:
 
     def test_model_client_get_mode_gateway(self):
         """Test get_mode returns gateway mode."""
-        with patch.dict(os.environ, {
-            "DORAEMON_GATEWAY_URL": "http://localhost:8000"
-        }, clear=True):
+        with patch("src.core.config.load_config", return_value={
+            "model": "gpt-4o",
+            "gateway_url": "http://localhost:8000",
+        }):
             mode = ModelClient.get_mode()
             assert mode == ClientMode.GATEWAY
 
     def test_model_client_get_mode_direct(self):
         """Test get_mode returns direct mode."""
-        with patch.dict(os.environ, {}, clear=True):
+        with patch("src.core.config.load_config", return_value={"model": "gemini-2.5-flash"}):
             mode = ModelClient.get_mode()
             assert mode == ClientMode.DIRECT
 
     def test_model_client_get_mode_info_gateway(self):
         """Test get_mode_info for gateway mode."""
-        with patch.dict(os.environ, {
-            "DORAEMON_GATEWAY_URL": "http://localhost:8000",
-            "DORAEMON_API_KEY": "test_key"
-        }, clear=True):
+        with patch("src.core.config.load_config", return_value={
+            "model": "gpt-4o",
+            "gateway_url": "http://localhost:8000",
+            "gateway_key": "test_key",
+        }):
             info = ModelClient.get_mode_info()
             assert info["mode"] == "gateway"
             assert info["gateway_url"] == "http://localhost:8000"
@@ -1594,10 +1596,11 @@ class TestModelClientFactory:
 
     def test_model_client_get_mode_info_direct(self):
         """Test get_mode_info for direct mode."""
-        with patch.dict(os.environ, {
-            "GOOGLE_API_KEY": "google_key",
-            "OPENAI_API_KEY": "openai_key"
-        }, clear=True):
+        with patch("src.core.config.load_config", return_value={
+            "model": "gemini-2.5-flash",
+            "google_api_key": "google_key",
+            "openai_api_key": "openai_key",
+        }):
             info = ModelClient.get_mode_info()
             assert info["mode"] == "direct"
             assert "providers" in info
@@ -1606,14 +1609,14 @@ class TestModelClientFactory:
 
     def test_model_client_get_mode_info_no_keys(self):
         """Test get_mode_info with no API keys."""
-        with patch.dict(os.environ, {}, clear=True):
+        with patch("src.core.config.load_config", return_value={"model": "test-model"}):
             info = ModelClient.get_mode_info()
             assert info["mode"] == "direct"
             assert all(not v for k, v in info["providers"].items() if k != "ollama")
 
     def test_model_client_get_mode_info_ollama_always_true(self):
         """Test that Ollama is always available in mode info."""
-        with patch.dict(os.environ, {}, clear=True):
+        with patch("src.core.config.load_config", return_value={"model": "test-model"}):
             info = ModelClient.get_mode_info()
             assert info["providers"]["ollama"] is True
 
@@ -1831,4 +1834,3 @@ class TestEdgeCasesAndIntegration:
         assert restored.id == original.id
         assert restored.name == original.name
         assert restored.arguments == original.arguments
-

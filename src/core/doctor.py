@@ -22,6 +22,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from src.core.config import load_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -120,7 +122,7 @@ class Doctor:
                 name="Python Version",
                 status=CheckStatus.ERROR,
                 message=f"Python {version_str} is too old",
-                details="Doraemon requires Python 3.10 or higher",
+                details="The agent requires Python 3.10 or higher",
                 fix_suggestion="Upgrade Python to 3.10+",
             )
 
@@ -131,33 +133,47 @@ class Doctor:
         )
 
     def check_api_key(self) -> CheckResult:
-        """Check Google API key configuration."""
-        api_key = os.getenv("GOOGLE_API_KEY")
+        """Check model credentials from project config."""
+        config = load_config(validate=False)
+        gateway_url = config.get("gateway_url")
+        gateway_key = config.get("gateway_key")
+        provider_keys = {
+            "google_api_key": config.get("google_api_key"),
+            "openai_api_key": config.get("openai_api_key"),
+            "anthropic_api_key": config.get("anthropic_api_key"),
+        }
 
-        if not api_key:
+        if gateway_url:
+            if not gateway_key:
+                return CheckResult(
+                    name="Model Credentials",
+                    status=CheckStatus.ERROR,
+                    message="gateway_url is set but gateway_key is missing",
+                    details="Gateway mode requires both gateway_url and gateway_key",
+                    fix_suggestion="Set gateway_key in .agent/config.json",
+                )
+
             return CheckResult(
-                name="API Key",
-                status=CheckStatus.ERROR,
-                message="GOOGLE_API_KEY not set",
-                details="No API key found in environment",
-                fix_suggestion="Set GOOGLE_API_KEY in .env file or environment",
+                name="Model Credentials",
+                status=CheckStatus.OK,
+                message="Gateway credentials configured",
+                details=f"Gateway: {gateway_url}",
             )
 
-        # Basic validation
-        if len(api_key) < 20:
+        configured = [name for name, value in provider_keys.items() if value]
+        if not configured:
             return CheckResult(
-                name="API Key",
-                status=CheckStatus.WARNING,
-                message="API key appears invalid",
-                details="Key is shorter than expected",
-                fix_suggestion="Verify your API key is correct",
+                name="Model Credentials",
+                status=CheckStatus.ERROR,
+                message="No model credentials configured",
+                details="No provider keys found in .agent/config.json",
+                fix_suggestion="Set google_api_key, openai_api_key, or anthropic_api_key in .agent/config.json",
             )
 
         return CheckResult(
-            name="API Key",
+            name="Model Credentials",
             status=CheckStatus.OK,
-            message="API key configured",
-            details=f"Key: {api_key[:8]}...{api_key[-4:]}",
+            message=f"Configured: {', '.join(configured)}",
         )
 
     def check_dependencies(self) -> CheckResult:
@@ -270,7 +286,6 @@ class Doctor:
         config_paths = [
             self.project_dir / ".agent" / "config.json",
             self.project_dir / "AGENTS.md",
-            self.project_dir / ".env",
         ]
 
         found = []

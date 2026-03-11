@@ -1,7 +1,7 @@
 """
-Doraemon Code CLI - Main Entry Point
+Code Agent CLI - Main Entry Point
 
-Provides the primary interactive interface for Doraemon Code AI agent.
+Provides the primary interactive interface for the code agent.
 Features:
 - Multi-mode support (plan/build)
 - HITL (Human-in-the-loop) approval for sensitive operations
@@ -20,7 +20,6 @@ Features:
 
 import asyncio
 import logging
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -30,7 +29,10 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
+from src.core.config import load_config
+from src.core.logger import configure_root_logger
 from src.core.paths import config_path
+from src.core.schema import get_default_config
 from src.core.session import SessionManager
 from src.host.cli.chat_loop import chat_loop
 
@@ -135,10 +137,9 @@ def start(
     allowed_tools: str = typer.Option(None, "--allowedTools", help="Comma-separated list of allowed tools"),
     disallowed_tools: str = typer.Option(None, "--disallowedTools", help="Comma-separated list of disallowed tools"),
 ):
-    """Start Doraemon Code CLI."""
+    """Start the code agent CLI."""
     # Setup logging
-    if verbose:
-        logging.basicConfig(level=logging.DEBUG, format="%(name)s - %(levelname)s - %(message)s")
+    configure_root_logger(level="DEBUG" if verbose else None)
 
     # Handle --continue: use most recent session
     if continue_session:
@@ -217,7 +218,7 @@ def config(
         import json
         config_data = json.loads(config_file.read_text())
     else:
-        config_data = {}
+        config_data = get_default_config()
 
     if action is None or action == "list":
         # List all config
@@ -280,19 +281,19 @@ def config(
 @app.command()
 def version():
     """Show version information."""
-    console.print("[bold]🤖 Doraemon Code v0.9.0[/bold]")
+    console.print("[bold]🤖 Code Agent v0.9.0[/bold]")
     console.print("[dim]Features: Web UI, Gateway, checkpointing, subagents, hooks, cost tracking[/dim]")
-    gateway_url = os.getenv("DORAEMON_GATEWAY_URL")
+    gateway_url = load_config(validate=False).get("gateway_url")
     if gateway_url:
         console.print(f"[cyan]Mode: Gateway ({gateway_url})[/cyan]")
     else:
-        console.print("[green]Mode: Direct (using API keys)[/green]")
+        console.print("[green]Mode: Direct (using config file credentials)[/green]")
 
 
 @app.command()
 def doctor():
     """Run diagnostic checks."""
-    console.print("[bold]🔍 Doraemon Code Diagnostics[/bold]\n")
+    console.print("[bold]🔍 Agent Diagnostics[/bold]\n")
 
     checks = []
 
@@ -301,21 +302,24 @@ def doctor():
     py_ok = py_version >= (3, 10)
     checks.append(("Python version", f"{py_version.major}.{py_version.minor}.{py_version.micro}", py_ok))
 
-    # Check API keys
-    google_key = bool(os.getenv("GOOGLE_API_KEY"))
-    openai_key = bool(os.getenv("OPENAI_API_KEY"))
-    anthropic_key = bool(os.getenv("ANTHROPIC_API_KEY"))
-    gateway_url = os.getenv("DORAEMON_GATEWAY_URL")
+    config_data = load_config(validate=False)
+    model = config_data.get("model")
+    google_key = bool(config_data.get("google_api_key"))
+    openai_key = bool(config_data.get("openai_api_key"))
+    anthropic_key = bool(config_data.get("anthropic_api_key"))
+    gateway_url = config_data.get("gateway_url")
+
+    checks.append(("Model", model or "✗ Not set", bool(model)))
 
     if gateway_url:
         checks.append(("Gateway URL", gateway_url, True))
     else:
-        checks.append(("GOOGLE_API_KEY", "✓ Set" if google_key else "✗ Not set", google_key))
-        checks.append(("OPENAI_API_KEY", "✓ Set" if openai_key else "✗ Not set", openai_key))
-        checks.append(("ANTHROPIC_API_KEY", "✓ Set" if anthropic_key else "✗ Not set", anthropic_key))
+        checks.append(("google_api_key", "✓ Set" if google_key else "✗ Not set", google_key))
+        checks.append(("openai_api_key", "✓ Set" if openai_key else "✗ Not set", openai_key))
+        checks.append(("anthropic_api_key", "✓ Set" if anthropic_key else "✗ Not set", anthropic_key))
 
         if not any([google_key, openai_key, anthropic_key]):
-            checks.append(("API Keys", "⚠ No API keys configured", False))
+            checks.append(("API Keys", "⚠ No API keys configured in .agent/config.json", False))
 
     # Check directories
     agent_dir = Path(".agent")

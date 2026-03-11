@@ -189,7 +189,7 @@ class ToolCall:
 class ClientConfig:
     """Model client configuration."""
     mode: ClientMode = ClientMode.DIRECT
-    model: str = "gemini-2.5-flash-preview"
+    model: str | None = None
     temperature: float = 0.7
     max_tokens: int | None = None
     system_prompt: str | None = None
@@ -206,26 +206,25 @@ class ClientConfig:
 
     @classmethod
     def from_env(cls) -> "ClientConfig":
-        """Load configuration from environment variables."""
-        import os
+        """Load runtime configuration from the project config file."""
+        from src.core.config import load_config
 
-        # Check if gateway mode is configured
-        gateway_url = os.getenv("DORAEMON_GATEWAY_URL")
+        config_data = load_config()
+        model = config_data.get("model")
+        if not model:
+            raise ValueError("Project config is missing required 'model'")
 
-        if gateway_url:
-            mode = ClientMode.GATEWAY
-        else:
-            mode = ClientMode.DIRECT
+        gateway_url = config_data.get("gateway_url")
+        mode = ClientMode.GATEWAY if gateway_url else ClientMode.DIRECT
 
         return cls(
             mode=mode,
-            model=os.getenv("DORAEMON_MODEL", "gemini-2.5-flash-preview"),
-            # Gateway settings
+            model=model,
+            temperature=config_data.get("temperature", 0.7),
             gateway_url=gateway_url,
-            gateway_key=os.getenv("DORAEMON_API_KEY"),
-            # Direct mode API keys
-            google_api_key=os.getenv("GOOGLE_API_KEY"),
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
-            ollama_base_url=os.getenv("OLLAMA_API_BASE", "http://localhost:11434"),
+            gateway_key=config_data.get("gateway_key"),
+            google_api_key=config_data.get("google_api_key"),
+            openai_api_key=config_data.get("openai_api_key"),
+            anthropic_api_key=config_data.get("anthropic_api_key"),
+            ollama_base_url=config_data.get("ollama_base_url", "http://localhost:11434"),
         )

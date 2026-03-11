@@ -2,9 +2,7 @@
 Unified Configuration System
 
 Consolidates all configuration classes into a single, validated configuration.
-Supports loading from environment variables and config files with clear precedence.
-
-Precedence: Environment Variables > Config File > Defaults
+Model selection is required from the project config file.
 """
 
 import json
@@ -17,15 +15,12 @@ from .paths import config_path as default_config_path
 
 
 class UnifiedConfig(BaseModel):
-    """Unified configuration for all Doraemon Code components."""
+    """Unified configuration for all agent components."""
 
     # ========================================
     # Model Settings
     # ========================================
-    model: str = Field(
-        default="gemini-3-pro-preview",
-        description="Default model to use"
-    )
+    model: str = Field(..., description="Model to use")
     temperature: float = Field(
         default=0.7,
         ge=0.0,
@@ -138,6 +133,14 @@ class UnifiedConfig(BaseModel):
             raise ValueError(f"log_level must be one of {valid_levels}")
         return v_upper
 
+    @field_validator("model")
+    @classmethod
+    def validate_model(cls, v: str) -> str:
+        """Validate model is configured."""
+        if not v or not v.strip():
+            raise ValueError("model must be configured in .agent/config.json")
+        return v.strip()
+
     @classmethod
     def from_env_and_file(
         cls,
@@ -145,9 +148,7 @@ class UnifiedConfig(BaseModel):
         validate: bool = True
     ) -> "UnifiedConfig":
         """
-        Load configuration from environment variables and config file.
-
-        Precedence: Environment Variables > Config File > Defaults
+        Load configuration from config file plus non-model environment overrides.
 
         Args:
             config_path: Path to config file (default: .agent/config.json)
@@ -175,38 +176,36 @@ class UnifiedConfig(BaseModel):
             except json.JSONDecodeError as e:
                 raise ValueError(f"Invalid JSON in config file: {e}") from e
 
-        # Environment variable overrides
+        # Environment variable overrides for non-model runtime knobs.
         env_overrides = {
-            # Model settings
-            "model": os.getenv("DORAEMON_MODEL"),
-            "temperature": _parse_float(os.getenv("DORAEMON_TEMPERATURE")),
+            "temperature": _parse_float(os.getenv("AGENT_TEMPERATURE")),
 
             # Context settings
-            "max_context_tokens": _parse_int(os.getenv("DORAEMON_MAX_CONTEXT_TOKENS")),
-            "summarize_threshold": _parse_float(os.getenv("DORAEMON_SUMMARIZE_THRESHOLD")),
-            "keep_recent_messages": _parse_int(os.getenv("DORAEMON_KEEP_RECENT_MESSAGES")),
+            "max_context_tokens": _parse_int(os.getenv("AGENT_MAX_CONTEXT_TOKENS")),
+            "summarize_threshold": _parse_float(os.getenv("AGENT_SUMMARIZE_THRESHOLD")),
+            "keep_recent_messages": _parse_int(os.getenv("AGENT_KEEP_RECENT_MESSAGES")),
 
             # Tool settings
-            "max_tool_steps": _parse_int(os.getenv("DORAEMON_MAX_TOOL_STEPS")),
-            "tool_timeout": _parse_float(os.getenv("DORAEMON_TOOL_TIMEOUT")),
-            "enable_hitl": _parse_bool(os.getenv("DORAEMON_ENABLE_HITL")),
+            "max_tool_steps": _parse_int(os.getenv("AGENT_MAX_TOOL_STEPS")),
+            "tool_timeout": _parse_float(os.getenv("AGENT_TOOL_TIMEOUT")),
+            "enable_hitl": _parse_bool(os.getenv("AGENT_ENABLE_HITL")),
 
             # Checkpoint settings
-            "checkpoint_enabled": _parse_bool(os.getenv("DORAEMON_CHECKPOINT_ENABLED")),
-            "checkpoint_retention_days": _parse_int(os.getenv("DORAEMON_CHECKPOINT_RETENTION_DAYS")),
-            "max_checkpoints_per_file": _parse_int(os.getenv("DORAEMON_MAX_CHECKPOINTS_PER_FILE")),
+            "checkpoint_enabled": _parse_bool(os.getenv("AGENT_CHECKPOINT_ENABLED")),
+            "checkpoint_retention_days": _parse_int(os.getenv("AGENT_CHECKPOINT_RETENTION_DAYS")),
+            "max_checkpoints_per_file": _parse_int(os.getenv("AGENT_MAX_CHECKPOINTS_PER_FILE")),
 
             # Budget settings
-            "daily_budget_usd": _parse_float(os.getenv("DORAEMON_DAILY_BUDGET")),
-            "session_budget_usd": _parse_float(os.getenv("DORAEMON_SESSION_BUDGET")),
+            "daily_budget_usd": _parse_float(os.getenv("AGENT_DAILY_BUDGET")),
+            "session_budget_usd": _parse_float(os.getenv("AGENT_SESSION_BUDGET")),
 
             # Logging settings
-            "log_level": os.getenv("DORAEMON_LOG_LEVEL"),
-            "log_file": os.getenv("DORAEMON_LOG_FILE"),
+            "log_level": os.getenv("AGENT_LOG_LEVEL"),
+            "log_file": os.getenv("AGENT_LOG_FILE"),
 
             # Performance settings
-            "enable_caching": _parse_bool(os.getenv("DORAEMON_ENABLE_CACHING")),
-            "cache_ttl_seconds": _parse_int(os.getenv("DORAEMON_CACHE_TTL")),
+            "enable_caching": _parse_bool(os.getenv("AGENT_ENABLE_CACHING")),
+            "cache_ttl_seconds": _parse_int(os.getenv("AGENT_CACHE_TTL")),
         }
 
         # Merge: env > file > defaults (filter out None values from env)

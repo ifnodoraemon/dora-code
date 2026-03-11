@@ -1,7 +1,8 @@
 import logging
-import os
 
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
+
+from src.core.config import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -16,24 +17,34 @@ class RemoteEmbeddingFunction(EmbeddingFunction):
     """
 
     def __init__(self):
+        config = load_config(validate=False)
         self.provider = "none"
         self.api_key = None
+        self._embedding_model = config.get("embedding_model")
 
-        # Check for Google API Key
-        if os.getenv("GOOGLE_API_KEY"):
+        model_name = (self._embedding_model or "").lower()
+
+        if model_name.startswith("text-embedding-3") and config.get("openai_api_key"):
+            self.provider = "openai"
+            self.api_key = config.get("openai_api_key")
+            try:
+                from openai import OpenAI
+                self.client = OpenAI(api_key=self.api_key)
+            except ImportError as e:
+                logger.warning(f"openai package not found or failed to load: {e}. Install it to use OpenAI embeddings.")
+                self.provider = "none"
+        elif config.get("google_api_key"):
             self.provider = "google"
-            self.api_key = os.getenv("GOOGLE_API_KEY")
+            self.api_key = config.get("google_api_key")
             try:
                 from google import genai
                 self.client = genai.Client(api_key=self.api_key)
             except ImportError as e:
                 logger.warning(f"google-genai package not found or failed to load: {e}. Install it to use Google embeddings.")
                 self.provider = "none"
-
-        # Check for OpenAI API Key (fallback or preference)
-        elif os.getenv("OPENAI_API_KEY"):
+        elif config.get("openai_api_key"):
             self.provider = "openai"
-            self.api_key = os.getenv("OPENAI_API_KEY")
+            self.api_key = config.get("openai_api_key")
             try:
                 from openai import OpenAI
                 self.client = OpenAI(api_key=self.api_key)
@@ -45,8 +56,10 @@ class RemoteEmbeddingFunction(EmbeddingFunction):
         from typing import cast
         if self.provider == "google":
             try:
-                # Batch embedding support for Gemini
-                embed_model = os.getenv("GOOGLE_EMBEDDING_MODEL", "text-embedding-004")
+                embed_model = self._embedding_model
+                if not embed_model:
+                    logger.warning("embedding_model is not configured")
+                    return cast(Embeddings, [[0.0] * 768 for _ in input])
                 embeddings = []
                 for text in input:
                     result = self.client.models.embed_content(
@@ -62,9 +75,13 @@ class RemoteEmbeddingFunction(EmbeddingFunction):
 
         elif self.provider == "openai":
             try:
+                embed_model = self._embedding_model
+                if not embed_model:
+                    logger.warning("embedding_model is not configured")
+                    return cast(Embeddings, [[0.0] * 1536 for _ in input])
                 response = self.client.embeddings.create(
                     input=input,
-                    model="text-embedding-3-small"
+                    model=embed_model
                 )
                 return cast(Embeddings, [data.embedding for data in response.data])
             except Exception as e:

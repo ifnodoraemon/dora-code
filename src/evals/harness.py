@@ -147,7 +147,9 @@ class EvaluationHarness:
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             )
 
-            model_name = os.getenv("EVAL_MODEL", "gemini-3-pro-preview")
+            model_name = config.get("model")
+            if not model_name:
+                raise ValueError("Project config is missing required 'model'")
             chat = client.chats.create(model=model_name, config=gen_config, history=[])
 
             # Run Loop

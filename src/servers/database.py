@@ -6,13 +6,14 @@ import sqlite3
 
 from mcp.server.fastmcp import FastMCP
 
+from src.core.logger import configure_root_logger
 from src.core.security import validate_path
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+configure_root_logger()
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("DoraemonDatabase")
+mcp = FastMCP("AgentDatabase")
 
 
 def _get_connection(db_path: str) -> sqlite3.Connection:
@@ -57,6 +58,7 @@ def db_read_query(query: str, db_path: str, params: list | None = None) -> str:
     if _contains_multiple_statements(query):
         return "Error: Multiple SQL statements are not allowed. Please execute one statement at a time."
 
+    conn = None
     try:
         conn = _get_connection(db_path)
         with conn:
@@ -76,7 +78,8 @@ def db_read_query(query: str, db_path: str, params: list | None = None) -> str:
         logger.error(f"Database error: {e}")
         return f"Database error: {str(e)}"
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 @mcp.tool()
@@ -92,6 +95,7 @@ def db_write_query(query: str, db_path: str, params: list | None = None) -> str:
     Returns:
         Success message or error
     """
+    conn = None
     try:
         # Block destructive SQL operations
         first_keyword = query.strip().split()[0].upper() if query.strip() else ""
@@ -119,7 +123,8 @@ def db_write_query(query: str, db_path: str, params: list | None = None) -> str:
         logger.error(f"Database error: {e}")
         return f"Database error: {str(e)}"
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 @mcp.tool()

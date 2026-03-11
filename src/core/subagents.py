@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from src.core.config import get_required_config_value
+
 logger = logging.getLogger(__name__)
 
 
@@ -682,7 +684,7 @@ class SubagentManager:
         self,
         model_client: Any,
         tool_registry: Any,  # ToolRegistry
-        parent_model: str = "gemini-2.0-flash",
+        parent_model: str | None = None,
     ):
         """
         Initialize subagent manager.
@@ -694,7 +696,7 @@ class SubagentManager:
         """
         self.model_client = model_client
         self.tool_registry = tool_registry
-        self.parent_model = parent_model
+        self.parent_model = parent_model or get_required_config_value("model")
         self._custom_agents: dict[str, SubagentConfig] = {}
         self._running_agents: dict[str, asyncio.Task] = {}
         self._message_queue = AgentMessageQueue()

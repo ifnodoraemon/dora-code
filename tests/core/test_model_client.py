@@ -154,7 +154,7 @@ class TestGatewayModelClient:
         client._client = mock_client
 
         from httpx import Response, HTTPStatusError, Request
-        from src.core.errors import DoraemonException
+        from src.core.errors import AgentError
 
         client_error_response = Response(
             status_code=400,
@@ -168,8 +168,8 @@ class TestGatewayModelClient:
 
         messages = [Message(role="user", content="Test")]
 
-        # Should raise DoraemonException without retry
-        with pytest.raises(DoraemonException):
+        # Should raise AgentError without retry
+        with pytest.raises(AgentError):
             await client.chat(messages)
 
         # Should only call once (no retry)
@@ -268,14 +268,17 @@ class TestModelClient:
             assert isinstance(client, DirectModelClient)
 
     def test_get_mode_detects_gateway(self):
-        """Test that get_mode detects gateway mode from environment."""
-        with patch.dict("os.environ", {"DORAEMON_GATEWAY_URL": "http://test.com"}):
+        """Test that get_mode detects gateway mode from config."""
+        with patch("src.core.config.load_config", return_value={
+            "model": "gpt-4o",
+            "gateway_url": "http://test.com",
+        }):
             mode = ModelClient.get_mode()
             assert mode == ClientMode.GATEWAY
 
     def test_get_mode_detects_direct(self):
         """Test that get_mode detects direct mode when no gateway URL."""
-        with patch.dict("os.environ", {}, clear=True):
+        with patch("src.core.config.load_config", return_value={"model": "test-model"}):
             mode = ModelClient.get_mode()
             assert mode == ClientMode.DIRECT
 
@@ -849,15 +852,12 @@ class TestClientConfiguration:
     """Tests for ClientConfig and configuration validation."""
 
     def test_config_from_env_gateway_mode(self):
-        """Test loading config from environment in gateway mode."""
-        with patch.dict(
-            "os.environ",
-            {
-                "DORAEMON_GATEWAY_URL": "http://gateway.test.com",
-                "DORAEMON_API_KEY": "test-key",
-                "DORAEMON_MODEL": "test-model",
-            },
-        ):
+        """Test loading config from project config in gateway mode."""
+        with patch("src.core.config.load_config", return_value={
+            "model": "test-model",
+            "gateway_url": "http://gateway.test.com",
+            "gateway_key": "test-key",
+        }):
             config = ClientConfig.from_env()
             assert config.mode == ClientMode.GATEWAY
             assert config.gateway_url == "http://gateway.test.com"
@@ -865,15 +865,12 @@ class TestClientConfiguration:
             assert config.model == "test-model"
 
     def test_config_from_env_direct_mode(self):
-        """Test loading config from environment in direct mode."""
-        with patch.dict(
-            "os.environ",
-            {
-                "GOOGLE_API_KEY": "google-key",
-                "OPENAI_API_KEY": "openai-key",
-            },
-            clear=True,
-        ):
+        """Test loading config from project config in direct mode."""
+        with patch("src.core.config.load_config", return_value={
+            "model": "gemini-2.5-flash",
+            "google_api_key": "google-key",
+            "openai_api_key": "openai-key",
+        }):
             config = ClientConfig.from_env()
             assert config.mode == ClientMode.DIRECT
             assert config.google_api_key == "google-key"
@@ -884,7 +881,7 @@ class TestClientConfiguration:
         config = ClientConfig()
         assert config.mode == ClientMode.DIRECT
         assert config.temperature == 0.7
-        assert config.model == "gemini-2.5-flash-preview"
+        assert config.model is None
         assert config.max_tokens is None
 
     def test_config_custom_values(self):
@@ -1067,30 +1064,39 @@ class TestModelClientFactory:
 
     def test_get_mode_info_gateway(self):
         """Test get_mode_info returns gateway info."""
-        with patch.dict("os.environ", {"DORAEMON_GATEWAY_URL": "http://test.com"}):
+        with patch("src.core.config.load_config", return_value={
+            "model": "test-model",
+            "gateway_url": "http://test.com",
+        }):
             info = ModelClient.get_mode_info()
             assert info["mode"] == "gateway"
             assert info["gateway_url"] == "http://test.com"
 
     def test_get_mode_info_direct(self):
         """Test get_mode_info returns direct mode info."""
-        with patch.dict("os.environ", {}, clear=True):
+        with patch("src.core.config.load_config", return_value={"model": "test-model"}):
             info = ModelClient.get_mode_info()
             assert info["mode"] == "direct"
             assert "providers" in info
 
     @pytest.mark.asyncio
     async def test_create_with_default_config(self):
-        """Test creating client with default config."""
+        """Test creating client from config file settings."""
         with patch("google.genai.Client"):
-            with patch.dict("os.environ", {}, clear=True):
+            with patch("src.core.config.load_config", return_value={
+                "model": "gemini-test",
+                "google_api_key": "google-key",
+            }):
                 client = await ModelClient.create()
                 assert isinstance(client, DirectModelClient)
 
     @pytest.mark.asyncio
     async def test_create_loads_config_from_env(self):
-        """Test that create loads config from environment."""
+        """Test that create loads config from the project config file."""
         with patch("httpx.AsyncClient"):
-            with patch.dict("os.environ", {"DORAEMON_GATEWAY_URL": "http://test.com"}):
+            with patch("src.core.config.load_config", return_value={
+                "model": "test-model",
+                "gateway_url": "http://test.com",
+            }):
                 client = await ModelClient.create()
                 assert isinstance(client, GatewayModelClient)

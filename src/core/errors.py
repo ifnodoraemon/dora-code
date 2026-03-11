@@ -39,8 +39,8 @@ class ErrorInfo:
     context: dict = field(default_factory=dict)
 
 
-class DoraemonException(Exception):
-    """Base exception for Doraemon errors"""
+class AgentError(Exception):
+    """Base exception for agent errors"""
 
     def __init__(
         self,
@@ -54,14 +54,14 @@ class DoraemonException(Exception):
         self.context = context or {}
 
 
-class ConfigurationError(DoraemonException):
+class ConfigurationError(AgentError):
     """Configuration-related errors"""
 
     def __init__(self, message: str, context: dict | None = None):
         super().__init__(message, ErrorCategory.CONFIGURATION, context)
 
 
-class TransientError(DoraemonException):
+class TransientError(AgentError):
     """Transient errors that can be retried"""
 
     def __init__(self, message: str, retry_after: float = 1.0, context: dict | None = None):
@@ -69,7 +69,7 @@ class TransientError(DoraemonException):
         self.retry_after = retry_after
 
 
-class RateLimitError(DoraemonException):
+class RateLimitError(AgentError):
     """Rate limiting errors"""
 
     def __init__(self, message: str, retry_after: float = 60.0, context: dict | None = None):
@@ -159,7 +159,7 @@ class RetryPolicy:
         """Calculate retry delay with exponential backoff"""
         # Check if exception has retry_after
         if hasattr(exception, "retry_after") and exception.retry_after:
-            return exception.retry_after
+            return min(float(exception.retry_after), self.config.max_delay)
 
         # Exponential backoff
         delay = self.config.initial_delay * (self.config.exponential_base**attempt)
@@ -403,8 +403,8 @@ class ErrorHandler:
 
     def categorize(self, exception: Exception) -> ErrorCategory:
         """Categorize an exception"""
-        # Check if it's a DoraemonException with category
-        if isinstance(exception, DoraemonException):
+        # Check if it's an AgentError with category
+        if isinstance(exception, AgentError):
             return exception.category
 
         # Check error mappings

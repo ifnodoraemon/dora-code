@@ -18,7 +18,9 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 
 from src.core.config import load_config
+from src.core.context_manager import ConversationSummary
 from src.core.hooks import HookEvent
+from src.core.logger import configure_root_logger
 from src.core.model_client import ClientMode, Message, ToolDefinition
 from src.core.model_utils import ChatResponse
 from src.core.parallel_executor import DependencyAnalyzer
@@ -249,7 +251,7 @@ def validate_client_mode(model_client) -> bool:
 
     if client_mode == ClientMode.GATEWAY:
         if not mode_info.get("gateway_url"):
-            console.print("[red]Error: DORAEMON_GATEWAY_URL not set[/red]")
+            console.print("[red]Error: gateway_url not set in .agent/config.json[/red]")
             return False
     else:
         # Direct mode - check for at least one provider
@@ -257,9 +259,9 @@ def validate_client_mode(model_client) -> bool:
         if not any(providers.values()):
             console.print("[red]Error: No API keys configured[/red]")
             console.print(
-                "[dim]Set at least one of: GOOGLE_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY[/dim]"
+                "[dim]Set at least one of: google_api_key, openai_api_key, anthropic_api_key in .agent/config.json[/dim]"
             )
-            console.print("[dim]Or configure Gateway mode: DORAEMON_GATEWAY_URL[/dim]")
+            console.print("[dim]Or configure Gateway mode with gateway_url in .agent/config.json[/dim]")
             return False
 
     return True
@@ -270,6 +272,16 @@ def restore_session_history(session_mgr, ctx, resume_session: str | None):
     if resume_session:
         session_data = session_mgr.resume_session(resume_session)
         if session_data:
+            if hasattr(ctx, "clear"):
+                ctx.clear(keep_summaries=False)
+            ctx.session_id = session_data.metadata.id
+            if hasattr(ctx, "summaries"):
+                ctx.summaries = [
+                    ConversationSummary.from_dict(summary)
+                    if isinstance(summary, dict)
+                    else summary
+                    for summary in session_data.summaries
+                ]
             console.print(
                 f"[green]Resumed session: {session_data.metadata.get_display_name()}[/green]"
             )
@@ -280,8 +292,76 @@ def restore_session_history(session_mgr, ctx, resume_session: str | None):
                     ctx.add_user_message(content) if role == "user" else ctx.add_assistant_message(
                         content
                     )
+            return session_data
         else:
             console.print(f"[yellow]Session not found: {resume_session}[/yellow]")
+    return None
+
+
+def _serialize_session_entries(entries: list) -> list[dict]:
+    """Convert context messages/summaries into session-persistable dicts."""
+    serialized = []
+    for entry in entries:
+        if isinstance(entry, dict):
+            serialized.append(entry)
+            continue
+        to_dict = getattr(entry, "to_dict", None)
+        if callable(to_dict):
+            try:
+                data = to_dict()
+                if isinstance(data, dict):
+                    serialized.append(data)
+                    continue
+            except Exception:
+                pass
+        serialized.append({"value": str(entry)})
+    return serialized
+
+
+def persist_session_state(
+    session_mgr,
+    ctx,
+    project: str,
+    mode: str,
+    session_name: str | None = None,
+    session_data=None,
+):
+    """Create/update the session record so session commands map to real persisted data."""
+    try:
+        session = session_data
+        if session is None and hasattr(session_mgr, "load_session"):
+            session = session_mgr.load_session(ctx.session_id)
+
+        if session is None and hasattr(session_mgr, "create_session"):
+            session = session_mgr.create_session(project=project, name=session_name, mode=mode)
+
+        metadata = getattr(session, "metadata", None)
+        if metadata is None:
+            return session
+
+        session_id = getattr(metadata, "id", None)
+        if isinstance(session_id, str) and session_id:
+            ctx.session_id = session_id
+
+        metadata.project = project
+        metadata.mode = mode
+        if session_name and not getattr(metadata, "name", None):
+            metadata.name = session_name
+
+        stats = ctx.get_context_stats() if hasattr(ctx, "get_context_stats") else {}
+        metadata.message_count = len(getattr(ctx, "messages", []) or [])
+        if isinstance(stats, dict):
+            metadata.total_tokens = stats.get("estimated_tokens", getattr(metadata, "total_tokens", 0))
+
+        session.messages = _serialize_session_entries(getattr(ctx, "messages", []) or [])
+        session.summaries = _serialize_session_entries(getattr(ctx, "summaries", []) or [])
+
+        if hasattr(session_mgr, "save_session"):
+            session_mgr.save_session(session)
+        return session
+    except Exception as e:
+        logger.warning(f"Failed to persist session state: {e}")
+        return session_data
 
 
 def show_startup_info(model_client, project: str, ctx):
@@ -422,6 +502,7 @@ async def stream_model_response(
 
 async def process_tool_calls(
     response,
+    project: str,
     registry,
     sensitive_tools: set,
     checkpoint_mgr,
@@ -550,6 +631,7 @@ async def process_tool_calls(
                             tool_name=pc.name,
                             args=matched_args,
                             tool_call_id=pc.id,
+                            project=project,
                             registry=registry,
                             sensitive_tools=sensitive_tools,
                             checkpoint_mgr=checkpoint_mgr,
@@ -565,6 +647,7 @@ async def process_tool_calls(
                                 tool_name=pc.name,
                                 args=a,
                                 tool_call_id=pc.id,
+                                project=project,
                                 registry=registry,
                                 sensitive_tools=sensitive_tools,
                                 checkpoint_mgr=checkpoint_mgr,
@@ -586,6 +669,7 @@ async def process_tool_calls(
                         tool_name=tool_name,
                         args=args,
                         tool_call_id=tool_call_id,
+                        project=project,
                         registry=registry,
                         sensitive_tools=sensitive_tools,
                         checkpoint_mgr=checkpoint_mgr,
@@ -742,6 +826,7 @@ async def chat_loop(
     tool_config: dict | None = None,
 ):
     """Main chat loop with automatic context management."""
+    configure_root_logger()
 
     # Check for piped input (Headless detection)
     piped_input, headless_from_pipe = check_piped_input()
@@ -761,9 +846,14 @@ async def chat_loop(
     # Initialize model client
     from src.host.cli.initialization import initialize_model_client
 
-    model_client = await initialize_model_client()
+    try:
+        model_client = await initialize_model_client()
+    except Exception as e:
+        console.print(f"[red]Failed to initialize model client: {e}[/red]")
+        return
 
     if not validate_client_mode(model_client):
+        await model_client.close()
         return
 
     # Initialize all managers
@@ -771,6 +861,7 @@ async def chat_loop(
         managers = await initialize_all_managers(project)
     except Exception as e:
         console.print(f"[red]Failed to initialize managers: {e}[/red]")
+        await model_client.close()
         return
 
     # Extract managers
@@ -791,17 +882,26 @@ async def chat_loop(
 
 
     # Handle session resume
-    restore_session_history(session_mgr, ctx, resume_session)
+    session_data = restore_session_history(session_mgr, ctx, resume_session)
 
     # Show startup info
     show_startup_info(model_client, project, ctx)
 
     # State
-    mode = "build"
+    mode = getattr(getattr(session_data, "metadata", None), "mode", "build")
     turn_count = 0
-    import os
 
-    model_name = os.getenv("DORAEMON_MODEL", "gemini-3-pro-preview")
+    model_name = load_config().get("model")
+    if not model_name:
+        raise ValueError("Project config is missing required 'model'")
+    session_data = persist_session_state(
+        session_mgr,
+        ctx,
+        project,
+        mode,
+        session_name=session_name,
+        session_data=session_data,
+    )
 
     # Get tools for current mode
     tool_names = tool_selector.get_tools_for_mode(mode)
@@ -852,7 +952,7 @@ async def chat_loop(
 
     console.print(
         Panel.fit(
-            f"[bold blue]🤖 Doraemon Code[/bold blue]\n[dim]Type /help for commands. Mode: {mode}[/dim]",
+            f"[bold blue]🤖 Code Agent[/bold blue]\n[dim]Type /help for commands. Mode: {mode}[/dim]",
             border_style="blue",
         )
     )
@@ -884,10 +984,10 @@ async def chat_loop(
                 break
             else:
                 try:
-                    _ctrl_c_count = 0
                     user_input = Prompt.ask(
                         f"\n[bold {mode_color}]You ({mode})[/bold {mode_color}]"
                     )
+                    _ctrl_c_count = 0
 
                     # Multi-line input: detect """ or ''' opener
                     for delim in ('"""', "'''"):
@@ -921,8 +1021,6 @@ async def chat_loop(
 
             # Exit
             if user_input.lower() in ["exit", "quit", "/exit"]:
-                await hook_mgr.trigger(HookEvent.SESSION_END, message_count=len(ctx.messages))
-                await model_client.close()
                 break
 
             # Bash mode (! prefix)
@@ -957,6 +1055,14 @@ async def chat_loop(
                 conversation_history = result["conversation_history"]
                 if result["system_prompt"]:
                     system_prompt = result["system_prompt"]
+                session_data = persist_session_state(
+                    session_mgr,
+                    ctx,
+                    project,
+                    mode,
+                    session_name=session_name,
+                    session_data=session_data,
+                )
                 continue
 
             # Add to command history
@@ -1064,6 +1170,7 @@ async def chat_loop(
             # Process tool calls (agentic loop: sends tool results back to model)
             accumulated_text, files_modified, tool_results_messages = await process_tool_calls(
                 response=response,
+                project=project,
                 registry=registry,
                 sensitive_tools=sensitive_tools,
                 checkpoint_mgr=checkpoint_mgr,
@@ -1115,6 +1222,14 @@ async def chat_loop(
 
             # Trigger Stop hook
             await hook_mgr.trigger(HookEvent.STOP, message_count=len(ctx.messages))
+            session_data = persist_session_state(
+                session_mgr,
+                ctx,
+                project,
+                mode,
+                session_name=session_name,
+                session_data=session_data,
+            )
 
             # Show usage stats
             if usage:
@@ -1150,6 +1265,14 @@ async def chat_loop(
 
         traceback.print_exc()
     finally:
+        persist_session_state(
+            session_mgr,
+            ctx,
+            project,
+            mode,
+            session_name=session_name,
+            session_data=session_data,
+        )
         try:
             await hook_mgr.trigger(HookEvent.SESSION_END, message_count=len(ctx.messages))
         except Exception:

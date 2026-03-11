@@ -12,16 +12,18 @@ from typing import Any
 # Use new Google GenAI SDK (consistent with main CLI)
 from google import genai
 
+from src.core.config import get_required_config_value
+
 
 class ModelGrader:
     """LLM-based grader for evaluating agent outputs."""
 
-    def __init__(self, model_name: str = "gemini-3-pro-preview"):
+    def __init__(self, model_name: str | None = None):
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not set for ModelGrader")
         self.client = genai.Client(api_key=api_key)
-        self.model_name = model_name
+        self.model_name = model_name or get_required_config_value("model")
 
     def grade(self, task: str, agent_output: str, rubric: str) -> dict[str, Any]:
         """

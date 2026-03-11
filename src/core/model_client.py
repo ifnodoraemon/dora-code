@@ -5,15 +5,15 @@ Provides a unified interface for both Gateway and Direct modes.
 
 Modes:
 1. Gateway Mode: Connect to a Model Gateway server
-   - Only needs: DORAEMON_GATEWAY_URL + DORAEMON_API_KEY
+   - Reads: model + gateway_url + gateway_key from .agent/config.json
    - Supports all providers through the gateway
 
 2. Direct Mode: Connect directly to provider APIs
-   - Needs individual API keys: GOOGLE_API_KEY, OPENAI_API_KEY, etc.
+   - Reads provider keys from .agent/config.json
    - Supports provider-specific features
 
 Usage:
-    # Auto-detect mode based on environment
+    # Auto-detect mode based on project config
     client = await ModelClient.create()
 
     # Chat
@@ -23,8 +23,6 @@ Usage:
     async for chunk in client.chat_stream(messages, tools):
         print(chunk.content)
 """
-
-import os
 
 # Re-export base class
 from src.core.model_client_base import BaseModelClient
@@ -67,7 +65,7 @@ class ModelClient:
     """
     Unified model client factory.
 
-    Auto-detects mode based on environment configuration.
+    Auto-detects mode based on project configuration.
     """
 
     @staticmethod
@@ -76,7 +74,7 @@ class ModelClient:
         Create a model client based on configuration.
 
         Args:
-            config: Optional configuration. If not provided, loads from environment.
+            config: Optional configuration. If not provided, loads from project config.
 
         Returns:
             Configured model client (Gateway or Direct mode)
@@ -94,29 +92,29 @@ class ModelClient:
 
     @staticmethod
     def get_mode() -> ClientMode:
-        """Get current mode based on environment."""
-        if os.getenv("DORAEMON_GATEWAY_URL"):
-            return ClientMode.GATEWAY
-        return ClientMode.DIRECT
+        """Get current mode based on project configuration."""
+        config = ClientConfig.from_env()
+        return config.mode
 
     @staticmethod
     def get_mode_info() -> dict:
         """Get information about current mode configuration."""
-        mode = ModelClient.get_mode()
+        config = ClientConfig.from_env()
+        mode = config.mode
 
         if mode == ClientMode.GATEWAY:
             return {
                 "mode": "gateway",
-                "gateway_url": os.getenv("DORAEMON_GATEWAY_URL"),
-                "has_key": bool(os.getenv("DORAEMON_API_KEY")),
+                "gateway_url": config.gateway_url,
+                "has_key": bool(config.gateway_key),
             }
         else:
             return {
                 "mode": "direct",
                 "providers": {
-                    "google": bool(os.getenv("GOOGLE_API_KEY")),
-                    "openai": bool(os.getenv("OPENAI_API_KEY")),
-                    "anthropic": bool(os.getenv("ANTHROPIC_API_KEY")),
-                    "ollama": True,
+                    "google": bool(config.google_api_key),
+                    "openai": bool(config.openai_api_key),
+                    "anthropic": bool(config.anthropic_api_key),
+                    "ollama": bool(config.ollama_base_url),
                 },
             }

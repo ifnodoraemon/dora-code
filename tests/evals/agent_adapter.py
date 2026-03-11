@@ -219,7 +219,7 @@ class DoraemonAgentAdapter(AgentAdapter):
         Initialize the Doraemon Agent adapter.
 
         Args:
-            model: Model name to use (defaults to env DORAEMON_MODEL)
+            model: Model name to use (defaults to project config model)
             timeout: Maximum execution time in seconds
             max_retries: Number of retries on failure
             retry_delay: Delay between retries in seconds

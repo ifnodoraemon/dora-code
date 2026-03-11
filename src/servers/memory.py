@@ -2,27 +2,23 @@ import hashlib
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from src.core.logger import configure_root_logger
 from src.core.paths import chroma_dir, persona_path, state_dir
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+configure_root_logger()
 logger = logging.getLogger(__name__)
 
 # Suppress noisy HTTP request logs from the Gemini/httpx SDK
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Initialize FastMCP Server
-mcp = FastMCP("DoraemonMemory")
-
-# --------------------------
-# Core Data Structures
-# --------------------------
-PERSIST_DIR = str(chroma_dir())
-MEMORY_FILE = str(persona_path())
+mcp = FastMCP("AgentMemory")
 
 # Lazy-initialized globals
 _initialized = False
@@ -32,9 +28,22 @@ collection = None
 COLLECTION_NAME = None
 
 
+def _persist_dir() -> str:
+    """Resolve the current project's vector store directory."""
+    return str(chroma_dir())
+
+
+def _memory_file() -> Path:
+    """Resolve the current project's persona file."""
+    return persona_path()
+
+
 def _ensure_initialized():
     """Lazily initialize ChromaDB and embeddings on first use."""
     global _initialized, embedding_fn, client, collection, COLLECTION_NAME
+    if collection is not None:
+        _initialized = True
+        return
     if _initialized:
         return
     _initialized = True
@@ -47,10 +56,10 @@ def _ensure_initialized():
         from src.services.embeddings import RemoteEmbeddingFunction
 
         embedding_fn = RemoteEmbeddingFunction()
-        client = chromadb.PersistentClient(path=PERSIST_DIR)
+        client = chromadb.PersistentClient(path=_persist_dir())
 
-        PROVIDER = embedding_fn.provider
-        COLLECTION_NAME = f"doraemon_notes_{PROVIDER}"
+        provider = embedding_fn.provider
+        COLLECTION_NAME = f"agent_notes_{provider}"
 
         collection = client.get_or_create_collection(
             name=COLLECTION_NAME,
@@ -116,11 +125,11 @@ def search_notes(query: str, collection_name: str = "default", n_results: int = 
         metas = results.get("metadatas")
 
         if not docs or not docs[0] or not metas or not metas[0]:
-            return f"No notes found in project {collection_name} matching query."
+            return f"Notes not found in project {collection_name}."
 
         output = []
         for doc, meta in zip(docs[0], metas[0], strict=True):
-            output.append(f"[Title: {meta.get('title', 'Untitled')}]\n{doc}")
+            output.append(f"[标题: {meta.get('title', 'Untitled')}]\n{doc}")
 
         return "\n---\n".join(output)
     except Exception as e:
@@ -190,17 +199,20 @@ def list_notes(collection_name: str = "default", limit: int = 20) -> str:
 @mcp.tool()
 def update_user_persona(key: str, value: str) -> str:
     """Update user persona (preferences, job, etc.)."""
+    memory_file = _memory_file()
+    memory_file.parent.mkdir(parents=True, exist_ok=True)
+
     data = {}
-    if os.path.exists(MEMORY_FILE):
+    if memory_file.exists():
         try:
-            with open(MEMORY_FILE) as f:
+            with memory_file.open() as f:
                 data = json.load(f)
         except (json.JSONDecodeError, OSError):
             pass
 
     data[key] = value
 
-    with open(MEMORY_FILE, "w") as f:
+    with memory_file.open("w") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
     return f"Remembered about you: {key} = {value}"
@@ -209,9 +221,10 @@ def update_user_persona(key: str, value: str) -> str:
 @mcp.tool()
 def get_user_persona() -> str:
     """Read current user persona."""
-    if not os.path.exists(MEMORY_FILE):
+    memory_file = _memory_file()
+    if not memory_file.exists():
         return "No user persona yet."
-    with open(MEMORY_FILE) as f:
+    with memory_file.open() as f:
         return f.read()
 
 

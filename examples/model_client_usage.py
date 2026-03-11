@@ -6,7 +6,6 @@ Demonstrates both Gateway and Direct modes for the unified model client.
 """
 
 import asyncio
-import os
 from dotenv import load_dotenv
 
 from src.core.model_client import (
@@ -24,18 +23,16 @@ async def example_gateway_mode():
     """
     Gateway Mode Example
 
-    User only needs to configure:
-      - DORAEMON_GATEWAY_URL
-      - DORAEMON_API_KEY
+    User configures `.agent/config.json` with:
+      - model
+      - gateway_url
+      - gateway_key
 
     The gateway handles all provider routing internally.
     """
     print("\n=== Gateway Mode ===")
 
-    # Option 1: Auto-detect from environment
-    # Set these in .env:
-    #   DORAEMON_GATEWAY_URL=http://localhost:8000
-    #   DORAEMON_API_KEY=your-key
+    # Option 1: Auto-detect from project config
     client = await ModelClient.create()
 
     # Option 2: Explicit configuration
@@ -69,16 +66,17 @@ async def example_direct_mode():
     """
     Direct Mode Example
 
-    User configures individual provider API keys:
-      - GOOGLE_API_KEY
-      - OPENAI_API_KEY
-      - ANTHROPIC_API_KEY
+    User configures `.agent/config.json` with:
+      - model
+      - google_api_key
+      - openai_api_key
+      - anthropic_api_key
 
     The client auto-routes based on model name prefix.
     """
     print("\n=== Direct Mode ===")
 
-    # Option 1: Auto-detect from environment
+    # Option 1: Auto-detect from project config
     client = await ModelClient.create()
 
     # Option 2: Explicit configuration

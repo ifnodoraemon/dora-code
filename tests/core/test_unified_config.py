@@ -5,26 +5,35 @@ Tests configuration loading, validation, and precedence.
 """
 
 import json
-import os
-import pytest
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 from pydantic import ValidationError
 
 from src.core.unified_config import UnifiedConfig
+
+
+BASE_CONFIG = {"model": "test-model"}
 
 
 class TestUnifiedConfig:
     """Tests for UnifiedConfig class."""
 
     def test_default_values(self):
-        """Test that default values are set correctly."""
-        config = UnifiedConfig()
+        """Test that required and default values are set correctly."""
+        config = UnifiedConfig(**BASE_CONFIG)
 
-        assert config.model == "gemini-3-pro-preview"
+        assert config.model == "test-model"
         assert config.temperature == 0.7
         assert config.max_context_tokens == 100_000
         assert config.max_tool_steps == 15
         assert config.checkpoint_enabled is True
+
+    def test_model_is_required(self):
+        """Test that model must be configured explicitly."""
+        with pytest.raises(ValidationError):
+            UnifiedConfig()
 
     def test_custom_values(self):
         """Test setting custom values."""
@@ -41,47 +50,47 @@ class TestUnifiedConfig:
     def test_temperature_validation(self):
         """Test that temperature is validated."""
         # Valid temperatures
-        UnifiedConfig(temperature=0.0)
-        UnifiedConfig(temperature=1.0)
-        UnifiedConfig(temperature=2.0)
+        UnifiedConfig(model="test-model", temperature=0.0)
+        UnifiedConfig(model="test-model", temperature=1.0)
+        UnifiedConfig(model="test-model", temperature=2.0)
 
         # Invalid temperatures
         with pytest.raises(ValidationError):
-            UnifiedConfig(temperature=-0.1)
+            UnifiedConfig(model="test-model", temperature=-0.1)
 
         with pytest.raises(ValidationError):
-            UnifiedConfig(temperature=2.1)
+            UnifiedConfig(model="test-model", temperature=2.1)
 
     def test_positive_value_validation(self):
         """Test that positive values are validated."""
         # Valid
-        UnifiedConfig(max_context_tokens=1000)
-        UnifiedConfig(max_tool_steps=1)
+        UnifiedConfig(model="test-model", max_context_tokens=1000)
+        UnifiedConfig(model="test-model", max_tool_steps=1)
 
         # Invalid
         with pytest.raises(ValidationError):
-            UnifiedConfig(max_context_tokens=0)
+            UnifiedConfig(model="test-model", max_context_tokens=0)
 
         with pytest.raises(ValidationError):
-            UnifiedConfig(max_tool_steps=0)
+            UnifiedConfig(model="test-model", max_tool_steps=0)
 
     def test_log_level_validation(self):
         """Test that log level is validated."""
         # Valid
-        UnifiedConfig(log_level="DEBUG")
-        UnifiedConfig(log_level="INFO")
-        UnifiedConfig(log_level="WARNING")
-        UnifiedConfig(log_level="ERROR")
+        UnifiedConfig(model="test-model", log_level="DEBUG")
+        UnifiedConfig(model="test-model", log_level="INFO")
+        UnifiedConfig(model="test-model", log_level="WARNING")
+        UnifiedConfig(model="test-model", log_level="ERROR")
 
         # Invalid
         with pytest.raises(ValidationError):
-            UnifiedConfig(log_level="INVALID")
+            UnifiedConfig(model="test-model", log_level="INVALID")
 
-    def test_from_env_and_file_defaults(self, tmp_path):
-        """Test loading with no env vars or file."""
+    def test_from_env_and_file_requires_model(self, tmp_path):
+        """Test loading without a configured model fails."""
         with patch.dict("os.environ", {}, clear=True):
-            config = UnifiedConfig.from_env_and_file()
-            assert config.model == "gemini-3-pro-preview"
+            with pytest.raises(ValidationError):
+                UnifiedConfig.from_env_and_file(tmp_path / ".agent" / "config.json")
 
     def test_from_env_and_file_with_file(self, tmp_path):
         """Test loading from config file."""
@@ -101,8 +110,8 @@ class TestUnifiedConfig:
         assert config.model == "file-model"
         assert config.max_tool_steps == 25
 
-    def test_from_env_and_file_env_overrides_file(self, tmp_path):
-        """Test that env vars override file config."""
+    def test_from_env_and_file_does_not_override_model_from_env(self, tmp_path):
+        """Test that model must come from the config file."""
         config_file = tmp_path / ".agent" / "config.json"
         config_file.parent.mkdir(parents=True)
 
@@ -110,9 +119,9 @@ class TestUnifiedConfig:
         with open(config_file, "w") as f:
             json.dump(config_data, f)
 
-        with patch.dict("os.environ", {"DORAEMON_MODEL": "env-model"}):
+        with patch.dict("os.environ", {"AGENT_MODEL": "env-model"}):
             config = UnifiedConfig.from_env_and_file(config_file)
-            assert config.model == "env-model"
+            assert config.model == "file-model"
 
     def test_to_file(self, tmp_path):
         """Test saving config to file."""
@@ -186,7 +195,3 @@ class TestConfigHelpers:
 
         assert _parse_bool(None) is None
         assert _parse_bool("maybe") is None
-
-
-# Need to add patch import
-from unittest.mock import patch

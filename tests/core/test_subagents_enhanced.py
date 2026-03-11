@@ -505,13 +505,13 @@ class TestSubagentManager:
     @pytest.fixture
     def manager(self, mock_client, mock_tool_registry):
         """Create SubagentManager instance."""
-        return SubagentManager(mock_client, mock_tool_registry)
+        return SubagentManager(mock_client, mock_tool_registry, parent_model="test-model")
 
     def test_manager_initialization(self, manager):
         """Test manager initialization."""
         assert manager.model_client is not None
         assert manager.tool_registry is not None
-        assert manager.parent_model == "gemini-2.0-flash"
+        assert manager.parent_model == "test-model"
 
     def test_manager_register_agent(self, manager):
         """Test registering custom agent."""

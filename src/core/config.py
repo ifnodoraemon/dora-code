@@ -64,3 +64,23 @@ def load_config(override_path: str | None = None, validate: bool = True) -> dict
     except Exception as e:
         logger.error(f"Failed to load configuration: {e}", exc_info=True)
         return get_default_config()
+
+
+def get_required_config_value(key: str, override_path: str | None = None) -> Any:
+    """Return a required top-level config value, raising if absent."""
+    config_data = load_config(override_path=override_path)
+    value = config_data.get(key)
+    if value is None or value == "":
+        config_file = override_path or str(default_config_path())
+        raise ValueError(f"Missing required config '{key}' in {config_file}")
+    return value
+
+
+def get_optional_config_value(
+    key: str,
+    default: Any = None,
+    override_path: str | None = None,
+) -> Any:
+    """Return an optional top-level config value."""
+    config_data = load_config(override_path=override_path)
+    return config_data.get(key, default)

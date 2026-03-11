@@ -24,7 +24,7 @@ class ServerConfig(BaseModel):
 class PersonaConfig(BaseModel):
     """Agent persona configuration."""
 
-    name: str = Field(default="Doraemon", description="Agent name")
+    name: str = Field(default="Agent", description="Agent name")
     role: str = Field(default="Generalist AI Assistant", description="Agent role")
 
     @field_validator("name", "role")
@@ -36,12 +36,26 @@ class PersonaConfig(BaseModel):
         return v.strip()
 
 
-class DoraemonConfig(BaseModel):
-    """Main Doraemon configuration."""
+class AgentConfig(BaseModel):
+    """Main agent configuration."""
 
+    model: str = Field(..., description="Primary model identifier")
     mcpServers: dict[str, ServerConfig] = Field(
         ..., alias="mcpServers", description="MCP servers configuration"
     )
+    gateway_url: str | None = Field(default=None, description="Gateway server URL")
+    gateway_key: str | None = Field(default=None, description="Gateway API key")
+    google_api_key: str | None = Field(default=None, description="Google API key")
+    openai_api_key: str | None = Field(default=None, description="OpenAI API key")
+    anthropic_api_key: str | None = Field(default=None, description="Anthropic API key")
+    ollama_base_url: str | None = Field(default=None, description="Ollama base URL")
+    embedding_model: str | None = Field(default=None, description="Embedding model")
+    rerank_model: str | None = Field(default=None, description="Rerank model")
+    temperature: float | None = Field(default=None, description="Model temperature override")
+    daily_budget_usd: float | None = Field(default=None, description="Daily budget in USD")
+    session_budget_usd: float | None = Field(default=None, description="Session budget in USD")
+    log_level: str | None = Field(default=None, description="Global log level")
+    log_file: str | None = Field(default=None, description="Global log file path")
     persona: PersonaConfig | None = Field(default=None, description="Agent persona configuration")
     sensitive_tools: list[str] = Field(
         default_factory=lambda: [
@@ -68,10 +82,10 @@ class DoraemonConfig(BaseModel):
         """Ensure required servers are configured."""
         required_servers = {
             "memory": "Long-term memory server",
-            "fs_read": "File reading server",
-            "fs_write": "File writing server",
-            "fs_edit": "File editing server",
-            "fs_ops": "File operations server",
+            "filesystem": "Unified filesystem server",
+            "web": "Web access server",
+            "run": "Unified command execution server",
+            "task": "Task management server",
         }
 
         missing = []
@@ -92,8 +106,16 @@ class DoraemonConfig(BaseModel):
             raise ValueError("Sensitive tools list cannot be empty")
         return v
 
+    @field_validator("model")
+    @classmethod
+    def validate_model(cls, v):
+        """Ensure the configured model is not empty."""
+        if not v or not v.strip():
+            raise ValueError("Model cannot be empty")
+        return v.strip()
 
-def validate_config_file(config_path: Path) -> DoraemonConfig:
+
+def validate_config_file(config_path: Path) -> AgentConfig:
     """
     Validate a configuration file.
 
@@ -116,7 +138,7 @@ def validate_config_file(config_path: Path) -> DoraemonConfig:
         config_data = json.load(f)
 
     try:
-        config = DoraemonConfig.model_validate(config_data)
+        config = AgentConfig.model_validate(config_data)
         return config
     except Exception as e:
         raise ValueError(f"Invalid configuration: {e}") from e
@@ -127,19 +149,12 @@ def get_default_config() -> dict:
     return {
         "mcpServers": {
             "memory": {"command": "python3", "args": ["src/servers/memory.py"], "env": {}},
-            "fs_read": {
-                "command": "python3",
-                "args": ["src/servers/fs_read.py"],
-                "env": {"VISION_PROVIDER": "google", "VISION_MODEL": "gemini-1.5-flash"},
-            },
-            "fs_write": {"command": "python3", "args": ["src/servers/fs_write.py"], "env": {}},
-            "fs_edit": {"command": "python3", "args": ["src/servers/fs_edit.py"], "env": {}},
-            "fs_ops": {"command": "python3", "args": ["src/servers/fs_ops.py"], "env": {}},
+            "filesystem": {"command": "python3", "args": ["src/servers/filesystem_unified.py"], "env": {}},
             "web": {"command": "python3", "args": ["src/servers/web.py"], "env": {}},
-            "computer": {"command": "python3", "args": ["src/servers/computer.py"], "env": {}},
+            "run": {"command": "python3", "args": ["src/servers/run_unified.py"], "env": {}},
             "task": {"command": "python3", "args": ["src/servers/task.py"], "env": {}},
         },
-        "persona": {"name": "Doraemon", "role": "Generalist AI Assistant & Coder"},
+        "persona": {"name": "Agent", "role": "Generalist AI Assistant & Coder"},
         "sensitive_tools": [
             "execute_python",
             "write_file",

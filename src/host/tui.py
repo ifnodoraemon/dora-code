@@ -1,5 +1,5 @@
 """
-Textual-based TUI for Doraemon.
+Textual-based TUI for the agent.
 
 This provides a modern terminal user interface with:
 - Split-screen layout (chat + sidebar)
@@ -9,8 +9,6 @@ This provides a modern terminal user interface with:
 - AI chat integration via ModelClient
 """
 
-import os
-
 from dotenv import load_dotenv
 from rich.markdown import Markdown
 from textual.app import App, ComposeResult
@@ -19,6 +17,7 @@ from textual.containers import Container, ScrollableContainer, Vertical
 from textual.reactive import reactive
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
+from src.core.config import load_config
 # Import ModelClient for AI integration
 from src.core.model_client import (
     Message,
@@ -60,7 +59,7 @@ class Sidebar(Vertical):
     server_count = reactive(0)
 
     def compose(self) -> ComposeResult:
-        yield Static("[bold]Doraemon v0.7.0[/bold]", id="title")
+        yield Static("[bold]Agent v0.7.0[/bold]", id="title")
         yield Static("", id="mode-display")
         yield Static("", id="server-display")
         yield Static("[green]Ready[/green]", id="status")
@@ -125,7 +124,7 @@ class DoraemonTUI(App):
         Binding("ctrl+l", "clear", "Clear Chat", show=False),
     ]
 
-    TITLE = "Doraemon AI Assistant"
+    TITLE = "Agent Assistant"
     SUB_TITLE = "Powered by ModelClient"
 
     current_mode = reactive("build")
@@ -167,21 +166,21 @@ class DoraemonTUI(App):
 
         try:
             self.model_client = await ModelClient.create()
-            self.model_name = os.getenv("DORAEMON_MODEL", "gemini-3-pro-preview")
+            self.model_name = load_config().get("model")
             self.system_prompt = get_system_prompt(self.current_mode, {})
 
             # Show mode info
             mode_info = ModelClient.get_mode_info()
             if mode_info.get("mode") == "gateway":
-                chat.add_message("system", f"Doraemon TUI v0.7.0 - Gateway Mode ({mode_info.get('gateway_url')})")
+                chat.add_message("system", f"Agent TUI v0.7.0 - Gateway Mode ({mode_info.get('gateway_url')})")
             else:
                 providers = [p for p, v in mode_info.get("providers", {}).items() if v]
-                chat.add_message("system", f"Doraemon TUI v0.7.0 - Direct Mode ({', '.join(providers)})")
+                chat.add_message("system", f"Agent TUI v0.7.0 - Direct Mode ({', '.join(providers)})")
 
             chat.add_message("system", "Type /help for commands")
         except Exception as e:
             chat.add_message("system", f"[red]Failed to initialize AI client: {e}[/red]")
-            chat.add_message("system", "Check your API configuration in .env file")
+            chat.add_message("system", "Check your project config in .agent/config.json")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle user input."""

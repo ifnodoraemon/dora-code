@@ -100,14 +100,17 @@ class TestClientConfigValidation:
 
     def test_from_env_detects_gateway_mode(self):
         """Test that from_env detects gateway mode."""
-        with patch.dict("os.environ", {"DORAEMON_GATEWAY_URL": "http://test.com"}):
+        with patch("src.core.config.load_config", return_value={
+            "model": "gpt-4o",
+            "gateway_url": "http://test.com",
+        }):
             config = ClientConfig.from_env()
             assert config.mode == ClientMode.GATEWAY
             assert config.gateway_url == "http://test.com"
 
     def test_from_env_detects_direct_mode(self):
         """Test that from_env detects direct mode."""
-        with patch.dict("os.environ", {}, clear=True):
+        with patch("src.core.config.load_config", return_value={"model": "test-model"}):
             config = ClientConfig.from_env()
             assert config.mode == ClientMode.DIRECT
 

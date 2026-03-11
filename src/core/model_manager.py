@@ -11,10 +11,11 @@ Features:
 """
 
 import logging
-import os
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+
+from src.core.config import get_required_config_value
 
 logger = logging.getLogger(__name__)
 
@@ -204,9 +205,7 @@ class ModelManager:
         Args:
             default_model: Default model ID
         """
-        self._current_model = default_model or os.getenv(
-            "DORAEMON_MODEL", "gemini-3-pro-preview"
-        )
+        self._current_model = default_model or get_required_config_value("model")
         self._model_history: list[str] = [self._current_model]
 
     def list_models(self, provider: str | None = None) -> list[ModelInfo]:

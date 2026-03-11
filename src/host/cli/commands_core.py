@@ -11,8 +11,10 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from src.core.config import load_config
 from src.core.paths import config_path, memory_path, skills_dir
 from src.core.rules import create_default_rules
+from src.core.schema import get_default_config
 from src.host.cli.command_context import CommandContext
 
 console = Console()
@@ -747,7 +749,9 @@ class CoreCommandHandler:
 
     def _show_status(self, mode: str, tool_names: list):
         """Show system status information."""
-        import os
+        from src.core.config import load_config
+
+        config_data = load_config()
 
         table = Table(title="System Status", show_header=False)
         table.add_column("Key", style="cyan")
@@ -759,10 +763,10 @@ class CoreCommandHandler:
         table.add_row("Mode", mode)
 
         # Model info
-        model = os.getenv("DORAEMON_MODEL", "gemini-3-pro-preview")
+        model = config_data.get("model", "(not set)")
         table.add_row("Model", model)
 
-        gateway = os.getenv("DORAEMON_GATEWAY_URL")
+        gateway = config_data.get("gateway_url")
         if gateway:
             table.add_row("Gateway", gateway)
         else:
@@ -794,7 +798,6 @@ class CoreCommandHandler:
             /config model        - Change model interactively
         """
         import json
-        import os
 
         config_file = config_path()
         config_file.parent.mkdir(parents=True, exist_ok=True)
@@ -803,7 +806,7 @@ class CoreCommandHandler:
         if config_file.exists():
             config_data = json.loads(config_file.read_text())
         else:
-            config_data = {}
+            config_data = get_default_config()
 
         if not cmd_args:
             # Show current config
@@ -811,12 +814,6 @@ class CoreCommandHandler:
             table.add_column("Key", style="cyan")
             table.add_column("Value", style="green")
             table.add_column("Source", style="dim")
-
-            # Show env vars and config
-            table.add_row("model", os.getenv("DORAEMON_MODEL", "gemini-3-pro-preview"), "env")
-            table.add_row("gateway_url", os.getenv("DORAEMON_GATEWAY_URL", "(not set)"), "env")
-            table.add_row("daily_budget", os.getenv("DORAEMON_DAILY_BUDGET", "0"), "env")
-            table.add_row("session_budget", os.getenv("DORAEMON_SESSION_BUDGET", "0"), "env")
 
             for k, v in config_data.items():
                 table.add_row(k, str(v), "config.json")
@@ -853,8 +850,10 @@ class CoreCommandHandler:
                 selected = models[int(choice) - 1]
             else:
                 selected = choice
+            config_data["model"] = selected
+            config_file.write_text(json.dumps(config_data, indent=2))
             console.print(f"[green]Selected: {selected}[/green]")
-            console.print(f"[dim]Set DORAEMON_MODEL={selected} in your environment[/dim]")
+            console.print(f"[dim]Saved model to {config_file}[/dim]")
 
         else:
             console.print("[red]Usage: /config [set <key> <value> | model][/red]")
@@ -903,10 +902,9 @@ class CoreCommandHandler:
 
     def _run_doctor(self):
         """Run diagnostic checks (same as CLI doctor command)."""
-        import os
         import sys
 
-        console.print("[bold]🔍 Doraemon Code Diagnostics[/bold]\n")
+        console.print("[bold]🔍 Agent Diagnostics[/bold]\n")
 
         checks = []
 
@@ -915,18 +913,21 @@ class CoreCommandHandler:
         py_ok = py_version >= (3, 10)
         checks.append(("Python", f"{py_version.major}.{py_version.minor}.{py_version.micro}", py_ok))
 
-        # API keys
-        google_key = bool(os.getenv("GOOGLE_API_KEY"))
-        openai_key = bool(os.getenv("OPENAI_API_KEY"))
-        anthropic_key = bool(os.getenv("ANTHROPIC_API_KEY"))
-        gateway_url = os.getenv("DORAEMON_GATEWAY_URL")
+        config_data = load_config(validate=False)
+        model = config_data.get("model")
+        google_key = bool(config_data.get("google_api_key"))
+        openai_key = bool(config_data.get("openai_api_key"))
+        anthropic_key = bool(config_data.get("anthropic_api_key"))
+        gateway_url = config_data.get("gateway_url")
+
+        checks.append(("model", model or "Missing", bool(model)))
 
         if gateway_url:
             checks.append(("Gateway", gateway_url, True))
         else:
-            checks.append(("GOOGLE_API_KEY", "✓" if google_key else "✗", google_key))
-            checks.append(("OPENAI_API_KEY", "✓" if openai_key else "✗", openai_key))
-            checks.append(("ANTHROPIC_API_KEY", "✓" if anthropic_key else "✗", anthropic_key))
+            checks.append(("google_api_key", "✓" if google_key else "✗", google_key))
+            checks.append(("openai_api_key", "✓" if openai_key else "✗", openai_key))
+            checks.append(("anthropic_api_key", "✓" if anthropic_key else "✗", anthropic_key))
 
         # Directories
         checks.append((".agent/", "✓" if Path(".agent").exists() else "Will create", True))

@@ -193,58 +193,35 @@ bus.clear_history()
 
 ---
 
-### Metrics
+### Logging and Trace
 
-**Module:** `src.core.metrics`
+**Module:** `src.core.logger`
 
-Metrics collection with Counter, Gauge, and Histogram types.
+Project-local logging helpers for standard logs and lightweight trace capture.
 
 #### Basic Usage
 
 ```python
-from src.core.metrics import get_metrics
+from src.core.logger import get_logger, setup_logger
 
-metrics = get_metrics()
+logger = get_logger(__name__)
+logger.info("Background task started")
 
-# Counters (only increase)
-metrics.increment("requests_total")
-metrics.increment("requests_total", method="GET", status="200")
-
-# Gauges (can increase/decrease)
-metrics.gauge_set("queue_size", 42)
-metrics.gauge_inc("active_connections")
-metrics.gauge_dec("active_connections")
-
-# Histograms (distributions)
-metrics.observe("request_duration_seconds", 0.5)
-
-# Timer context manager
-with metrics.timer("operation_duration", operation="fetch"):
-    do_something()
+custom_logger = setup_logger("my_module", level="DEBUG", log_file=".agent/logs/my_module.log")
+custom_logger.debug("Verbose details enabled")
 ```
 
-#### Doraemon Metrics
+#### Trace Logger
 
 ```python
-from src.core.metrics import get_doraemon_metrics
+from src.core.logger import TraceLogger
 
-pm = get_doraemon_metrics()
+trace = TraceLogger()
 
-# Session metrics
-pm.session_started("my_project")
-pm.session_ended("my_project", turns=10, duration_seconds=300.0)
+trace.log("tool_call", "read", {"path": "README.md"})
+trace.log("tool_result", "read", {"bytes": 2048}, duration_ms=12.4)
 
-# Tool metrics
-pm.tool_called("read_file", "fs_read")
-pm.tool_succeeded("read_file", 0.5)
-pm.tool_failed("write_file", "permission_denied")
-
-# Cache metrics
-pm.cache_hit("read_file")
-pm.cache_miss("read_file")
-
-# Token metrics
-pm.tokens_used(input_tokens=100, output_tokens=50)
+events = trace.export()
 ```
 
 #### Export
@@ -270,7 +247,7 @@ Structured error handling with retry and circuit breaker patterns.
 
 ```python
 from src.core.errors import (
-    DoraemonException,
+    AgentError,
     ConfigurationError,
     TransientError,
     RateLimitError,
@@ -278,7 +255,7 @@ from src.core.errors import (
 )
 
 # Base exception
-raise DoraemonException("Something went wrong", ErrorCategory.UNKNOWN)
+raise AgentError("Something went wrong", ErrorCategory.UNKNOWN)
 
 # Configuration error
 raise ConfigurationError("Missing required config", {"key": "database.host"})
@@ -364,54 +341,32 @@ except Exception as e:
 
 ---
 
-### Telemetry
+### Logging
 
-**Module:** `src.core.telemetry`
+**Module:** `src.core.logger`
 
-Structured logging and distributed tracing.
+Standard logging plus per-operation trace capture.
 
-#### Structured Logger
+#### Logger
 
 ```python
-from src.core.telemetry import StructuredLogger, get_logger, LogLevel
+from src.core.logger import get_logger
 
-logger = get_logger("my_module", min_level=LogLevel.DEBUG)
-
-# Basic logging
-logger.debug("Debug message", key="value")
-logger.info("Info message", user_id="123")
+logger = get_logger(__name__)
+logger.debug("Debug message")
+logger.info("Info message")
 logger.warning("Warning message")
-logger.error("Error message", exception=e)
-logger.critical("Critical message")
-
-# Operation scope
-with logger.operation("process_request", request_id="abc"):
-    logger.debug("Processing...")
-    # Logs will include operation context
-
-# Correlation ID
-with logger.correlation("req-12345"):
-    logger.info("All logs in this scope share correlation ID")
+logger.error("Error message")
 ```
 
-#### Tracer
+#### Trace Capture
 
 ```python
-from src.core.telemetry import Tracer, get_tracer
+from src.core.logger import TraceLogger
 
-tracer = get_tracer()
-
-# Create spans
-with tracer.start_span("http_request", method="GET", url="/api") as span:
-    # Do work
-    span.tags["status"] = 200
-    span.tags["bytes"] = 1024
-
-# Nested spans
-with tracer.start_span("process_order") as parent:
-    with tracer.start_span("validate") as child:
-        # child.parent_id == parent.span_id
-        pass
+trace = TraceLogger()
+trace.log("operation_start", "process_request", {"request_id": "abc"})
+trace.log("operation_end", "process_request", {"status": 200}, duration_ms=18.7)
 ```
 
 ---
@@ -668,27 +623,47 @@ See `src.core.user_errors` for user-friendly error messages.
 |----------|-------------|---------|
 | `GOOGLE_API_KEY` | Google Gemini API key | Required |
 | `OPENAI_API_KEY` | OpenAI API key | Optional |
-| `DORAEMON_MODEL` | LLM model name | `gemini-3-pro-preview` |
-| `DORAEMON_LOG_LEVEL` | Log level (DEBUG/INFO/WARNING/ERROR) | `INFO` |
-| `DORAEMON_LOG_FILE` | Enable file logging | `false` |
-| `DORAEMON_MAX_MEMORY_MB` | Code execution memory limit | `512` |
-| `DORAEMON_MAX_CPU_TIME` | Code execution CPU time limit | `30` |
+| `AGENT_LOG_LEVEL` | Log level (DEBUG/INFO/WARNING/ERROR) | `INFO` |
+| `AGENT_LOG_FILE` | Enable file logging | `false` |
+| `AGENT_MAX_MEMORY_MB` | Code execution memory limit | `512` |
+| `AGENT_MAX_CPU_TIME` | Code execution CPU time limit | `30` |
 
 ### Config File
 
-Location: `.doraemon/config.json`
+Location: `.agent/config.json`
 
 ```json
 {
+  "model": "gemini-3-pro-preview",
   "mcpServers": {
-    "fs_read": {
+    "filesystem": {
       "command": "python3",
-      "args": ["src/servers/fs_read.py"],
+      "args": ["src/servers/filesystem_unified.py"],
+      "env": {}
+    },
+    "memory": {
+      "command": "python3",
+      "args": ["src/servers/memory.py"],
+      "env": {}
+    },
+    "web": {
+      "command": "python3",
+      "args": ["src/servers/web.py"],
+      "env": {}
+    },
+    "run": {
+      "command": "python3",
+      "args": ["src/servers/run_unified.py"],
+      "env": {}
+    },
+    "task": {
+      "command": "python3",
+      "args": ["src/servers/task.py"],
       "env": {}
     }
   },
   "persona": {
-    "name": "Doraemon",
+    "name": "Agent",
     "role": "AI Assistant"
   },
   "sensitive_tools": [

@@ -35,9 +35,9 @@ from src.servers.memory import (
 def temp_memory_dir():
     """Create a temporary directory for memory files."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Create .doraemon subdirectory
-        doraemon_dir = os.path.join(tmpdir, ".doraemon")
-        os.makedirs(doraemon_dir, exist_ok=True)
+        # Create .agent subdirectory
+        agent_dir = os.path.join(tmpdir, ".agent")
+        os.makedirs(agent_dir, exist_ok=True)
 
         original_cwd = os.getcwd()
         os.chdir(tmpdir)
@@ -454,13 +454,13 @@ class TestUpdateUserPersona:
         assert "name = John Doe" in result
 
         # Verify file was created
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         assert os.path.exists(memory_file)
 
     def test_update_user_persona_existing_file(self, temp_memory_dir):
         """Test updating user persona when file already exists."""
         # Create initial memory file
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         initial_data = {"job": "Engineer"}
         with open(memory_file, "w") as f:
             json.dump(initial_data, f)
@@ -478,7 +478,7 @@ class TestUpdateUserPersona:
 
     def test_update_user_persona_overwrite_existing_key(self, temp_memory_dir):
         """Test overwriting an existing persona key."""
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         initial_data = {"name": "Old Name"}
         with open(memory_file, "w") as f:
             json.dump(initial_data, f)
@@ -503,7 +503,7 @@ class TestUpdateUserPersona:
         assert "已记住" in result or "remembered" in result.lower()
 
         # Verify special characters are preserved
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         with open(memory_file) as f:
             data = json.load(f)
         assert "喜欢" in data["preferences"]
@@ -516,7 +516,7 @@ class TestUpdateUserPersona:
         assert "已记住" in result or "remembered" in result.lower()
 
         # Verify empty value is stored
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         with open(memory_file) as f:
             data = json.load(f)
         assert data["key"] == ""
@@ -527,7 +527,7 @@ class TestUpdateUserPersona:
         update_user_persona("key2", "value2")
         update_user_persona("key3", "value3")
 
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         with open(memory_file) as f:
             data = json.load(f)
 
@@ -537,7 +537,7 @@ class TestUpdateUserPersona:
 
     def test_update_user_persona_corrupted_json(self, temp_memory_dir):
         """Test updating persona when JSON file is corrupted."""
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         with open(memory_file, "w") as f:
             f.write("{ invalid json }")
 
@@ -555,7 +555,7 @@ class TestUpdateUserPersona:
         """Test that JSON is formatted with proper indentation."""
         update_user_persona("key", "value")
 
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         with open(memory_file) as f:
             content = f.read()
 
@@ -568,7 +568,7 @@ class TestUpdateUserPersona:
 
         assert "已记住" in result or "remembered" in result.lower()
 
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         with open(memory_file) as f:
             content = f.read()
 
@@ -592,7 +592,7 @@ class TestGetUserPersona:
 
     def test_get_user_persona_existing_file(self, temp_memory_dir):
         """Test getting persona from existing file."""
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         data = {"name": "John", "job": "Engineer"}
         with open(memory_file, "w") as f:
             json.dump(data, f)
@@ -604,7 +604,7 @@ class TestGetUserPersona:
 
     def test_get_user_persona_empty_file(self, temp_memory_dir):
         """Test getting persona from empty JSON file."""
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         with open(memory_file, "w") as f:
             json.dump({}, f)
 
@@ -615,7 +615,7 @@ class TestGetUserPersona:
 
     def test_get_user_persona_complex_data(self, temp_memory_dir):
         """Test getting persona with complex nested data."""
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         data = {
             "name": "John",
             "preferences": {
@@ -634,7 +634,7 @@ class TestGetUserPersona:
 
     def test_get_user_persona_special_characters(self, temp_memory_dir):
         """Test getting persona with special characters."""
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         data = {"preferences": "喜欢 Python & 测试"}
         with open(memory_file, "w") as f:
             json.dump(data, f, ensure_ascii=False)
@@ -646,7 +646,7 @@ class TestGetUserPersona:
 
     def test_get_user_persona_returns_raw_content(self, temp_memory_dir):
         """Test that get_user_persona returns raw file content."""
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         data = {"key": "value"}
         with open(memory_file, "w") as f:
             json.dump(data, f)
@@ -790,7 +790,7 @@ class TestEdgeCases:
 
         assert "已记住" in result or "remembered" in result.lower()
 
-        memory_file = os.path.join(temp_memory_dir, ".doraemon", "memory.json")
+        memory_file = os.path.join(temp_memory_dir, ".agent", "memory.json")
         with open(memory_file) as f:
             data = json.load(f)
         assert data["long_key"] == long_value

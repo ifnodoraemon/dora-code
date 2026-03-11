@@ -48,7 +48,7 @@ def get_modified_paths(tool_name: str, args: dict[str, Any]) -> list[str]:
         path = args.get("path")
         return [path] if isinstance(path, str) and path else []
 
-    if tool_name != "write":
+    if tool_name not in {"write", "write_file", "edit_file"}:
         return []
 
     operation = args.get("operation", "create")
@@ -136,6 +136,7 @@ async def execute_tool(
     tool_name: str,
     args: dict[str, Any],
     tool_call_id: str,
+    project: str,
     registry,
     sensitive_tools: set,
     checkpoint_mgr,
@@ -216,8 +217,8 @@ async def execute_tool(
                 sensitive_tools = sensitive_tools | {tool_name}
 
     # Inject project context for memory tools
-    if tool_name in ["save_note", "search_notes"]:
-        args["collection_name"] = args.get("collection_name", "default")
+    if tool_name in ["save_note", "search_notes", "delete_note", "list_notes"]:
+        args["collection_name"] = args.get("collection_name", project)
 
     for path in get_modified_paths(tool_name, args):
         checkpoint_mgr.snapshot_file(path)

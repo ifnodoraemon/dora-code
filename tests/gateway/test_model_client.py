@@ -1,6 +1,5 @@
 """Tests for the unified model client."""
 
-import os
 from unittest.mock import patch
 
 from src.core.model_client import (
@@ -18,12 +17,12 @@ class TestClientConfig:
     """Tests for ClientConfig."""
 
     def test_from_env_direct_mode(self):
-        """Test config from environment in direct mode."""
-        with patch.dict(os.environ, {
-            "GOOGLE_API_KEY": "test_google_key",
-            "OPENAI_API_KEY": "test_openai_key",
-            "DORAEMON_MODEL": "gemini-2.5-flash",
-        }, clear=True):
+        """Test config from project config in direct mode."""
+        with patch("src.core.config.load_config", return_value={
+            "model": "gemini-2.5-flash",
+            "google_api_key": "test_google_key",
+            "openai_api_key": "test_openai_key",
+        }):
             config = ClientConfig.from_env()
 
             assert config.mode == ClientMode.DIRECT
@@ -32,11 +31,12 @@ class TestClientConfig:
             assert config.model == "gemini-2.5-flash"
 
     def test_from_env_gateway_mode(self):
-        """Test config from environment in gateway mode."""
-        with patch.dict(os.environ, {
-            "DORAEMON_GATEWAY_URL": "http://localhost:8000",
-            "DORAEMON_API_KEY": "test_gateway_key",
-        }, clear=True):
+        """Test config from project config in gateway mode."""
+        with patch("src.core.config.load_config", return_value={
+            "model": "gpt-4o",
+            "gateway_url": "http://localhost:8000",
+            "gateway_key": "test_gateway_key",
+        }):
             config = ClientConfig.from_env()
 
             assert config.mode == ClientMode.GATEWAY
@@ -113,23 +113,25 @@ class TestModelClient:
 
     def test_get_mode_direct(self):
         """Test mode detection for direct mode."""
-        with patch.dict(os.environ, {}, clear=True):
+        with patch("src.core.config.load_config", return_value={"model": "gemini-2.5-flash"}):
             mode = ModelClient.get_mode()
             assert mode == ClientMode.DIRECT
 
     def test_get_mode_gateway(self):
         """Test mode detection for gateway mode."""
-        with patch.dict(os.environ, {
-            "DORAEMON_GATEWAY_URL": "http://localhost:8000",
-        }, clear=True):
+        with patch("src.core.config.load_config", return_value={
+            "model": "gpt-4o",
+            "gateway_url": "http://localhost:8000",
+        }):
             mode = ModelClient.get_mode()
             assert mode == ClientMode.GATEWAY
 
     def test_get_mode_info(self):
         """Test mode info retrieval."""
-        with patch.dict(os.environ, {
-            "GOOGLE_API_KEY": "test_key",
-        }, clear=True):
+        with patch("src.core.config.load_config", return_value={
+            "model": "gemini-2.5-flash",
+            "google_api_key": "test_key",
+        }):
             info = ModelClient.get_mode_info()
 
             assert info["mode"] == "direct"
