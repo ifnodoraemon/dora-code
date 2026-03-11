@@ -99,24 +99,17 @@ class DependencyAnalyzer:
     WRITE_TOOLS = {
         "write",
         "run",
-        "git_commit",
-        "git_push",
     }
 
     # Tools that read state
     READ_TOOLS = {
         "read",
         "search",
-        "git_status",
-        "git_log",
-        "git_diff",
         "semantic_search",
     }
 
     # Known dependencies (tool -> depends on)
     KNOWN_DEPENDENCIES = {
-        "git_commit": ["git_add"],
-        "git_push": ["git_commit"],
         "file_edit": [],  # Can depend on file_read of same file
     }
 

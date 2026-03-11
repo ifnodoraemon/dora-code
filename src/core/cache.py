@@ -84,10 +84,6 @@ class ToolCache:
         "file_read",
         "file_list",
         "file_search",
-        "git_status",
-        "git_log",
-        "git_diff",
-        "git_show",
         "semantic_search",
         "grep",
         "glob",
@@ -97,8 +93,6 @@ class ToolCache:
 
     # TTL overrides for specific tools
     TOOL_TTL = {
-        "git_status": 10,  # Changes frequently
-        "git_diff": 30,
         "file_read": 60,
         "file_list": 30,
         "semantic_search": 300,

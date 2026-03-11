@@ -394,14 +394,6 @@ TOOL_SPECS: list[ToolSpec] = [
     ToolSpec("src.servers.task", "list_tasks",          name="task_list",          sensitive=False, timeout=60.0),
     ToolSpec("src.servers.task", "update_task_status",  name="task_update_status", sensitive=False, timeout=60.0),
 
-    # ── Git ──────────────────────────────────────────────────────────
-    ToolSpec("src.servers.git", "git",        sensitive=True,  timeout=60.0),
-    ToolSpec("src.servers.git", "git_status", sensitive=False, timeout=60.0),
-    ToolSpec("src.servers.git", "git_diff",   sensitive=False, timeout=60.0),
-    ToolSpec("src.servers.git", "git_log",    sensitive=False, timeout=60.0),
-    ToolSpec("src.servers.git", "git_add",    sensitive=False, timeout=60.0),
-    ToolSpec("src.servers.git", "git_commit", sensitive=True,  timeout=60.0),
-
     # ── LSP ──────────────────────────────────────────────────────────
     ToolSpec("src.servers.lsp", "lsp",             sensitive=False, timeout=120.0),
     ToolSpec("src.servers.lsp", "lsp_diagnostics", sensitive=False, timeout=120.0),

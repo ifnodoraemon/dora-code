@@ -55,8 +55,8 @@ class TestToolCall:
         """Test ToolCall with multiple dependencies."""
         call = ToolCall(
             id="call_3",
-            name="git_commit",
-            arguments={"message": "test"},
+            name="run",
+            arguments={"command": "python build.py"},
             depends_on=["call_1", "call_2"],
         )
         assert len(call.depends_on) == 2
@@ -245,18 +245,22 @@ class TestDependencyAnalyzer:
         assert len(stages) == 1
         assert len(stages[0]) == 2
 
-    def test_analyze_git_commit_depends_on_git_add(self):
-        """Test git_commit depends on git_add."""
+    def test_analyze_explicit_dependency_chain(self):
+        """Test explicit dependencies create separate stages."""
         analyzer = DependencyAnalyzer()
         calls = [
-            ToolCall(id="call_1", name="git_add", arguments={"path": "/file.txt"}),
-            ToolCall(id="call_2", name="git_commit", arguments={"message": "test"}),
+            ToolCall(id="call_1", name="run", arguments={"command": "npm test"}),
+            ToolCall(
+                id="call_2",
+                name="run",
+                arguments={"command": "npm publish"},
+                depends_on=["call_1"],
+            ),
         ]
         stages = analyzer.analyze(calls)
-        # Should be in separate stages
         assert len(stages) == 2
-        assert stages[0][0].name == "git_add"
-        assert stages[1][0].name == "git_commit"
+        assert stages[0][0].id == "call_1"
+        assert stages[1][0].id == "call_2"
 
     def test_analyze_explicit_dependencies(self):
         """Test explicit dependencies."""
@@ -693,9 +697,19 @@ class TestParallelExecutor:
         async_handler = AsyncMock(return_value="result")
         executor = ParallelExecutor(async_handler)
         calls = [
-            ToolCall(id="call_1", name="git_add", arguments={"path": "/file.txt"}),
-            ToolCall(id="call_2", name="git_commit", arguments={"message": "test"}),
-            ToolCall(id="call_3", name="git_push", arguments={}),
+            ToolCall(id="call_1", name="run", arguments={"command": "npm test"}),
+            ToolCall(
+                id="call_2",
+                name="run",
+                arguments={"command": "npm pack"},
+                depends_on=["call_1"],
+            ),
+            ToolCall(
+                id="call_3",
+                name="run",
+                arguments={"command": "npm publish"},
+                depends_on=["call_2"],
+            ),
         ]
         results = await executor.execute(calls, strategy=ExecutionStrategy.SMART)
 
@@ -818,23 +832,19 @@ class TestParallelExecutor:
         analyzer = DependencyAnalyzer()
         assert "write" in analyzer.WRITE_TOOLS
         assert "run" in analyzer.WRITE_TOOLS
-        assert "git_commit" in analyzer.WRITE_TOOLS
 
     def test_analyzer_read_tools_set(self):
         """Test that READ_TOOLS set contains expected tools."""
         analyzer = DependencyAnalyzer()
         assert "read" in analyzer.READ_TOOLS
         assert "search" in analyzer.READ_TOOLS
-        assert "git_log" in analyzer.READ_TOOLS
         assert "semantic_search" in analyzer.READ_TOOLS
 
     def test_analyzer_known_dependencies(self):
         """Test KNOWN_DEPENDENCIES mapping."""
         analyzer = DependencyAnalyzer()
-        assert "git_commit" in analyzer.KNOWN_DEPENDENCIES
-        assert "git_add" in analyzer.KNOWN_DEPENDENCIES["git_commit"]
-        assert "git_push" in analyzer.KNOWN_DEPENDENCIES
-        assert "git_commit" in analyzer.KNOWN_DEPENDENCIES["git_push"]
+        assert "file_edit" in analyzer.KNOWN_DEPENDENCIES
+        assert analyzer.KNOWN_DEPENDENCIES["file_edit"] == []
 
     @pytest.mark.asyncio
     async def test_execute_with_different_timeout_values(self):
@@ -878,17 +888,26 @@ class TestParallelExecutor:
         """Test topological sort with complex dependency graph."""
         analyzer = DependencyAnalyzer()
         calls = [
-            ToolCall(id="call_1", name="git_add", arguments={"path": "/file1.txt"}),
-            ToolCall(id="call_2", name="git_add", arguments={"path": "/file2.txt"}),
-            ToolCall(id="call_3", name="git_commit", arguments={"message": "test"}),
-            ToolCall(id="call_4", name="git_push", arguments={}),
+            ToolCall(id="call_1", name="write", arguments={"path": "/file1.txt"}),
+            ToolCall(id="call_2", name="write", arguments={"path": "/file2.txt"}),
+            ToolCall(
+                id="call_3",
+                name="run",
+                arguments={"command": "npm test"},
+                depends_on=["call_1", "call_2"],
+            ),
+            ToolCall(
+                id="call_4",
+                name="run",
+                arguments={"command": "npm publish"},
+                depends_on=["call_3"],
+            ),
         ]
         stages = analyzer.analyze(calls)
 
         # Should have multiple stages
         assert len(stages) > 1
-        # First stage should have the git_add calls
-        assert any(call.name == "git_add" for call in stages[0])
+        assert any(call.name == "write" for call in stages[0])
 
     @pytest.mark.asyncio
     async def test_execute_single_with_exception_timing(self):
@@ -973,21 +992,24 @@ class TestParallelExecutor:
         assert plan_dict["estimated_speedup"] == 1
 
     @pytest.mark.asyncio
-    async def test_analyze_with_multiple_git_operations(self):
-        """Test analyzing multiple git operations."""
+    async def test_analyze_with_multiple_explicit_dependencies(self):
+        """Test analyzing multiple explicit dependencies."""
         analyzer = DependencyAnalyzer()
         calls = [
-            ToolCall(id="call_1", name="git_add", arguments={"path": "/file1.txt"}),
-            ToolCall(id="call_2", name="git_add", arguments={"path": "/file2.txt"}),
-            ToolCall(id="call_3", name="git_add", arguments={"path": "/file3.txt"}),
-            ToolCall(id="call_4", name="git_commit", arguments={"message": "test"}),
+            ToolCall(id="call_1", name="write", arguments={"path": "/file1.txt"}),
+            ToolCall(id="call_2", name="write", arguments={"path": "/file2.txt"}),
+            ToolCall(id="call_3", name="write", arguments={"path": "/file3.txt"}),
+            ToolCall(
+                id="call_4",
+                name="run",
+                arguments={"command": "npm test"},
+                depends_on=["call_1", "call_2", "call_3"],
+            ),
         ]
         stages = analyzer.analyze(calls)
 
-        # First stage should have all git_add calls
         assert len(stages[0]) == 3
-        # Second stage should have git_commit
-        assert stages[1][0].name == "git_commit"
+        assert stages[1][0].name == "run"
 
     @pytest.mark.asyncio
     async def test_get_execution_summary_with_single_result(self):

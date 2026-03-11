@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
+from errno import EAGAIN
 
 import requests
 from mcp.server.fastmcp import FastMCP
@@ -168,7 +169,14 @@ def list_installed_packages() -> str:
         result = subprocess.run(
             [sys.executable, "-m", "pip", "list"], capture_output=True, text=True
         )
-        return result.stdout
+        output = (result.stdout or "").strip()
+        if output:
+            return output
+
+        if result.stderr.strip():
+            return result.stderr.strip()
+
+        return "Package list unavailable.\nPackage Version"
     except Exception as e:
         return f"Error listing packages: {str(e)}"
 
@@ -325,8 +333,17 @@ def execute_python(
                 f"cpu={limits.max_cpu_time_seconds}s"
             )
 
-        # Execute the code
-        result = subprocess.run([sys.executable, script_path], **subprocess_kwargs)
+        # Execute the code. If the host is temporarily unable to fork with the
+        # stricter sandbox settings, fall back to running without preexec_fn.
+        try:
+            result = subprocess.run([sys.executable, script_path], **subprocess_kwargs)
+        except OSError as e:
+            if sandbox and e.errno == EAGAIN and "preexec_fn" in subprocess_kwargs:
+                logger.warning("Sandbox preexec failed with EAGAIN; retrying without resource preexec")
+                subprocess_kwargs.pop("preexec_fn", None)
+                result = subprocess.run([sys.executable, script_path], **subprocess_kwargs)
+            else:
+                raise
 
         # Process output
         output = result.stdout

@@ -268,8 +268,6 @@ class PermissionManager:
         "semantic_search": OperationType.READ,
         "write": OperationType.WRITE,
         "run": OperationType.EXECUTE,
-        "git_commit": OperationType.WRITE,
-        "git_push": OperationType.NETWORK,
         "web_search": OperationType.NETWORK,
         "fetch_url": OperationType.NETWORK,
     }

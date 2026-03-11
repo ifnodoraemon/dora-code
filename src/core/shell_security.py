@@ -325,6 +325,9 @@ def truncate_output(output: str, max_size: int = DEFAULT_CONFIG.max_output_size)
     if len(output) <= max_size:
         return output
 
+    if max_size <= 0:
+        return ""
+
     lines = output.splitlines(keepends=True)
     total_lines = len(lines)
 
@@ -353,8 +356,18 @@ def truncate_output(output: str, max_size: int = DEFAULT_CONFIG.max_output_size)
         return output
 
     omitted = total_lines - len(head_lines) - len(tail_lines)
+    if not head_lines and not tail_lines:
+        head_chars = max(1, max_size // 3)
+        tail_chars = max(1, max_size // 3)
+        head = output[:head_chars]
+        tail = output[-tail_chars:]
+        separator = (
+            f"\n\n... [truncated: {omitted} lines omitted, {len(output)} chars total] ...\n\n"
+        )
+        return head + separator + tail
+
     separator = (
-        f"\n\n... [{omitted} lines omitted, {len(output):,} chars total] ...\n\n"
+        f"\n\n... [truncated: {omitted} lines omitted, {len(output)} chars total] ...\n\n"
     )
 
     return "".join(head_lines) + separator + "".join(tail_lines)

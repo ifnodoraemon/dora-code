@@ -56,12 +56,6 @@ AUX_TOOLS = [
 ADVANCED_TOOLS = [
     "semantic_search",  # 语义搜索
     "index_codebase",  # 索引代码库
-    "git",  # 统一 Git 工具（推荐）
-    "git_status",  # Git 状态（向后兼容）
-    "git_diff",  # Git 差异（向后兼容）
-    "git_log",  # Git 日志（向后兼容）
-    "git_add",  # Git 暂存（向后兼容）
-    "git_commit",  # Git 提交（向后兼容）
 ]
 
 
