@@ -1,8 +1,14 @@
 """Additional comprehensive tests for tool_selector.py"""
-import pytest
+
 from src.core.tool_selector import (
-    ToolSelector, ToolConfig, get_default_selector, get_tools_for_mode,
-    READ_TOOLS, WRITE_TOOLS, AUX_TOOLS, ADVANCED_TOOLS
+    ADVANCED_TOOLS,
+    AUX_TOOLS,
+    READ_TOOLS,
+    WRITE_TOOLS,
+    ToolConfig,
+    ToolSelector,
+    get_default_selector,
+    get_tools_for_mode,
 )
 
 
@@ -184,6 +190,19 @@ class TestToolSelectorExtended:
         unknown_tools = selector.get_tools_for_mode("unknown")
         build_tools = selector.get_tools_for_mode("build")
         assert set(unknown_tools) == set(build_tools)
+
+    def test_verifying_phase_prioritizes_run(self):
+        """Test that verify phase moves run to the front in build mode."""
+        selector = ToolSelector()
+        tools = selector.get_tools_for_state("build", "verifying")
+        assert tools[0] == "run"
+
+    def test_unknown_phase_keeps_default_order(self):
+        """Test that unknown phase falls back to mode-only ordering."""
+        selector = ToolSelector()
+        default_tools = selector.get_tools_for_mode("build")
+        phase_tools = selector.get_tools_for_state("build", "unknown-phase")
+        assert phase_tools == default_tools
 
 
 class TestGlobalFunctions:

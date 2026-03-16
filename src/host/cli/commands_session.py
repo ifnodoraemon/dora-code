@@ -11,6 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from src.host.cli.command_context import CommandContext
+from src.host.cli.command_result import CommandResult
 
 console = Console()
 
@@ -29,46 +30,25 @@ class SessionCommandHandler:
         self,
         cmd: str,
         cmd_args: list[str],
-    ) -> dict | None:
-        """
-        Handle session management commands.
-
-        Returns:
-            dict with handled status or None if command not handled
-        """
-        result = {"handled": True}
-
-        if cmd == "sessions":
-            self._show_sessions()
-
-        elif cmd == "resume":
-            self._resume_session(cmd_args)
-
-        elif cmd == "rename":
-            self._rename_session(cmd_args)
-
-        elif cmd == "export":
-            self._export_session(cmd_args)
-
-        elif cmd == "fork":
-            self._fork_session()
-
-        elif cmd == "checkpoints":
-            self._show_checkpoints()
-
-        elif cmd == "rewind":
-            self._rewind_checkpoint(cmd_args)
-
-        elif cmd == "tasks":
-            self._show_tasks()
-
-        elif cmd == "task":
-            self._show_task_output(cmd_args)
-
-        else:
+    ) -> CommandResult | None:
+        """Handle session management commands."""
+        handlers = {
+            "sessions": self._show_sessions,
+            "resume": lambda: self._resume_session(cmd_args),
+            "rename": lambda: self._rename_session(cmd_args),
+            "export": lambda: self._export_session(cmd_args),
+            "fork": self._fork_session,
+            "checkpoints": self._show_checkpoints,
+            "rewind": lambda: self._rewind_checkpoint(cmd_args),
+            "tasks": self._show_tasks,
+            "task": lambda: self._show_task_output(cmd_args),
+            "ralph": lambda: self._handle_ralph(cmd_args),
+        }
+        handler = handlers.get(cmd)
+        if handler is None:
             return None
-
-        return result
+        result = handler()
+        return result if isinstance(result, CommandResult) else CommandResult()
 
     def _show_sessions(self):
         """List recent sessions."""
@@ -201,3 +181,131 @@ class SessionCommandHandler:
                 console.print(f"[red]Task not found: {cmd_args[0]}[/red]")
         else:
             console.print("[yellow]Usage: /task <task_id>[/yellow]")
+
+    def _handle_ralph(self, cmd_args: list):
+        """Handle Ralph outer-loop commands."""
+        if not self.ralph_mgr:
+            console.print("[red]Ralph manager is not available[/red]")
+            return
+
+        if not cmd_args:
+            console.print(
+                "[yellow]Usage: /ralph <init|add|list|active|next|run-next|done|blocked> ...[/yellow]"
+            )
+            return
+
+        subcmd = cmd_args[0].lower()
+        rest = cmd_args[1:]
+
+        handlers = {
+            "init": self._ralph_init,
+            "add": self._ralph_add,
+            "list": self._ralph_list,
+            "active": self._ralph_active,
+            "next": self._ralph_next,
+            "run-next": self._ralph_run_next,
+            "done": self._ralph_done,
+            "blocked": self._ralph_blocked,
+        }
+        handler = handlers.get(subcmd)
+        if handler is None:
+            console.print(f"[yellow]Unknown /ralph command: {subcmd}[/yellow]")
+            return
+        return handler(rest)
+
+    def _ralph_init(self, _args: list[str]):
+        path = self.ralph_mgr.init_storage()
+        console.print(f"[green]Initialized Ralph state:[/green] {path}")
+        return None
+
+    def _ralph_add(self, args: list[str]):
+        if not args:
+            console.print("[yellow]Usage: /ralph add <task title>[/yellow]")
+            return None
+        task = self.ralph_mgr.add_task(" ".join(args))
+        console.print(f"[green]Added Ralph task[/green] {task.id}: {task.title}")
+        return None
+
+    def _ralph_list(self, _args: list[str]):
+        tasks = self.ralph_mgr.list_tasks()
+        if not tasks:
+            console.print("[dim]No Ralph tasks[/dim]")
+            return None
+
+        table = Table(title="Ralph Tasks")
+        table.add_column("ID", style="cyan")
+        table.add_column("Status", style="yellow")
+        table.add_column("Attempts", style="magenta")
+        table.add_column("Title", style="green")
+        for task in tasks:
+            table.add_row(task.id, task.status, str(task.attempts), task.title)
+        console.print(table)
+        return None
+
+    def _ralph_active(self, _args: list[str]):
+        task = self.ralph_mgr.get_active_task()
+        if task is None:
+            console.print("[dim]No active Ralph task[/dim]")
+            return None
+        console.print(
+            Panel(
+                task.last_prompt or task.title,
+                title=f"Ralph Active: {task.id}",
+                border_style="cyan",
+            )
+        )
+        return None
+
+    def _ralph_next(self, _args: list[str]):
+        task = self.ralph_mgr.choose_next_task()
+        if task is None:
+            console.print("[dim]No pending Ralph tasks[/dim]")
+            return None
+        console.print(Panel(task.last_prompt, title=f"Ralph Next: {task.id}", border_style="blue"))
+        return None
+
+    def _ralph_run_next(self, _args: list[str]):
+        task = self.ralph_mgr.choose_next_task()
+        if task is None:
+            console.print("[dim]No pending Ralph tasks[/dim]")
+            return CommandResult(next_prompt=None)
+
+        if hasattr(self.ctx, "reset"):
+            self.ctx.reset()
+
+        console.print(
+            Panel(
+                task.last_prompt,
+                title=f"Ralph Run-Next: {task.id}",
+                border_style="green",
+            )
+        )
+        console.print("[dim]Starting fresh inner-agent run for selected Ralph task.[/dim]")
+        return CommandResult(
+            conversation_history=[],
+            next_prompt=task.last_prompt,
+        )
+
+    def _ralph_done(self, args: list[str]):
+        if not args:
+            console.print("[yellow]Usage: /ralph done <task_id> [note][/yellow]")
+            return None
+        task_id = args[0]
+        note = " ".join(args[1:])
+        if self.ralph_mgr.mark_done(task_id, note):
+            console.print(f"[green]Marked Ralph task done:[/green] {task_id}")
+        else:
+            console.print(f"[red]Ralph task not found:[/red] {task_id}")
+        return None
+
+    def _ralph_blocked(self, args: list[str]):
+        if len(args) < 2:
+            console.print("[yellow]Usage: /ralph blocked <task_id> <reason>[/yellow]")
+            return None
+        task_id = args[0]
+        reason = " ".join(args[1:])
+        if self.ralph_mgr.mark_blocked(task_id, reason):
+            console.print(f"[yellow]Marked Ralph task blocked:[/yellow] {task_id}")
+        else:
+            console.print(f"[red]Ralph task not found:[/red] {task_id}")
+        return None

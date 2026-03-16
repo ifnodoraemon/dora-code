@@ -1,6 +1,7 @@
 """Tests for tool_selector.py"""
-import pytest
+
 from src.core.tool_selector import ToolSelector
+
 
 class TestToolSelector:
     def test_initialization(self):
@@ -22,3 +23,9 @@ class TestToolSelector:
         plan_tools = selector.get_tools_for_mode("plan")
         build_tools = selector.get_tools_for_mode("build")
         assert len(plan_tools) <= len(build_tools)
+
+    def test_get_tools_for_state_prioritizes_reads_in_gathering(self):
+        selector = ToolSelector()
+        tools = selector.get_tools_for_state("build", "gathering")
+        assert tools.index("read") < tools.index("write")
+        assert tools.index("search") < tools.index("run")

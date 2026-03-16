@@ -9,8 +9,6 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from src.host.cli.command_context import CommandContext
-
 from src.core.doctor import Doctor
 from src.core.input_mode import InputManager, InputMode
 from src.core.model_manager import ModelManager
@@ -18,6 +16,8 @@ from src.core.plugins import PluginManager
 from src.core.themes import ThemeManager
 from src.core.thinking import ThinkingManager
 from src.core.workspace import WorkspaceManager
+from src.host.cli.command_context import CommandContext
+from src.host.cli.command_result import CommandResult
 
 console = Console()
 
@@ -44,55 +44,27 @@ class ConfigCommandHandler:
         self,
         cmd: str,
         cmd_args: list[str],
-    ) -> dict | None:
-        """
-        Handle configuration commands.
-
-        Returns:
-            dict with handled status or None if command not handled
-        """
-        result = {"handled": True}
-
-        if cmd == "model":
-            self._handle_model(cmd_args)
-
-        elif cmd == "theme":
-            self._handle_theme(cmd_args)
-
-        elif cmd == "vim":
-            self._toggle_vim()
-
-        elif cmd == "thinking":
-            self._toggle_thinking()
-
-        elif cmd == "doctor":
-            self._run_doctor()
-
-        elif cmd == "workspace":
-            self._show_workspace()
-
-        elif cmd == "add-dir":
-            self._add_directory(cmd_args)
-
-        elif cmd == "cost":
-            self._show_cost()
-
-        elif cmd == "agents":
-            self._show_agents()
-
-        elif cmd == "history":
-            self._show_history()
-
-        elif cmd == "plugins":
-            self._show_plugins()
-
-        elif cmd == "plugin":
-            self._handle_plugin(cmd_args)
-
-        else:
+    ) -> CommandResult | None:
+        """Handle configuration commands."""
+        handlers = {
+            "model": lambda: self._handle_model(cmd_args),
+            "theme": lambda: self._handle_theme(cmd_args),
+            "vim": self._toggle_vim,
+            "thinking": self._toggle_thinking,
+            "doctor": self._run_doctor,
+            "workspace": self._show_workspace,
+            "add-dir": lambda: self._add_directory(cmd_args),
+            "cost": self._show_cost,
+            "agents": self._show_agents,
+            "history": self._show_history,
+            "plugins": self._show_plugins,
+            "plugin": lambda: self._handle_plugin(cmd_args),
+        }
+        handler = handlers.get(cmd)
+        if handler is None:
             return None
-
-        return result
+        handler()
+        return CommandResult()
 
     def _handle_model(self, cmd_args: list):
         """Handle model switching."""

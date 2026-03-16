@@ -61,6 +61,22 @@ def tasks_path(project_dir: Path | None = None) -> Path:
     return state_dir(project_dir) / "tasks.json"
 
 
+def ralph_dir(project_dir: Path | None = None) -> Path:
+    return state_dir(project_dir) / "ralph"
+
+
+def ralph_tasks_path(project_dir: Path | None = None) -> Path:
+    return ralph_dir(project_dir) / "tasks.json"
+
+
+def ralph_runs_dir(project_dir: Path | None = None) -> Path:
+    return ralph_dir(project_dir) / "runs"
+
+
+def ralph_active_path(project_dir: Path | None = None) -> Path:
+    return ralph_dir(project_dir) / "active.json"
+
+
 def theme_path(project_dir: Path | None = None) -> Path:
     return state_dir(project_dir) / "theme.json"
 

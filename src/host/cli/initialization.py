@@ -15,8 +15,9 @@ from src.core.context_manager import ContextConfig, ContextManager, get_context_
 from src.core.cost_tracker import BudgetConfig, CostTracker
 from src.core.hooks import HookManager
 from src.core.model_client import ModelClient
-from src.core.permissions import PermissionManager
 from src.core.paths import hooks_path, permissions_path
+from src.core.permissions import PermissionManager
+from src.core.ralph_loop import RalphLoopManager
 from src.core.session import SessionManager
 from src.core.skills import SkillManager
 from src.core.tool_selector import ToolSelector
@@ -122,6 +123,11 @@ def initialize_permission_manager() -> PermissionManager:
     return perm_mgr
 
 
+def initialize_ralph_manager() -> RalphLoopManager:
+    """Initialize the Ralph outer-loop manager."""
+    return RalphLoopManager(project_dir=Path.cwd())
+
+
 async def initialize_all_managers(project: str):
     """
     Initialize all managers and components.
@@ -142,6 +148,7 @@ async def initialize_all_managers(project: str):
     bash_executor = initialize_bash_executor()
     session_mgr = initialize_session_manager()
     permission_mgr = initialize_permission_manager()
+    ralph_mgr = initialize_ralph_manager()
 
     return {
         "model_client": model_client,
@@ -157,4 +164,5 @@ async def initialize_all_managers(project: str):
         "bash_executor": bash_executor,
         "session_mgr": session_mgr,
         "permission_mgr": permission_mgr,
+        "ralph_mgr": ralph_mgr,
     }

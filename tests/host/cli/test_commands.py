@@ -14,10 +14,10 @@ Tests cover:
 - Permission checks for sensitive commands
 """
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch, call
-from pathlib import Path
 from datetime import datetime
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.host.cli.commands import CommandHandler
 
@@ -53,18 +53,18 @@ class TestCommandHandlerInitialization:
             project="test-project",
         )
 
-        assert handler.ctx == ctx
-        assert handler.tool_selector == tool_selector
-        assert handler.registry == registry
-        assert handler.skill_mgr == skill_mgr
-        assert handler.checkpoint_mgr == checkpoint_mgr
-        assert handler.task_mgr == task_mgr
-        assert handler.cost_tracker == cost_tracker
-        assert handler.cmd_history == cmd_history
-        assert handler.session_mgr == session_mgr
-        assert handler.hook_mgr == hook_mgr
-        assert handler.model_name == "test-model"
-        assert handler.project == "test-project"
+        assert handler.cc.ctx == ctx
+        assert handler.cc.tool_selector == tool_selector
+        assert handler.cc.registry == registry
+        assert handler.cc.skill_mgr == skill_mgr
+        assert handler.cc.checkpoint_mgr == checkpoint_mgr
+        assert handler.cc.task_mgr == task_mgr
+        assert handler.cc.cost_tracker == cost_tracker
+        assert handler.cc.cmd_history == cmd_history
+        assert handler.cc.session_mgr == session_mgr
+        assert handler.cc.hook_mgr == hook_mgr
+        assert handler.cc.model_name == "test-model"
+        assert handler.cc.project == "test-project"
 
     def test_init_stores_all_attributes(self):
         """Test that all attributes are properly stored."""
@@ -88,7 +88,7 @@ class TestCommandHandlerInitialization:
         )
 
         for key, value in mocks.items():
-            assert getattr(handler, key) == value
+            assert getattr(handler.cc, key) == value
 
 
 @pytest.mark.asyncio
@@ -127,7 +127,168 @@ class TestHelpCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
+            mock_console.print.assert_called()
+
+
+@pytest.mark.asyncio
+class TestRalphCommand:
+    async def test_ralph_next_prints_prompt_for_selected_task(self):
+        handler = CommandHandler(
+            ctx=MagicMock(),
+            tool_selector=MagicMock(),
+            registry=MagicMock(),
+            skill_mgr=MagicMock(),
+            checkpoint_mgr=MagicMock(),
+            task_mgr=MagicMock(),
+            cost_tracker=MagicMock(),
+            cmd_history=MagicMock(),
+            session_mgr=MagicMock(),
+            hook_mgr=MagicMock(),
+            model_name="test",
+            project="test",
+            ralph_mgr=MagicMock(),
+        )
+        fake_task = MagicMock()
+        fake_task.id = "abc123"
+        fake_task.last_prompt = "fresh prompt"
+        handler.session_handler.ralph_mgr.choose_next_task.return_value = fake_task
+
+        with patch("src.host.cli.commands_session.console") as mock_console:
+            result = await handler.handle(
+                cmd="ralph",
+                cmd_args=["next"],
+                mode="build",
+                tool_names=[],
+                tool_definitions=[],
+                conversation_history=[],
+                active_skills_content="",
+                build_system_prompt=MagicMock(return_value="prompt"),
+                convert_tools_to_definitions=MagicMock(return_value=[]),
+                sensitive_tools=set(),
+            )
+
+            assert result.handled is True
+            handler.session_handler.ralph_mgr.choose_next_task.assert_called_once()
+            mock_console.print.assert_called()
+
+    async def test_ralph_add_delegates_to_manager(self):
+        handler = CommandHandler(
+            ctx=MagicMock(),
+            tool_selector=MagicMock(),
+            registry=MagicMock(),
+            skill_mgr=MagicMock(),
+            checkpoint_mgr=MagicMock(),
+            task_mgr=MagicMock(),
+            cost_tracker=MagicMock(),
+            cmd_history=MagicMock(),
+            session_mgr=MagicMock(),
+            hook_mgr=MagicMock(),
+            model_name="test",
+            project="test",
+            ralph_mgr=MagicMock(),
+        )
+        fake_task = MagicMock()
+        fake_task.id = "task1"
+        fake_task.title = "Investigate perf"
+        handler.session_handler.ralph_mgr.add_task.return_value = fake_task
+
+        with patch("src.host.cli.commands_session.console") as mock_console:
+            result = await handler.handle(
+                cmd="ralph",
+                cmd_args=["add", "Investigate", "perf"],
+                mode="build",
+                tool_names=[],
+                tool_definitions=[],
+                conversation_history=[],
+                active_skills_content="",
+                build_system_prompt=MagicMock(return_value="prompt"),
+                convert_tools_to_definitions=MagicMock(return_value=[]),
+                sensitive_tools=set(),
+            )
+
+            assert result.handled is True
+            handler.session_handler.ralph_mgr.add_task.assert_called_once_with("Investigate perf")
+            mock_console.print.assert_called()
+
+    async def test_ralph_run_next_resets_context_and_returns_next_prompt(self):
+        ctx = MagicMock()
+        handler = CommandHandler(
+            ctx=ctx,
+            tool_selector=MagicMock(),
+            registry=MagicMock(),
+            skill_mgr=MagicMock(),
+            checkpoint_mgr=MagicMock(),
+            task_mgr=MagicMock(),
+            cost_tracker=MagicMock(),
+            cmd_history=MagicMock(),
+            session_mgr=MagicMock(),
+            hook_mgr=MagicMock(),
+            model_name="test",
+            project="test",
+            ralph_mgr=MagicMock(),
+        )
+        fake_task = MagicMock()
+        fake_task.id = "run123"
+        fake_task.last_prompt = "fresh-run prompt"
+        handler.session_handler.ralph_mgr.choose_next_task.return_value = fake_task
+
+        with patch("src.host.cli.commands_session.console"):
+            result = await handler.handle(
+                cmd="ralph",
+                cmd_args=["run-next"],
+                mode="build",
+                tool_names=[],
+                tool_definitions=[],
+                conversation_history=[{"role": "user", "content": "old"}],
+                active_skills_content="",
+                build_system_prompt=MagicMock(return_value="prompt"),
+                convert_tools_to_definitions=MagicMock(return_value=[]),
+                sensitive_tools=set(),
+            )
+
+            assert result.handled is True
+            assert result.conversation_history == []
+            assert result.next_prompt == "fresh-run prompt"
+            ctx.reset.assert_called_once()
+
+    async def test_ralph_active_prints_current_task(self):
+        handler = CommandHandler(
+            ctx=MagicMock(),
+            tool_selector=MagicMock(),
+            registry=MagicMock(),
+            skill_mgr=MagicMock(),
+            checkpoint_mgr=MagicMock(),
+            task_mgr=MagicMock(),
+            cost_tracker=MagicMock(),
+            cmd_history=MagicMock(),
+            session_mgr=MagicMock(),
+            hook_mgr=MagicMock(),
+            model_name="test",
+            project="test",
+            ralph_mgr=MagicMock(),
+        )
+        active_task = MagicMock()
+        active_task.id = "active1"
+        active_task.last_prompt = "active prompt"
+        handler.session_handler.ralph_mgr.get_active_task.return_value = active_task
+
+        with patch("src.host.cli.commands_session.console") as mock_console:
+            result = await handler.handle(
+                cmd="ralph",
+                cmd_args=["active"],
+                mode="build",
+                tool_names=[],
+                tool_definitions=[],
+                conversation_history=[],
+                active_skills_content="",
+                build_system_prompt=MagicMock(return_value="prompt"),
+                convert_tools_to_definitions=MagicMock(return_value=[]),
+                sensitive_tools=set(),
+            )
+
+            assert result.handled is True
+            handler.session_handler.ralph_mgr.get_active_task.assert_called_once()
             mock_console.print.assert_called()
 
     async def test_help_command_returns_handled_true(self):
@@ -161,7 +322,7 @@ class TestHelpCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
 
 
 @pytest.mark.asyncio
@@ -203,8 +364,8 @@ class TestClearCommand:
             )
 
             ctx.clear.assert_called_once_with(keep_summaries=True)
-            assert result["conversation_history"] == []
-            assert result["handled"] is True
+            assert result.conversation_history == []
+            assert result.handled is True
 
     async def test_clear_command_preserves_summaries(self):
         """Test that /clear preserves summaries."""
@@ -291,8 +452,8 @@ class TestModeCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["mode"] == "build"
-            assert result["handled"] is True
+            assert result.mode == "build"
+            assert result.handled is True
             tool_selector.get_tools_for_mode.assert_called_with("build")
             hook_mgr.permission_mode = "build"
 
@@ -337,7 +498,7 @@ class TestModeCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["mode"] == "plan"
+            assert result.mode == "plan"
             tool_selector.get_tools_for_mode.assert_called_with("plan")
 
     async def test_mode_command_without_args_shows_current(self):
@@ -371,7 +532,7 @@ class TestModeCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["mode"] == "build"
+            assert result.mode == "build"
             mock_console.print.assert_called()
 
     async def test_mode_command_invalid_mode(self):
@@ -405,7 +566,7 @@ class TestModeCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["mode"] == "build"  # Mode unchanged
+            assert result.mode == "build"  # Mode unchanged
             mock_console.print.assert_called()
             # Verify error message was printed
             call_args = str(mock_console.print.call_args)
@@ -458,10 +619,10 @@ class TestResetCommand:
             )
 
             ctx.reset.assert_called_once()
-            assert result["mode"] == "build"
-            assert result["conversation_history"] == []
-            assert result["active_skills_content"] == ""
-            assert result["handled"] is True
+            assert result.mode == "build"
+            assert result.conversation_history == []
+            assert result.active_skills_content == ""
+            assert result.handled is True
 
     async def test_reset_command_resets_to_build_mode(self):
         """Test that /reset always resets to build mode."""
@@ -501,7 +662,7 @@ class TestResetCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["mode"] == "build"
+            assert result.mode == "build"
 
 
 @pytest.mark.asyncio
@@ -554,7 +715,7 @@ class TestContextCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             ctx.get_context_stats.assert_called_once()
 
 
@@ -596,7 +757,7 @@ class TestSkillsCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             mock_console.print.assert_called()
 
     async def test_skills_command_with_no_active_skills(self):
@@ -633,7 +794,7 @@ class TestSkillsCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
 
 
 @pytest.mark.asyncio
@@ -677,7 +838,7 @@ class TestToolsCommand:
                 sensitive_tools={"write_file"},
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             tool_selector.get_tool_categories.assert_called_once()
 
 
@@ -732,7 +893,7 @@ class TestCheckpointsCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             checkpoint_mgr.list_checkpoints.assert_called_once_with(limit=10)
 
     async def test_checkpoints_command_with_no_checkpoints(self):
@@ -769,7 +930,7 @@ class TestCheckpointsCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
 
 
 @pytest.mark.asyncio
@@ -813,7 +974,7 @@ class TestRewindCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             checkpoint_mgr.rewind.assert_called_once_with("cp123", mode="code")
 
     async def test_rewind_to_last_checkpoint(self):
@@ -853,7 +1014,7 @@ class TestRewindCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             checkpoint_mgr.rewind_last.assert_called_once_with(mode="code")
 
     async def test_rewind_with_failed_files(self):
@@ -893,7 +1054,7 @@ class TestRewindCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             # Verify warning about failed files
             mock_console.print.assert_called()
 
@@ -952,7 +1113,7 @@ class TestSessionsCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             session_mgr.list_sessions.assert_called_once_with(
                 project="test-project", limit=10
             )
@@ -991,7 +1152,7 @@ class TestSessionsCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
 
 
 @pytest.mark.asyncio
@@ -1036,7 +1197,7 @@ class TestHistoryCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             cmd_history.get_recent.assert_called_once_with(20)
 
     async def test_history_command_with_empty_history(self):
@@ -1073,7 +1234,7 @@ class TestHistoryCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
 
 
 @pytest.mark.asyncio
@@ -1132,7 +1293,7 @@ class TestCostCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             cost_tracker.get_cost_summary.assert_called_once()
 
     async def test_cost_command_with_budget_warning(self):
@@ -1187,7 +1348,7 @@ class TestCostCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             # Verify warning was printed
             mock_console.print.assert_called()
 
@@ -1245,7 +1406,7 @@ class TestTasksCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             task_mgr.list_tasks.assert_called_once_with(limit=10)
 
     async def test_tasks_command_with_no_tasks(self):
@@ -1282,7 +1443,7 @@ class TestTasksCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
 
 
 @pytest.mark.asyncio
@@ -1339,7 +1500,7 @@ class TestDebugCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
 
 
 @pytest.mark.asyncio
@@ -1377,7 +1538,7 @@ class TestUnknownCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             mock_console.print.assert_called()
 
 
@@ -1425,7 +1586,7 @@ class TestReturnValueStructure:
                 "active_skills_content",
                 "conversation_history",
             }
-            assert all(key in result for key in required_keys)
+            assert all(hasattr(result, key) for key in required_keys)
 
     async def test_handle_preserves_input_values_on_no_change(self):
         """Test that handle() preserves input values when command doesn't change them."""
@@ -1462,9 +1623,9 @@ class TestReturnValueStructure:
                 sensitive_tools=set(),
             )
 
-            assert result["mode"] == original_mode
-            assert result["tool_names"] == original_tools
-            assert result["conversation_history"] == original_history
+            assert result.mode == original_mode
+            assert result.tool_names == original_tools
+            assert result.conversation_history == original_history
 
 
 @pytest.mark.asyncio
@@ -1507,7 +1668,7 @@ class TestSessionManagementCommands:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             session_mgr.resume_session.assert_called_once_with("sess123")
 
     async def test_resume_session_without_args(self):
@@ -1541,7 +1702,7 @@ class TestSessionManagementCommands:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             mock_console.print.assert_called()
 
     async def test_rename_session_with_name(self):
@@ -1580,7 +1741,7 @@ class TestSessionManagementCommands:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             session_mgr.rename_session.assert_called_once_with("sess123", "New Session Name")
 
     async def test_export_session_with_path(self):
@@ -1619,7 +1780,7 @@ class TestSessionManagementCommands:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             session_mgr.export_session.assert_called_once()
 
     async def test_fork_session(self):
@@ -1660,7 +1821,7 @@ class TestSessionManagementCommands:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             session_mgr.fork_session.assert_called_once_with("sess123")
 
 
@@ -1705,7 +1866,7 @@ class TestModelCommand:
                     sensitive_tools=set(),
                 )
 
-                assert result["handled"] is True
+                assert result.handled is True
 
     async def test_model_command_list_models(self):
         """Test /model without args lists available models."""
@@ -1743,7 +1904,7 @@ class TestModelCommand:
                     sensitive_tools=set(),
                 )
 
-                assert result["handled"] is True
+                assert result.handled is True
 
 
 @pytest.mark.asyncio
@@ -1788,7 +1949,7 @@ class TestPluginCommand:
                     sensitive_tools=set(),
                 )
 
-                assert result["handled"] is True
+                assert result.handled is True
 
     async def test_plugin_enable(self):
         """Test /plugin enable command."""
@@ -1826,7 +1987,7 @@ class TestPluginCommand:
                     sensitive_tools=set(),
                 )
 
-                assert result["handled"] is True
+                assert result.handled is True
 
     async def test_plugin_disable(self):
         """Test /plugin disable command."""
@@ -1864,7 +2025,7 @@ class TestPluginCommand:
                     sensitive_tools=set(),
                 )
 
-                assert result["handled"] is True
+                assert result.handled is True
 
     async def test_plugin_without_args(self):
         """Test /plugin without arguments shows usage."""
@@ -1897,7 +2058,7 @@ class TestPluginCommand:
                 sensitive_tools=set(),
             )
 
-            assert result["handled"] is True
+            assert result.handled is True
             mock_console.print.assert_called()
 
 
@@ -1941,7 +2102,7 @@ class TestThemeCommand:
                     sensitive_tools=set(),
                 )
 
-                assert result["handled"] is True
+                assert result.handled is True
 
     async def test_theme_command_list_themes(self):
         """Test /theme without args lists available themes."""
@@ -1979,7 +2140,7 @@ class TestThemeCommand:
                     sensitive_tools=set(),
                 )
 
-                assert result["handled"] is True
+                assert result.handled is True
 
 
 @pytest.mark.asyncio
@@ -2023,7 +2184,7 @@ class TestToggleCommands:
                     sensitive_tools=set(),
                 )
 
-                assert result["handled"] is True
+                assert result.handled is True
 
     async def test_thinking_toggle(self):
         """Test /thinking command toggles thinking mode."""
@@ -2064,7 +2225,7 @@ class TestToggleCommands:
                     sensitive_tools=set(),
                 )
 
-                assert result["handled"] is True
+                assert result.handled is True
 
 
 @pytest.mark.asyncio
@@ -2109,7 +2270,7 @@ class TestInitCommand:
                     sensitive_tools=set(),
                 )
 
-                assert result["handled"] is True
+                assert result.handled is True
 
     async def test_init_skips_if_exists(self):
         """Test /init skips if AGENTS.md already exists."""
@@ -2148,6 +2309,6 @@ class TestInitCommand:
                     sensitive_tools=set(),
                 )
 
-                assert result["handled"] is True
+                assert result.handled is True
                 # Verify write_text was not called
                 mock_path.write_text.assert_not_called()

@@ -13,14 +13,47 @@ from .paths import MEMORY_FILENAME, RULES_FILENAME, memory_path
 
 logger = get_logger(__name__)
 
+_TEXT_CACHE: dict[str, tuple[tuple[int, int], str]] = {}
+_PROJECT_RULES_CACHE: dict[tuple[str, tuple[tuple[str, tuple[int, int]], ...]], str | None] = {}
+_ALL_INSTRUCTIONS_CACHE: dict[
+    tuple[str, tuple[str, ...], tuple[tuple[str, tuple[int, int] | None], ...]],
+    str,
+] = {}
 
-def _read_instruction_file(path: Path) -> str | None:
-    """Read a single instruction file."""
+
+def _file_signature(path: Path) -> tuple[int, int] | None:
+    """Return `(mtime_ns, size)` for cache invalidation."""
+    if not path.exists():
+        return None
+
+    stat = path.stat()
+    return stat.st_mtime_ns, stat.st_size
+
+
+def _cacheable_text_read(path: Path) -> str | None:
+    """Read file content with a lightweight mtime-based cache."""
+    signature = _file_signature(path)
+    if signature is None:
+        return None
+
+    cache_key = str(path.resolve())
+    cached = _TEXT_CACHE.get(cache_key)
+    if cached and cached[0] == signature:
+        return cached[1]
+
     try:
-        return path.read_text(encoding="utf-8")
+        content = path.read_text(encoding="utf-8")
     except Exception as e:
         logger.error(f"Failed to read {path}: {e}")
         return None
+
+    _TEXT_CACHE[cache_key] = (signature, content)
+    return content
+
+
+def _read_instruction_file(path: Path) -> str | None:
+    """Read a single instruction file."""
+    return _cacheable_text_read(path)
 
 
 def _find_project_boundary(project_dir: Path) -> Path:
@@ -74,9 +107,28 @@ def load_project_rules(project_dir: Path | None = None) -> str | None:
     if project_dir is None:
         project_dir = Path.cwd()
 
+    boundary = _find_project_boundary(project_dir.resolve())
+    search_dirs: list[Path] = []
+    current = project_dir.resolve()
+    while True:
+        search_dirs.append(current)
+        if current == boundary or current.parent == current:
+            break
+        current = current.parent
+
+    signatures = tuple(
+        (str((directory / RULES_FILENAME).resolve()), signature)
+        for directory in reversed(search_dirs)
+        if (signature := _file_signature(directory / RULES_FILENAME)) is not None
+    )
+    cache_key = (str(project_dir.resolve()), signatures)
+    if cache_key in _PROJECT_RULES_CACHE:
+        return _PROJECT_RULES_CACHE[cache_key]
+
     sections = _load_hierarchical_agents(project_dir)
 
     combined = _combine_instruction_sections(sections)
+    _PROJECT_RULES_CACHE[cache_key] = combined
     if combined:
         logger.info("Loaded project rules and instructions")
     else:
@@ -115,19 +167,20 @@ def load_instruction_file(file_path: str, base_dir: Path | None = None) -> str |
 
         contents = []
         for file in matching_files:
-            try:
-                content = file.read_text(encoding="utf-8")
-                contents.append(f"## From {file.name}\n\n{content}")
-                logger.info(f"Loaded instruction file: {file}")
-            except Exception as e:
-                logger.error(f"Failed to read {file}: {e}")
+            content = _cacheable_text_read(file)
+            if content is None:
+                continue
+            contents.append(f"## From {file.name}\n\n{content}")
+            logger.info(f"Loaded instruction file: {file}")
 
         return "\n\n".join(contents) if contents else None
 
     # Single file
     if path.exists():
         try:
-            content = path.read_text(encoding="utf-8")
+            content = _cacheable_text_read(path)
+            if content is None:
+                return None
             logger.info(f"Loaded instruction file: {path}")
             return content
         except Exception as e:
@@ -153,6 +206,41 @@ def load_all_instructions(config: dict, project_dir: Path | None = None) -> str:
     Returns:
         Combined instructions as a single string
     """
+    if project_dir is None:
+        project_dir = Path.cwd()
+
+    instruction_files = tuple(config.get("instructions", []))
+    boundary = _find_project_boundary(project_dir.resolve())
+    search_dirs: list[Path] = []
+    current = project_dir.resolve()
+    while True:
+        search_dirs.append(current)
+        if current == boundary or current.parent == current:
+            break
+        current = current.parent
+
+    project_rule_signatures = tuple(
+        (str((directory / RULES_FILENAME).resolve()), signature)
+        for directory in reversed(search_dirs)
+        if (signature := _file_signature(directory / RULES_FILENAME)) is not None
+    )
+    instruction_signatures = tuple(
+        (
+            file_path,
+            _file_signature((project_dir / file_path) if not Path(file_path).is_absolute() else Path(file_path)),
+        )
+        for file_path in instruction_files
+        if "*" not in file_path
+    )
+    cache_key = (
+        str(project_dir.resolve()),
+        instruction_files + tuple(path for path, _ in project_rule_signatures),
+        project_rule_signatures + instruction_signatures,
+    )
+    cached = _ALL_INSTRUCTIONS_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     instructions = []
 
     # 1. Project AGENTS.md hierarchy
@@ -161,7 +249,6 @@ def load_all_instructions(config: dict, project_dir: Path | None = None) -> str:
         instructions.append(f"# Project Rules ({RULES_FILENAME})\n\n" + project_rules)
 
     # 2. Additional instruction files from config
-    instruction_files = config.get("instructions", [])
     if instruction_files:
         logger.info(f"Loading {len(instruction_files)} additional instruction files")
 
@@ -172,6 +259,7 @@ def load_all_instructions(config: dict, project_dir: Path | None = None) -> str:
 
     if not instructions:
         logger.info("No instructions loaded")
+        _ALL_INSTRUCTIONS_CACHE[cache_key] = ""
         return ""
 
     combined = "\n\n---\n\n".join(instructions)
@@ -179,6 +267,7 @@ def load_all_instructions(config: dict, project_dir: Path | None = None) -> str:
         f"Loaded total of {len(instructions)} instruction sources, {len(combined)} characters"
     )
 
+    _ALL_INSTRUCTIONS_CACHE[cache_key] = combined
     return combined
 
 
@@ -252,7 +341,9 @@ def load_project_memory(project_dir: Path | None = None) -> str | None:
     memory_file = memory_path(project_dir)
     if memory_file.exists():
         try:
-            content = memory_file.read_text(encoding="utf-8")
+            content = _cacheable_text_read(memory_file)
+            if content is None:
+                return None
             logger.info(f"Loaded project memory: {memory_file}")
             return content
         except Exception as e:

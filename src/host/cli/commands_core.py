@@ -4,6 +4,7 @@ Core CLI Commands Handler
 Handles core commands: help, clear, mode, reset, context, tools, debug, init, skills, commit
 """
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -15,6 +16,8 @@ from src.core.config import load_config
 from src.core.paths import config_path, memory_path, skills_dir
 from src.core.rules import create_default_rules
 from src.core.schema import get_default_config
+from src.host.cli.command_context import CommandContext
+from src.host.cli.command_result import CommandResult
 from src.servers.memory import (
     delete_note,
     export_notes,
@@ -26,7 +29,6 @@ from src.servers.memory import (
     search_notes,
     update_user_persona,
 )
-from src.host.cli.command_context import CommandContext
 
 console = Console()
 
@@ -42,7 +44,6 @@ class CoreCommandHandler:
 
     def __init__(self, cc: CommandContext):
         self.cc = cc
-        # Shortcut aliases for backward compatibility
         self.ctx = cc.ctx
         self.tool_selector = cc.tool_selector
         self.registry = cc.registry
@@ -57,7 +58,6 @@ class CoreCommandHandler:
         self.project = cc.project
         self.permission_mgr = cc.permission_mgr
 
-
     async def handle_core_command(
         self,
         cmd: str,
@@ -70,118 +70,139 @@ class CoreCommandHandler:
         build_system_prompt,
         convert_tools_to_definitions,
         sensitive_tools: set,
-    ) -> dict | None:
-        """
-        Handle core commands.
+    ) -> CommandResult | None:
+        """Handle core commands."""
+        result = CommandResult(
+            handled=True,
+            mode=mode,
+            tool_names=tool_names,
+            tool_definitions=tool_definitions,
+            system_prompt=None,
+            active_skills_content=active_skills_content,
+            conversation_history=conversation_history,
+        )
 
-        Returns:
-            dict with updated state or None if command not handled
-        """
-        result = {
-            "handled": True,
-            "mode": mode,
-            "tool_names": tool_names,
-            "tool_definitions": tool_definitions,
-            "system_prompt": None,
-            "active_skills_content": active_skills_content,
-            "conversation_history": conversation_history,
+        async_handlers = {
+            "commit": lambda: self._handle_commit(cmd_args),
+            "review-pr": lambda: self._handle_review_pr(cmd_args),
+            "review": lambda: self._handle_review_command(cmd_args, conversation_history, result),
+            "config": lambda: self._handle_config(cmd_args),
+            "memory": lambda: self._handle_memory(cmd_args),
+        }
+        sync_handlers = {
+            "help": lambda: self._show_help(),
+            "init": lambda: self._handle_init(),
+            "mode": lambda: self._handle_mode_command(
+                cmd_args,
+                result,
+                active_skills_content,
+                build_system_prompt,
+                convert_tools_to_definitions,
+            ),
+            "context": lambda: self._show_context(mode, tool_names),
+            "skills": lambda: self._show_skills(),
+            "clear": lambda: self._handle_clear_command(result),
+            "compact": lambda: self._handle_compact_command(result),
+            "reset": lambda: self._handle_reset_command(result, build_system_prompt, convert_tools_to_definitions),
+            "tools": lambda: self._show_tools(mode, tool_names, sensitive_tools),
+            "debug": lambda: self._show_debug(mode, tool_names),
+            "status": lambda: self._show_status(mode, tool_names),
+            "doctor": lambda: self._run_doctor(),
         }
 
-        if cmd == "help":
-            self._show_help()
+        if cmd in async_handlers:
+            await async_handlers[cmd]()
+            return result
+        if cmd in sync_handlers:
+            sync_handlers[cmd]()
+            return result
+        return None
 
-        elif cmd == "init":
-            self._handle_init()
+    def _handle_mode_command(
+        self,
+        cmd_args: list[str],
+        result: CommandResult,
+        active_skills_content: str,
+        build_system_prompt,
+        convert_tools_to_definitions,
+    ) -> None:
+        """Switch mode and refresh tooling."""
+        if not cmd_args:
+            console.print(f"Current mode: {result.mode}")
+            return
 
-        elif cmd == "mode":
-            if cmd_args:
-                new_mode = cmd_args[0].lower()
-                if new_mode in MODE_COLORS:
-                    result["mode"] = new_mode
-                    new_tool_names = self.tool_selector.get_tools_for_mode(new_mode)
-                    genai_tools = self.registry.get_genai_tools(new_tool_names)
-                    new_tool_definitions = convert_tools_to_definitions(genai_tools)
-                    result["tool_names"] = new_tool_names
-                    result["tool_definitions"] = new_tool_definitions
-                    self.hook_mgr.permission_mode = new_mode
-                    if self.permission_mgr:
-                        self.permission_mgr.set_mode(new_mode)
-                    result["system_prompt"] = build_system_prompt(new_mode, active_skills_content)
-                    console.print(
-                        f"[green]Switched to {new_mode} mode ({len(new_tool_definitions)} tools)[/green]"
-                    )
-                else:
-                    console.print(f"[red]Unknown mode: {new_mode}[/red]")
-            else:
-                console.print(f"Current mode: {mode}")
+        new_mode = cmd_args[0].lower()
+        if new_mode not in MODE_COLORS:
+            console.print(f"[red]Unknown mode: {new_mode}[/red]")
+            return
 
-        elif cmd == "context":
-            self._show_context(mode, tool_names)
+        result.mode = new_mode
+        new_tool_names = self.tool_selector.get_tools_for_mode(new_mode)
+        genai_tools = self.registry.get_genai_tools(new_tool_names)
+        new_tool_definitions = convert_tools_to_definitions(genai_tools)
+        result.tool_names = new_tool_names
+        result.tool_definitions = new_tool_definitions
+        result.system_prompt = build_system_prompt(new_mode, active_skills_content)
+        self.hook_mgr.permission_mode = new_mode
+        if self.permission_mgr:
+            self.permission_mgr.set_mode(new_mode)
+        console.print(
+            f"[green]Switched to {new_mode} mode ({len(new_tool_definitions)} tools)[/green]"
+        )
 
-        elif cmd == "skills":
-            self._show_skills()
+    def _handle_clear_command(self, result: CommandResult) -> None:
+        """Clear conversation while preserving summaries."""
+        self.ctx.clear(keep_summaries=True)
+        result.conversation_history = []
+        console.print("[green]Conversation cleared (summaries preserved)[/green]")
 
-        elif cmd == "clear":
-            self.ctx.clear(keep_summaries=True)
-            result["conversation_history"] = []
-            console.print("[green]Conversation cleared (summaries preserved)[/green]")
+    def _handle_compact_command(self, result: CommandResult) -> None:
+        """Compact context and clear conversation history."""
+        stats_before = self.ctx.get_context_stats()
+        if stats_before["messages"] <= self.ctx.config.keep_recent_messages:
+            console.print("[yellow]Not enough messages to compact.[/yellow]")
+            return
 
-        elif cmd == "compact":
-            stats_before = self.ctx.get_context_stats()
-            if stats_before["messages"] <= self.ctx.config.keep_recent_messages:
-                console.print("[yellow]Not enough messages to compact.[/yellow]")
-            else:
-                self.ctx._force_summarize()
-                stats_after = self.ctx.get_context_stats()
-                result["conversation_history"] = []
-                console.print(
-                    f"[green]Context compacted: {stats_before['messages']} → {stats_after['messages']} messages, "
-                    f"{stats_before['estimated_tokens']:,} → {stats_after['estimated_tokens']:,} tokens[/green]"
-                )
+        self.ctx._force_summarize()
+        stats_after = self.ctx.get_context_stats()
+        result.conversation_history = []
+        console.print(
+            f"[green]Context compacted: {stats_before['messages']} → {stats_after['messages']} messages, "
+            f"{stats_before['estimated_tokens']:,} → {stats_after['estimated_tokens']:,} tokens[/green]"
+        )
 
-        elif cmd == "reset":
-            self.ctx.reset()
-            result["active_skills_content"] = ""
-            result["mode"] = "build"
-            new_tool_names = self.tool_selector.get_tools_for_mode("build")
-            genai_tools = self.registry.get_genai_tools(new_tool_names)
-            result["tool_names"] = new_tool_names
-            result["tool_definitions"] = convert_tools_to_definitions(genai_tools)
-            result["system_prompt"] = build_system_prompt("build", "")
-            result["conversation_history"] = []
-            console.print("[green]Full reset complete[/green]")
+    def _handle_reset_command(
+        self,
+        result: CommandResult,
+        build_system_prompt,
+        convert_tools_to_definitions,
+    ) -> None:
+        """Reset context and restore build-mode defaults."""
+        self.ctx.reset()
+        result.active_skills_content = ""
+        result.mode = "build"
+        new_tool_names = self.tool_selector.get_tools_for_mode("build")
+        genai_tools = self.registry.get_genai_tools(new_tool_names)
+        result.tool_names = new_tool_names
+        result.tool_definitions = convert_tools_to_definitions(genai_tools)
+        result.system_prompt = build_system_prompt("build", "")
+        result.conversation_history = []
+        console.print("[green]Full reset complete[/green]")
 
-        elif cmd == "tools":
-            self._show_tools(mode, tool_names, sensitive_tools)
-
-        elif cmd == "debug":
-            self._show_debug(mode, tool_names)
-
-        elif cmd == "commit":
-            await self._handle_commit(cmd_args)
-
-        elif cmd == "review-pr":
-            await self._handle_review_pr(cmd_args)
-
-        elif cmd == "review":
-            result = await self._handle_review(cmd_args, conversation_history)
-
-        elif cmd == "status":
-            self._show_status(mode, tool_names)
-
-        elif cmd == "config":
-            await self._handle_config(cmd_args)
-
-        elif cmd == "memory":
-            await self._handle_memory(cmd_args)
-
-        elif cmd == "doctor":
-            self._run_doctor()
-
-        else:
-            return None
-
-        return result
+    async def _handle_review_command(
+        self,
+        cmd_args: list[str],
+        conversation_history: list,
+        result: CommandResult,
+    ) -> None:
+        """Handle /review and capture any returned state updates."""
+        review_result = await self._handle_review(cmd_args, conversation_history)
+        result.mode = review_result.mode
+        result.tool_names = review_result.tool_names
+        result.tool_definitions = review_result.tool_definitions
+        result.system_prompt = review_result.system_prompt
+        result.active_skills_content = review_result.active_skills_content
+        result.conversation_history = review_result.conversation_history
 
     def _handle_init(self):
         """Initialize project with AGENTS.md."""
@@ -245,6 +266,13 @@ class CoreCommandHandler:
 [bold]Task Commands:[/bold]
   /tasks          - List background tasks
   /task <id>      - Show task output
+  /ralph init     - Initialize Ralph task state
+  /ralph add <t>  - Add an outer-loop task
+  /ralph list     - List Ralph tasks
+  /ralph next     - Pick next Ralph task and print fresh-run prompt
+  /ralph run-next - Start next Ralph task as a fresh inner-agent run
+  /ralph done <id> [note] - Mark Ralph task done
+  /ralph blocked <id> <reason> - Mark Ralph task blocked
 
 [bold]Plugin Commands:[/bold]
   /plugins        - List installed plugins
@@ -884,8 +912,6 @@ class CoreCommandHandler:
             /memory persona        - Show current persona JSON
             /memory persona set <key> <value> - Update persona JSON
         """
-        import os
-
         project_memory = memory_path()
 
         if not cmd_args or cmd_args[0] == "project":
@@ -976,7 +1002,6 @@ class CoreCommandHandler:
         editor = os.getenv("EDITOR", "nano")
         console.print(f"[dim]Opening {target} in {editor}...[/dim]")
 
-        import subprocess
         try:
             subprocess.run([editor, str(target)], timeout=600)
             console.print("[green]Memory file saved.[/green]")

@@ -17,6 +17,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 
+from src.core.agent_loop import AgentLoopController
 from src.core.config import load_config
 from src.core.context_manager import ConversationSummary
 from src.core.hooks import HookEvent
@@ -46,6 +47,9 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 MAX_TOOL_STEPS = 15  # Prevent infinite tool loops
+MAX_INLINE_FILE_CHARS = 50_000
+MAX_INLINE_DIR_ENTRIES = 100
+_DEPENDENCY_ANALYZER = DependencyAnalyzer()
 
 
 def _is_context_overflow(error: Exception) -> bool:
@@ -84,6 +88,14 @@ def expand_file_references(text: str) -> str:
 
     # Pattern: @ followed by path starting with ./ or / (avoids matching emails/mentions)
     pattern = r'@(\./[\w\-./]+|/[\w\-./]+)'
+    cwd = Path.cwd().resolve()
+
+    def _read_preview(path: Path) -> str:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            preview = handle.read(MAX_INLINE_FILE_CHARS + 1)
+        if len(preview) > MAX_INLINE_FILE_CHARS:
+            return preview[:MAX_INLINE_FILE_CHARS] + "\n... [truncated]"
+        return preview
 
     def replace_reference(match):
         ref_path = match.group(1)
@@ -92,7 +104,6 @@ def expand_file_references(text: str) -> str:
         try:
             # Security: resolve and check path is within cwd
             resolved = path.resolve()
-            cwd = Path.cwd().resolve()
             try:
                 resolved.relative_to(cwd)
             except ValueError:
@@ -100,22 +111,18 @@ def expand_file_references(text: str) -> str:
                 return match.group(0)
 
             if path.is_file():
-                # Read file content
-                content = path.read_text(encoding="utf-8", errors="replace")
-                # Truncate if too large
-                if len(content) > 50000:
-                    content = content[:50000] + "\n... [truncated]"
+                content = _read_preview(path)
                 return f"\n```{path.suffix[1:] if path.suffix else 'text'}\n# File: {path}\n{content}\n```\n"
 
             elif path.is_dir():
                 # List directory
                 files = sorted(path.iterdir())
                 listing = []
-                for f in files[:100]:  # Limit to 100 entries
+                for f in files[:MAX_INLINE_DIR_ENTRIES]:
                     prefix = "📁 " if f.is_dir() else "📄 "
                     listing.append(f"{prefix}{f.name}")
-                if len(files) > 100:
-                    listing.append(f"... and {len(files) - 100} more")
+                if len(files) > MAX_INLINE_DIR_ENTRIES:
+                    listing.append(f"... and {len(files) - MAX_INLINE_DIR_ENTRIES} more")
                 return f"\n```\n# Directory: {path}/\n" + "\n".join(listing) + "\n```\n"
 
             else:
@@ -220,6 +227,216 @@ def convert_tools_to_definitions(registry_tools: list) -> list:
                 )
             )
     return definitions
+
+
+def resolve_tooling_for_phase(tool_selector, registry, mode: str, phase: str | None):
+    """Resolve tool names/definitions with phase-aware ordering."""
+    tool_names = tool_selector.get_tools_for_state(mode, phase)
+    genai_tools = registry.get_genai_tools(tool_names)
+    return tool_names, convert_tools_to_definitions(genai_tools)
+
+
+def handle_ralph_post_turn(
+    ralph_mgr,
+    *,
+    accumulated_text: str,
+    files_modified: list[str],
+    loop_controller: AgentLoopController,
+) -> None:
+    """Record Ralph progress and print a suggested next command."""
+    if ralph_mgr is None:
+        return
+
+    active_ralph_task = ralph_mgr.get_active_task()
+    if active_ralph_task is None:
+        return
+
+    suggestion_kind, suggestion_command = ralph_mgr.suggest_outcome(
+        active_ralph_task.id,
+        files_modified=files_modified,
+        verification_performed=loop_controller.state.verification_performed,
+        is_stuck=loop_controller.state.is_stuck,
+        recent_failures=loop_controller.state.recent_failures,
+    )
+    summary_note = accumulated_text.strip().replace("\n", " ")[:200] or "turn completed"
+    ralph_mgr.record_progress(active_ralph_task.id, summary_note)
+    color = {
+        "done": "green",
+        "blocked": "yellow",
+        "progress": "cyan",
+    }.get(suggestion_kind, "white")
+    console.print(f"[{color}]Ralph suggestion:[/{color}] {suggestion_command}")
+
+
+def prepare_user_turn(
+    user_input: str,
+    image_paths: list[str],
+    *,
+    ctx,
+    checkpoint_mgr,
+    hook_mgr,
+    loop_controller: AgentLoopController,
+    tool_selector,
+    registry,
+    mode: str,
+    skill_mgr,
+    active_skills_content: str,
+    system_prompt: str,
+) -> tuple[str | list[dict] | None, str, str, list, list]:
+    """Prepare user input, checkpointing, context tracking, and skill refresh."""
+    checkpoint_mgr.begin_checkpoint(user_input, message_count=len(ctx.messages))
+
+    if image_paths:
+        from src.core.model_utils import make_image_part, make_text_part
+
+        content_parts = [make_text_part(user_input)]
+        for img_path in image_paths:
+            try:
+                content_parts.append(make_image_part(img_path))
+            except Exception as e:
+                console.print(f"[red]Failed to load image {img_path}: {e}[/red]")
+        user_content = content_parts
+    else:
+        user_content = user_input
+
+    ctx.add_user_message(user_content)
+    loop_controller.begin_turn(user_input)
+    tool_names, tool_definitions = resolve_tooling_for_phase(
+        tool_selector,
+        registry,
+        mode,
+        loop_controller.state.phase.value,
+    )
+
+    new_skills_content = skill_mgr.get_skills_for_context(user_input)
+    updated_system_prompt = system_prompt
+    if new_skills_content != active_skills_content:
+        active_skills_content = new_skills_content
+        new_active = skill_mgr.get_active_skills()
+        if new_active:
+            console.print(f"[dim cyan]Skills loaded: {', '.join(new_active)}[/dim cyan]")
+        updated_system_prompt = build_system_prompt(mode, active_skills_content)
+
+    return (
+        user_content,
+        active_skills_content,
+        updated_system_prompt,
+        tool_names,
+        tool_definitions,
+    )
+
+
+async def send_model_request_with_retry(
+    *,
+    model_client,
+    conversation_history: list[Message],
+    user_content,
+    system_prompt: str,
+    loop_controller: AgentLoopController,
+    tool_definitions,
+    model_name: str,
+    ctx,
+    checkpoint_mgr,
+) -> ChatResponse | None:
+    """Send a model request and retry once after context compaction."""
+    conversation_history.append(Message(role="user", content=user_content))
+    active_system_prompt = loop_controller.compose_system_prompt(system_prompt)
+    messages_for_api = [Message(role="system", content=active_system_prompt)] + conversation_history
+
+    try:
+        return await stream_model_response(
+            model_client,
+            messages_for_api,
+            tool_definitions,
+            model_name,
+        )
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Generation interrupted.[/yellow]")
+        conversation_history.pop()
+        checkpoint_mgr.discard_checkpoint()
+        return None
+    except Exception as e:
+        if not _is_context_overflow(e):
+            console.print(f"[red]API Error: {e}[/red]")
+            conversation_history.pop()
+            checkpoint_mgr.discard_checkpoint()
+            return None
+
+        console.print("[yellow]Context too large, compacting and retrying...[/yellow]")
+        ctx._force_summarize()
+        conversation_history.clear()
+        conversation_history.extend(restore_conversation_history(ctx))
+        conversation_history.append(Message(role="user", content=user_content))
+        active_system_prompt = loop_controller.compose_system_prompt(system_prompt)
+        messages_for_api = [Message(role="system", content=active_system_prompt)] + conversation_history
+        try:
+            return await stream_model_response(
+                model_client,
+                messages_for_api,
+                tool_definitions,
+                model_name,
+            )
+        except Exception as retry_e:
+            console.print(f"[red]API Error after compaction: {retry_e}[/red]")
+            conversation_history.pop()
+            checkpoint_mgr.discard_checkpoint()
+            return None
+
+
+async def finalize_turn(
+    *,
+    accumulated_text: str,
+    files_modified: list[str],
+    response,
+    conversation_history: list[Message],
+    ctx,
+    hook_mgr,
+    checkpoint_mgr,
+    cost_tracker,
+    model_name: str,
+    loop_controller: AgentLoopController,
+    ralph_mgr,
+) -> dict[str, int | float | None]:
+    """Finalize one completed agent turn."""
+    if accumulated_text:
+        conversation_history.append(Message(role="assistant", content=accumulated_text))
+
+    usage = response.usage
+    prompt_tokens = usage.get("prompt_tokens") if usage else None
+    completion_tokens = usage.get("completion_tokens") if usage else None
+
+    prev_summary_count = len(ctx.summaries)
+    ctx.add_assistant_message(
+        accumulated_text,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+    )
+
+    if len(ctx.summaries) > prev_summary_count:
+        await hook_mgr.trigger(HookEvent.PRE_COMPACT)
+        console.print("[dim yellow]Context summarized to save memory.[/dim yellow]")
+        conversation_history.clear()
+        conversation_history.extend(restore_conversation_history(ctx))
+
+    if files_modified:
+        checkpoint_mgr.finalize_checkpoint(description=f"Modified: {', '.join(files_modified)}")
+    else:
+        checkpoint_mgr.discard_checkpoint()
+
+    handle_ralph_post_turn(
+        ralph_mgr,
+        accumulated_text=accumulated_text,
+        files_modified=files_modified,
+        loop_controller=loop_controller,
+    )
+
+    await hook_mgr.trigger(HookEvent.STOP, message_count=len(ctx.messages))
+
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "usage_available": 1 if usage else 0,
+    }
 
 
 def check_piped_input() -> tuple[str | None, bool]:
@@ -516,6 +733,8 @@ async def process_tool_calls(
     system_prompt: str = "",
     permission_mgr=None,
     project: str | None = None,
+    loop_controller: AgentLoopController | None = None,
+    tool_selector=None,
 ) -> tuple[str, list[str], list[Message]]:
     """
     Process tool calls from model response with agentic loop.
@@ -563,6 +782,8 @@ async def process_tool_calls(
 
         has_tool_call = response.has_tool_calls
         tool_results = []
+        if loop_controller is not None:
+            loop_controller.record_model_response(response)
 
         # Thought display
         if response.thought:
@@ -615,19 +836,21 @@ async def process_tool_calls(
 
                 pending_calls.append((tool_name, args, tool_call_id))
 
+            if loop_controller is not None:
+                loop_controller.record_tool_plan(pending_calls, response)
+
             # Execute tools: parallel for multiple independent calls, sequential for single/sensitive
             if len(pending_calls) > 1:
-                # Use DependencyAnalyzer to find parallel stages
-                analyzer = DependencyAnalyzer()
+                pending_call_map = {tc_id: (tn, args) for tn, args, tc_id in pending_calls}
                 p_calls = [
                     PToolCall(id=tc_id, name=tn, arguments=a) for tn, a, tc_id in pending_calls
                 ]
-                stages = analyzer.analyze(p_calls)
+                stages = _DEPENDENCY_ANALYZER.analyze(p_calls)
 
                 for stage in stages:
                     if len(stage) == 1:
                         pc = stage[0]
-                        matched_args = next(args for tn, args, tc_id in pending_calls if tc_id == pc.id)
+                        _, matched_args = pending_call_map[pc.id]
                         r = await execute_tool(
                             tool_name=pc.name,
                             args=matched_args,
@@ -659,7 +882,7 @@ async def process_tool_calls(
 
                         tasks = []
                         for pc in stage:
-                            matched_args = next(args for tn, args, tc_id in pending_calls if tc_id == pc.id)
+                            _, matched_args = pending_call_map[pc.id]
                             tasks.append(_run_tool(pc, matched_args))
                         stage_results = await asyncio.gather(*tasks)
                         tool_results.extend(stage_results)
@@ -681,16 +904,34 @@ async def process_tool_calls(
                     tool_results.append(tool_result_dict)
 
             # Post-process: track modifications
-            for tool_name, args, _tool_call_id in pending_calls:
-                files_modified.extend(get_modified_paths(tool_name, args))
+            for tool_name, args, tool_call_id in pending_calls:
+                modified_paths = get_modified_paths(tool_name, args)
+                files_modified.extend(modified_paths)
                 verification_performed = verification_performed or is_validation_tool_call(
                     tool_name, args
                 )
+                if loop_controller is not None:
+                    result_text = next(
+                        (
+                            tr["result"]
+                            for tr in tool_results
+                            if tr["tool_call_id"] == tool_call_id
+                        ),
+                        "",
+                    )
+                    loop_controller.record_tool_outcome(
+                        tool_name=tool_name,
+                        args=args,
+                        result_text=result_text,
+                        modified_paths=modified_paths,
+                    )
 
         # No more tool calls - done with this turn
         if not has_tool_call:
+            if loop_controller is not None:
+                loop_controller.finalize_response(response)
             if (
-                files_modified
+                (loop_controller.should_nudge_verification() if loop_controller else files_modified)
                 and not verification_performed
                 and not verification_nudged
                 and model_client is not None
@@ -698,6 +939,15 @@ async def process_tool_calls(
                 and tool_definitions is not None
             ):
                 verification_nudged = True
+                if loop_controller is not None:
+                    loop_controller.mark_verification_nudged()
+                if loop_controller is not None and tool_selector is not None:
+                    _, tool_definitions = resolve_tooling_for_phase(
+                        tool_selector,
+                        registry,
+                        loop_controller.state.mode,
+                        loop_controller.state.phase.value,
+                    )
                 reminder = (
                     "[Verification Reminder]\n"
                     "You modified files but have not verified the changes yet. "
@@ -705,7 +955,14 @@ async def process_tool_calls(
                     "(for example lint, typecheck, tests, or build) and then report the results."
                 )
                 conversation_history.append(Message(role="user", content=reminder))
-                messages_for_api = [Message(role="system", content=system_prompt)] + conversation_history
+                active_system_prompt = (
+                    loop_controller.compose_system_prompt(system_prompt)
+                    if loop_controller is not None
+                    else system_prompt
+                )
+                messages_for_api = [
+                    Message(role="system", content=active_system_prompt)
+                ] + conversation_history
                 try:
                     response = await stream_model_response(
                         model_client,
@@ -762,9 +1019,19 @@ async def process_tool_calls(
 
         # Re-call model with updated conversation history (streaming)
         if model_client and conversation_history is not None and tool_definitions is not None:
-            messages_for_api = [
-                Message(role="system", content=system_prompt)
-            ] + conversation_history
+            if loop_controller is not None and tool_selector is not None:
+                _, tool_definitions = resolve_tooling_for_phase(
+                    tool_selector,
+                    registry,
+                    loop_controller.state.mode,
+                    loop_controller.state.phase.value,
+                )
+            active_system_prompt = (
+                loop_controller.compose_system_prompt(system_prompt)
+                if loop_controller is not None
+                else system_prompt
+            )
+            messages_for_api = [Message(role="system", content=active_system_prompt)] + conversation_history
             try:
                 response = await stream_model_response(
                     model_client,
@@ -790,8 +1057,13 @@ async def process_tool_calls(
                             name=tr["name"],
                         )
                         conversation_history.append(tool_msg)
+                    active_system_prompt = (
+                        loop_controller.compose_system_prompt(system_prompt)
+                        if loop_controller is not None
+                        else system_prompt
+                    )
                     messages_for_api = [
-                        Message(role="system", content=system_prompt)
+                        Message(role="system", content=active_system_prompt)
                     ] + conversation_history
                     try:
                         response = await stream_model_response(
@@ -878,6 +1150,7 @@ async def chat_loop(
     bash_executor = managers["bash_executor"]
     session_mgr = managers["session_mgr"]
     permission_mgr = managers.get("permission_mgr")
+    ralph_mgr = managers.get("ralph_mgr")
 
     sensitive_tools = registry.get_sensitive_tools()
 
@@ -905,14 +1178,18 @@ async def chat_loop(
     )
 
     # Get tools for current mode
-    tool_names = tool_selector.get_tools_for_mode(mode)
-    genai_tools = registry.get_genai_tools(tool_names)
-    tool_definitions = convert_tools_to_definitions(genai_tools)
+    tool_names, tool_definitions = resolve_tooling_for_phase(
+        tool_selector,
+        registry,
+        mode,
+        None,
+    )
     console.print(f"[dim]Tools: {len(tool_definitions)} ({mode} mode)[/dim]")
 
     # Build system prompt
     active_skills_content = ""
     system_prompt = build_system_prompt(mode, active_skills_content)
+    loop_controller = AgentLoopController.create(project=project, mode=mode)
 
     # Restore conversation history
     conversation_history = restore_conversation_history(ctx)
@@ -938,6 +1215,7 @@ async def chat_loop(
         model_name=model_name,
         project=project,
         permission_mgr=permission_mgr,
+        ralph_mgr=ralph_mgr,
     )
 
     # Setup tab completion for slash commands
@@ -946,7 +1224,7 @@ async def chat_loop(
         "clear", "compact", "reset", "tools", "debug", "doctor", "memory",
         "commit", "review-pr", "review", "sessions", "resume", "rename", "export",
         "fork", "checkpoints", "rewind", "tasks", "task", "plugins", "plugin",
-        "theme", "vim", "thinking", "workspace", "add-dir", "cost", "agents",
+        "ralph", "theme", "vim", "thinking", "workspace", "add-dir", "cost", "agents",
         "history", "exit",
     ]
     cmd_history.setup_completer(slash_commands)
@@ -1049,13 +1327,16 @@ async def chat_loop(
                 )
 
                 # Update state from command result
-                mode = result["mode"]
-                tool_names = result["tool_names"]
-                tool_definitions = result["tool_definitions"]
-                active_skills_content = result["active_skills_content"]
-                conversation_history = result["conversation_history"]
-                if result["system_prompt"]:
-                    system_prompt = result["system_prompt"]
+                mode = result.mode
+                loop_controller.update_mode(mode)
+                tool_names = result.tool_names
+                tool_definitions = result.tool_definitions
+                active_skills_content = result.active_skills_content
+                conversation_history = result.conversation_history
+                if result.system_prompt:
+                    system_prompt = result.system_prompt
+                if result.next_prompt:
+                    initial_prompt = result.next_prompt
                 session_data = persist_session_state(
                     session_mgr,
                     ctx,
@@ -1079,94 +1360,50 @@ async def chat_loop(
             # Expand @file references (text files only, images already extracted)
             user_input = expand_file_references(user_input)
 
-            # Trigger UserPromptSubmit hook
             hook_result = await hook_mgr.trigger(
                 HookEvent.USER_PROMPT_SUBMIT,
                 user_prompt=user_input,
                 message_count=len(ctx.messages),
             )
-
             if not hook_result.continue_processing:
                 if hook_result.reason:
                     console.print(f"[yellow]{hook_result.reason}[/yellow]")
                 continue
 
-            # Start checkpoint before processing
-            checkpoint_mgr.begin_checkpoint(user_input, message_count=len(ctx.messages))
+            (
+                user_content,
+                active_skills_content,
+                system_prompt,
+                tool_names,
+                tool_definitions,
+            ) = prepare_user_turn(
+                user_input,
+                image_paths,
+                ctx=ctx,
+                checkpoint_mgr=checkpoint_mgr,
+                hook_mgr=hook_mgr,
+                loop_controller=loop_controller,
+                tool_selector=tool_selector,
+                registry=registry,
+                mode=mode,
+                skill_mgr=skill_mgr,
+                active_skills_content=active_skills_content,
+                system_prompt=system_prompt,
+            )
 
-            # Build message content (text or multimodal)
-            if image_paths:
-                from src.core.model_utils import make_image_part, make_text_part
-                content_parts = [make_text_part(user_input)]
-                for img_path in image_paths:
-                    try:
-                        content_parts.append(make_image_part(img_path))
-                    except Exception as e:
-                        console.print(f"[red]Failed to load image {img_path}: {e}[/red]")
-                user_content = content_parts
-            else:
-                user_content = user_input
-
-            # Track user message in context
-            ctx.add_user_message(user_content)
-
-            # Check if we need to load/update skills
-            new_skills_content = skill_mgr.get_skills_for_context(user_input)
-            if new_skills_content != active_skills_content:
-                active_skills_content = new_skills_content
-                new_active = skill_mgr.get_active_skills()
-                if new_active:
-                    console.print(f"[dim cyan]Skills loaded: {', '.join(new_active)}[/dim cyan]")
-                system_prompt = build_system_prompt(mode, active_skills_content)
-
-            # Add user message to conversation history
-            conversation_history.append(Message(role="user", content=user_content))
-
-            # Build messages with system prompt
-            messages_for_api = [
-                Message(role="system", content=system_prompt)
-            ] + conversation_history
-
-            # Send message using unified client (streaming)
-            try:
-                response = await stream_model_response(
-                    model_client,
-                    messages_for_api,
-                    tool_definitions,
-                    model_name,
-                )
-            except KeyboardInterrupt:
-                console.print("\n[yellow]Generation interrupted.[/yellow]")
-                conversation_history.pop()
-                checkpoint_mgr.discard_checkpoint()
+            response = await send_model_request_with_retry(
+                model_client=model_client,
+                conversation_history=conversation_history,
+                user_content=user_content,
+                system_prompt=system_prompt,
+                loop_controller=loop_controller,
+                tool_definitions=tool_definitions,
+                model_name=model_name,
+                ctx=ctx,
+                checkpoint_mgr=checkpoint_mgr,
+            )
+            if response is None:
                 continue
-            except Exception as e:
-                if _is_context_overflow(e):
-                    console.print("[yellow]Context too large, compacting and retrying...[/yellow]")
-                    ctx._force_summarize()
-                    conversation_history.clear()
-                    conversation_history = restore_conversation_history(ctx)
-                    conversation_history.append(Message(role="user", content=user_content))
-                    messages_for_api = [
-                        Message(role="system", content=system_prompt)
-                    ] + conversation_history
-                    try:
-                        response = await stream_model_response(
-                            model_client,
-                            messages_for_api,
-                            tool_definitions,
-                            model_name,
-                        )
-                    except Exception as retry_e:
-                        console.print(f"[red]API Error after compaction: {retry_e}[/red]")
-                        conversation_history.pop()
-                        checkpoint_mgr.discard_checkpoint()
-                        continue
-                else:
-                    console.print(f"[red]API Error: {e}[/red]")
-                    conversation_history.pop()
-                    checkpoint_mgr.discard_checkpoint()
-                    continue
 
             # Process tool calls (agentic loop: sends tool results back to model)
             accumulated_text, files_modified, tool_results_messages = await process_tool_calls(
@@ -1185,44 +1422,31 @@ async def chat_loop(
                 tool_definitions=tool_definitions,
                 system_prompt=system_prompt,
                 permission_mgr=permission_mgr,
+                loop_controller=loop_controller,
+                tool_selector=tool_selector,
+            )
+            tool_names, tool_definitions = resolve_tooling_for_phase(
+                tool_selector,
+                registry,
+                mode,
+                loop_controller.state.phase.value,
             )
 
 
 
-            # Add final assistant text to conversation history
-            # (intermediate assistant+tool messages are already appended by process_tool_calls)
-            if accumulated_text:
-                conversation_history.append(Message(role="assistant", content=accumulated_text))
-
-            # Track assistant response in context
-            usage = response.usage
-            prompt_tokens = usage.get("prompt_tokens") if usage else None
-            completion_tokens = usage.get("completion_tokens") if usage else None
-
-            prev_summary_count = len(ctx.summaries)
-            ctx.add_assistant_message(
-                accumulated_text,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
+            finalization = await finalize_turn(
+                accumulated_text=accumulated_text,
+                files_modified=files_modified,
+                response=response,
+                conversation_history=conversation_history,
+                ctx=ctx,
+                hook_mgr=hook_mgr,
+                checkpoint_mgr=checkpoint_mgr,
+                cost_tracker=cost_tracker,
+                model_name=model_name,
+                loop_controller=loop_controller,
+                ralph_mgr=ralph_mgr,
             )
-
-            # Check if summarization occurred
-            if len(ctx.summaries) > prev_summary_count:
-                await hook_mgr.trigger(HookEvent.PRE_COMPACT)
-                console.print("[dim yellow]Context summarized to save memory.[/dim yellow]")
-                conversation_history.clear()
-                conversation_history = restore_conversation_history(ctx)
-
-            # Finalize checkpoint
-            if files_modified:
-                checkpoint_mgr.finalize_checkpoint(
-                    description=f"Modified: {', '.join(files_modified)}"
-                )
-            else:
-                checkpoint_mgr.discard_checkpoint()
-
-            # Trigger Stop hook
-            await hook_mgr.trigger(HookEvent.STOP, message_count=len(ctx.messages))
             session_data = persist_session_state(
                 session_mgr,
                 ctx,
@@ -1233,18 +1457,18 @@ async def chat_loop(
             )
 
             # Show usage stats
-            if usage:
+            if finalization["usage_available"]:
                 turn_count += 1
                 stats = ctx.get_context_stats()
                 cost = cost_tracker.calculate_cost(
                     model_name,
-                    usage.get("prompt_tokens", 0),
-                    usage.get("completion_tokens", 0),
+                    int(finalization["prompt_tokens"] or 0),
+                    int(finalization["completion_tokens"] or 0),
                 )
                 console.print(
                     f"\n[dim]Turn {turn_count} | "
-                    f"In: {usage.get('prompt_tokens', 0):,} | "
-                    f"Out: {usage.get('completion_tokens', 0):,} | "
+                    f"In: {int(finalization['prompt_tokens'] or 0):,} | "
+                    f"Out: {int(finalization['completion_tokens'] or 0):,} | "
                     f"Cost: ${cost:.4f} | "
                     f"Ctx: {stats['usage_percent']}%[/dim]"
                 )

@@ -12,26 +12,23 @@ Total: 45+ tests targeting 60%+ coverage
 """
 
 import asyncio
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch, call, Mock
-from pathlib import Path
-from io import StringIO
-import sys
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.core.model_client import Message, ToolDefinition, ClientMode
+import pytest
+
+from src.core.model_client import ClientMode, Message, ToolDefinition
 from src.host.cli.chat_loop import (
     build_system_prompt,
-    convert_tools_to_definitions,
     check_piped_input,
-    validate_client_mode,
-    restore_session_history,
-    show_startup_info,
-    restore_conversation_history,
+    convert_tools_to_definitions,
+    expand_file_references,
     handle_bash_mode,
     process_tool_calls,
-    chat_loop,
+    restore_conversation_history,
+    restore_session_history,
+    show_startup_info,
+    validate_client_mode,
 )
-
 
 # ============================================================================
 # SECTION 1: System Prompt Building Tests (7 tests)
@@ -241,6 +238,18 @@ class TestCheckPipedInput:
 
                 assert piped_input is None
                 assert is_headless is False
+
+
+class TestExpandFileReferences:
+    def test_expand_file_references_truncates_large_files(self, tmp_path, monkeypatch):
+        big_file = tmp_path / "large.txt"
+        big_file.write_text("a" * 60000, encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+
+        expanded = expand_file_references(f"inspect @{big_file}")
+
+        assert "... [truncated]" in expanded
+        assert len(expanded) < 53000
 
 
 # ============================================================================
@@ -886,7 +895,7 @@ class TestChatLoopMainFunction:
         """Test headless mode detection."""
         with patch('src.host.cli.chat_loop.check_piped_input', return_value=("test prompt", True)):
             # Headless mode should be True when prompt is provided
-            piped_input, is_headless = ("test prompt", True)
+            _, is_headless = ("test prompt", True)
             assert is_headless is True
 
     async def test_chat_loop_project_parameter(self):

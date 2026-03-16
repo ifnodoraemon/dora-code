@@ -1,5 +1,6 @@
 import json
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,17 @@ from .paths import config_path as default_config_path
 from .schema import get_default_config, validate_config_file
 
 logger = get_logger(__name__)
+
+_CONFIG_CACHE: dict[tuple[str, bool], tuple[tuple[int, int] | None, dict[str, Any]]] = {}
+
+
+def _get_config_signature(path: Path | None) -> tuple[int, int] | None:
+    """Return a lightweight file signature for cache invalidation."""
+    if path is None or not path.exists():
+        return None
+
+    stat = path.stat()
+    return stat.st_mtime_ns, stat.st_size
 
 
 def load_config(override_path: str | None = None, validate: bool = True) -> dict[str, Any]:
@@ -42,6 +54,13 @@ def load_config(override_path: str | None = None, validate: bool = True) -> dict
         logger.warning("No project config file found, using defaults")
         return get_default_config()
 
+    cache_key = (str(config_file.resolve()), validate)
+    signature = _get_config_signature(config_file)
+    cached = _CONFIG_CACHE.get(cache_key)
+    if cached and cached[0] == signature:
+        logger.debug("Configuration cache hit")
+        return deepcopy(cached[1])
+
     # Load and optionally validate
     try:
         if validate:
@@ -53,6 +72,7 @@ def load_config(override_path: str | None = None, validate: bool = True) -> dict
                 config_data = json.load(f)
                 logger.info("Configuration loaded (validation skipped)")
 
+        _CONFIG_CACHE[cache_key] = (signature, config_data)
         return config_data
 
     except ValueError as e:
