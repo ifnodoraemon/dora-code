@@ -27,18 +27,10 @@ class ConfigCommandHandler:
 
     def __init__(self, cc: CommandContext):
         self.cc = cc
-        self.ctx = cc.ctx
-        self.tool_selector = cc.tool_selector
-        self.registry = cc.registry
-        self.skill_mgr = cc.skill_mgr
-        self.checkpoint_mgr = cc.checkpoint_mgr
-        self.task_mgr = cc.task_mgr
-        self.cost_tracker = cc.cost_tracker
-        self.cmd_history = cc.cmd_history
-        self.session_mgr = cc.session_mgr
-        self.hook_mgr = cc.hook_mgr
-        self.model_name = cc.model_name
-        self.project = cc.project
+
+    def __getattr__(self, name):
+        """Proxy attribute access to the underlying command context."""
+        return getattr(self.cc, name)
 
     async def handle_config_command(
         self,
@@ -189,29 +181,45 @@ class ConfigCommandHandler:
     def _handle_plugin(self, cmd_args: list):
         """Handle plugin management."""
         plugin_mgr = PluginManager(project_dir=Path.cwd())
-        if len(cmd_args) >= 2:
-            action = cmd_args[0]
-            target = cmd_args[1]
-            if action == "install":
-                result = plugin_mgr.install(target)
-                if result:
-                    console.print(f"[green]Installed: {result.manifest.name}[/green]")
-                else:
-                    console.print("[red]Installation failed[/red]")
-            elif action == "enable":
-                if plugin_mgr.enable(target):
-                    console.print(f"[green]Enabled: {target}[/green]")
-                else:
-                    console.print(f"[red]Plugin not found: {target}[/red]")
-            elif action == "disable":
-                if plugin_mgr.disable(target):
-                    console.print(f"[yellow]Disabled: {target}[/yellow]")
-                else:
-                    console.print(f"[red]Plugin not found: {target}[/red]")
-            elif action == "uninstall":
-                if plugin_mgr.uninstall(target):
-                    console.print(f"[green]Uninstalled: {target}[/green]")
-                else:
-                    console.print(f"[red]Uninstall failed: {target}[/red]")
-        else:
+        if len(cmd_args) < 2:
             console.print("[yellow]Usage: /plugin <install|enable|disable|uninstall> <name>[/yellow]")
+            return
+
+        action = cmd_args[0]
+        target = cmd_args[1]
+        handlers = {
+            "install": lambda: self._install_plugin(plugin_mgr, target),
+            "enable": lambda: self._toggle_plugin(plugin_mgr, target, enabled=True),
+            "disable": lambda: self._toggle_plugin(plugin_mgr, target, enabled=False),
+            "uninstall": lambda: self._uninstall_plugin(plugin_mgr, target),
+        }
+        handler = handlers.get(action)
+        if handler is None:
+            console.print("[yellow]Usage: /plugin <install|enable|disable|uninstall> <name>[/yellow]")
+            return
+        handler()
+
+    def _install_plugin(self, plugin_mgr: PluginManager, target: str) -> None:
+        """Install a plugin from a source target."""
+        result = plugin_mgr.install(target)
+        if result:
+            console.print(f"[green]Installed: {result.manifest.name}[/green]")
+            return
+        console.print("[red]Installation failed[/red]")
+
+    def _toggle_plugin(self, plugin_mgr: PluginManager, target: str, *, enabled: bool) -> None:
+        """Enable or disable a plugin."""
+        operation = plugin_mgr.enable if enabled else plugin_mgr.disable
+        if operation(target):
+            status = "Enabled" if enabled else "Disabled"
+            color = "green" if enabled else "yellow"
+            console.print(f"[{color}]{status}: {target}[/{color}]")
+            return
+        console.print(f"[red]Plugin not found: {target}[/red]")
+
+    def _uninstall_plugin(self, plugin_mgr: PluginManager, target: str) -> None:
+        """Uninstall a plugin."""
+        if plugin_mgr.uninstall(target):
+            console.print(f"[green]Uninstalled: {target}[/green]")
+            return
+        console.print(f"[red]Uninstall failed: {target}[/red]")

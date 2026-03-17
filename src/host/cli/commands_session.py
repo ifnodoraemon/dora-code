@@ -186,13 +186,13 @@ class SessionCommandHandler:
         """Handle Ralph outer-loop commands."""
         if not self.ralph_mgr:
             console.print("[red]Ralph manager is not available[/red]")
-            return
+            return None
 
         if not cmd_args:
             console.print(
                 "[yellow]Usage: /ralph <init|add|list|active|next|run-next|done|blocked> ...[/yellow]"
             )
-            return
+            return None
 
         subcmd = cmd_args[0].lower()
         rest = cmd_args[1:]
@@ -210,7 +210,7 @@ class SessionCommandHandler:
         handler = handlers.get(subcmd)
         if handler is None:
             console.print(f"[yellow]Unknown /ralph command: {subcmd}[/yellow]")
-            return
+            return None
         return handler(rest)
 
     def _ralph_init(self, _args: list[str]):
