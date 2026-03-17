@@ -1,13 +1,4 @@
-"""Minimal Ralph-style outer task orchestrator.
-
-The goal is not to replace the interactive agent loop. This module adds a
-fresh-context task layer above it:
-
-- persistent backlog stored on disk
-- next-task selection
-- generated prompt for a fresh inner-agent run
-- explicit done/blocked transitions
-"""
+"""Persistent Ralph task state."""
 
 from __future__ import annotations
 
@@ -18,12 +9,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from src.core.paths import ralph_active_path, ralph_runs_dir, ralph_tasks_path
+from src.core.paths import ralph_active_path, ralph_tasks_path
 
 
 @dataclass
 class RalphTask:
-    """A single outer-loop task."""
+    """A single persisted Ralph task."""
 
     id: str
     title: str
@@ -33,7 +24,6 @@ class RalphTask:
     notes: list[str] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
-    last_prompt: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -45,7 +35,6 @@ class RalphTask:
             "notes": self.notes,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "last_prompt": self.last_prompt,
         }
 
     @classmethod
@@ -59,17 +48,15 @@ class RalphTask:
             notes=data.get("notes", []),
             created_at=data.get("created_at", time.time()),
             updated_at=data.get("updated_at", time.time()),
-            last_prompt=data.get("last_prompt", ""),
         )
 
 
 class RalphLoopManager:
-    """Persistent task orchestrator for fresh-context runs."""
+    """Persistent task storage with minimal active-task support."""
 
     def __init__(self, project_dir: Path | None = None):
         self.project_dir = (project_dir or Path.cwd()).resolve()
         self.tasks_path = ralph_tasks_path(self.project_dir)
-        self.runs_dir = ralph_runs_dir(self.project_dir)
         self.active_path = ralph_active_path(self.project_dir)
         self._tasks: dict[str, RalphTask] = {}
         self._load()
@@ -77,7 +64,6 @@ class RalphLoopManager:
     def init_storage(self) -> Path:
         """Ensure Ralph storage exists on disk."""
         self.tasks_path.parent.mkdir(parents=True, exist_ok=True)
-        self.runs_dir.mkdir(parents=True, exist_ok=True)
         if not self.tasks_path.exists():
             self._save()
         return self.tasks_path.parent
@@ -106,7 +92,7 @@ class RalphLoopManager:
         return self._tasks.get(task_id)
 
     def choose_next_task(self) -> RalphTask | None:
-        """Pick the next unfinished task."""
+        """Pick the next unfinished task and mark it active."""
         candidates = [
             task for task in self._tasks.values() if task.status in {"pending", "in_progress", "blocked"}
         ]
@@ -125,10 +111,8 @@ class RalphLoopManager:
         task.status = "in_progress"
         task.attempts += 1
         task.updated_at = time.time()
-        task.last_prompt = self.build_prompt(task)
-        self._save()
         self._set_active_task(task.id)
-        self._persist_run_record(task)
+        self._save()
         return task
 
     def mark_done(self, task_id: str, note: str = "") -> bool:
@@ -183,31 +167,15 @@ class RalphLoopManager:
         return True
 
     def build_prompt(self, task: RalphTask) -> str:
-        """Create a fresh-run prompt for the inner coding agent."""
+        """Create a task prompt for manual use."""
         acceptance = task.acceptance_criteria or "Not specified"
         notes = "\n".join(f"- {note}" for note in task.notes[-3:]) or "- none"
         return (
             f"[Ralph Task {task.id}]\n"
             f"Task: {task.title}\n"
             f"Acceptance criteria: {acceptance}\n"
-            f"Previous notes:\n{notes}\n\n"
-            "Use a fresh-context inner agent run for this task.\n"
-            "Choose the next best action dynamically: inspect, modify, verify, or summarize based on evidence.\n"
-            "Do not follow a rigid workflow; gather only enough context to act safely.\n"
-            "If you modify files, run relevant checks before declaring the task done.\n"
-            "When finished, summarize what changed and whether the acceptance criteria are met."
+            f"Previous notes:\n{notes}\n"
         )
-
-    def resume_active_prompt(self) -> str | None:
-        """Return the active task prompt for a fresh continuation run."""
-        task = self.get_active_task()
-        if task is None:
-            return None
-        if not task.last_prompt:
-            task.last_prompt = self.build_prompt(task)
-            task.updated_at = time.time()
-            self._save()
-        return task.last_prompt
 
     def _load(self) -> None:
         if not self.tasks_path.exists():
@@ -242,16 +210,3 @@ class RalphLoopManager:
         active = self.get_active_task()
         if active and active.id == task_id and self.active_path.exists():
             self.active_path.unlink()
-
-    def _persist_run_record(self, task: RalphTask) -> None:
-        """Write a simple run record for observability."""
-        self.runs_dir.mkdir(parents=True, exist_ok=True)
-        run_path = self.runs_dir / f"{int(time.time())}_{task.id}.json"
-        payload = {
-            "task_id": task.id,
-            "title": task.title,
-            "attempt": task.attempts,
-            "prompt": task.last_prompt,
-            "created_at": time.time(),
-        }
-        run_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

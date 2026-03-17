@@ -190,7 +190,7 @@ class SessionCommandHandler:
 
         if not cmd_args:
             console.print(
-                "[yellow]Usage: /ralph <init|add|list|active|next|run-next|resume-active|done|blocked> ...[/yellow]"
+                "[yellow]Usage: /ralph <init|add|list|active|next|done|blocked> ...[/yellow]"
             )
             return None
 
@@ -203,8 +203,6 @@ class SessionCommandHandler:
             "list": self._ralph_list,
             "active": self._ralph_active,
             "next": self._ralph_next,
-            "run-next": self._ralph_run_next,
-            "resume-active": self._ralph_resume_active,
             "done": self._ralph_done,
             "blocked": self._ralph_blocked,
         }
@@ -250,7 +248,7 @@ class SessionCommandHandler:
             return None
         console.print(
             Panel(
-                task.last_prompt or task.title,
+                self.ralph_mgr.build_prompt(task),
                 title=f"Ralph Active: {task.id}",
                 border_style="cyan",
             )
@@ -262,51 +260,8 @@ class SessionCommandHandler:
         if task is None:
             console.print("[dim]No pending Ralph tasks[/dim]")
             return None
-        console.print(Panel(task.last_prompt, title=f"Ralph Next: {task.id}", border_style="blue"))
+        console.print(Panel(self.ralph_mgr.build_prompt(task), title=f"Ralph Next: {task.id}", border_style="blue"))
         return None
-
-    def _ralph_run_next(self, _args: list[str]):
-        task = self.ralph_mgr.choose_next_task()
-        if task is None:
-            console.print("[dim]No pending Ralph tasks[/dim]")
-            return CommandResult(next_prompt=None)
-
-        self.ctx.reset()
-
-        console.print(
-            Panel(
-                task.last_prompt,
-                title=f"Ralph Run-Next: {task.id}",
-                border_style="green",
-            )
-        )
-        console.print("[dim]Starting fresh inner-agent run for selected Ralph task.[/dim]")
-        return CommandResult(
-            conversation_history=[],
-            next_prompt=task.last_prompt,
-        )
-
-    def _ralph_resume_active(self, _args: list[str]):
-        prompt = self.ralph_mgr.resume_active_prompt()
-        if prompt is None:
-            console.print("[dim]No active Ralph task[/dim]")
-            return CommandResult(next_prompt=None)
-
-        self.ctx.reset()
-        active_task = self.ralph_mgr.get_active_task()
-        title = active_task.id if active_task else "active"
-        console.print(
-            Panel(
-                prompt,
-                title=f"Ralph Resume: {title}",
-                border_style="cyan",
-            )
-        )
-        console.print("[dim]Resuming active Ralph task in a fresh inner-agent run.[/dim]")
-        return CommandResult(
-            conversation_history=[],
-            next_prompt=prompt,
-        )
 
     def _ralph_done(self, args: list[str]):
         if not args:

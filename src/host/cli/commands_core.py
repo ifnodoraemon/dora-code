@@ -252,8 +252,7 @@ class CoreCommandHandler:
   /ralph init     - Initialize Ralph task state
   /ralph add <t>  - Add an outer-loop task
   /ralph list     - List Ralph tasks
-  /ralph next     - Pick next Ralph task and print fresh-run prompt
-  /ralph run-next - Start next Ralph task as a fresh inner-agent run
+  /ralph next     - Pick next Ralph task and print its prompt
   /ralph done <id> [note] - Mark Ralph task done
   /ralph blocked <id> <reason> - Mark Ralph task blocked
 

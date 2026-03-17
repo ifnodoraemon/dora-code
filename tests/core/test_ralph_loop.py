@@ -12,9 +12,9 @@ def test_ralph_manager_add_choose_and_complete_task(tmp_path):
     assert next_task is not None
     assert next_task.id == task.id
     assert next_task.status == "in_progress"
-    assert "[Ralph Task" in next_task.last_prompt
     assert mgr.get_active_task() is not None
     assert mgr.get_active_task().id == task.id
+    assert "[Ralph Task" in mgr.build_prompt(next_task)
 
     assert mgr.mark_done(task.id, "validated") is True
     assert mgr.get_task(task.id).status == "completed"
@@ -44,13 +44,13 @@ def test_ralph_manager_records_progress_notes(tmp_path):
     assert updated.notes[-1] == "progress: inspected failing tests"
 
 
-def test_ralph_manager_can_resume_active_prompt(tmp_path):
+def test_ralph_manager_builds_prompt_for_active_task(tmp_path):
     mgr = RalphLoopManager(project_dir=tmp_path)
     task = mgr.add_task("Continue refactor", "Keep behavior unchanged.")
     mgr.choose_next_task()
 
-    prompt = mgr.resume_active_prompt()
+    prompt = mgr.build_prompt(task)
 
     assert prompt is not None
     assert task.id in prompt
-    assert "Choose the next best action dynamically" in prompt
+    assert "Acceptance criteria: Keep behavior unchanged." in prompt
