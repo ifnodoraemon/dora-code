@@ -200,9 +200,9 @@ class RalphLoopManager:
             return "done", f"/ralph done {task_id} verified changes for {', '.join(files_modified[:3])}"
 
         if files_modified:
-            return "progress", f"/ralph next  # task {task_id} still in progress; verification pending"
+            return "progress", f"/ralph resume-active  # task {task_id} still in progress; verification pending"
 
-        return "progress", f"/ralph next  # task {task_id} needs more work"
+        return "progress", f"/ralph resume-active  # task {task_id} needs more work"
 
     def build_prompt(self, task: RalphTask) -> str:
         """Create a fresh-run prompt for the inner coding agent."""
@@ -214,10 +214,22 @@ class RalphLoopManager:
             f"Acceptance criteria: {acceptance}\n"
             f"Previous notes:\n{notes}\n\n"
             "Use a fresh-context inner agent run for this task.\n"
-            "First gather only the minimum context needed, then act, then verify.\n"
+            "Choose the next best action dynamically: inspect, modify, verify, or summarize based on evidence.\n"
+            "Do not follow a rigid workflow; gather only enough context to act safely.\n"
             "If you modify files, run relevant checks before declaring the task done.\n"
             "When finished, summarize what changed and whether the acceptance criteria are met."
         )
+
+    def resume_active_prompt(self) -> str | None:
+        """Return the active task prompt for a fresh continuation run."""
+        task = self.get_active_task()
+        if task is None:
+            return None
+        if not task.last_prompt:
+            task.last_prompt = self.build_prompt(task)
+            task.updated_at = time.time()
+            self._save()
+        return task.last_prompt
 
     def _load(self) -> None:
         if not self.tasks_path.exists():

@@ -190,7 +190,7 @@ class SessionCommandHandler:
 
         if not cmd_args:
             console.print(
-                "[yellow]Usage: /ralph <init|add|list|active|next|run-next|done|blocked> ...[/yellow]"
+                "[yellow]Usage: /ralph <init|add|list|active|next|run-next|resume-active|done|blocked> ...[/yellow]"
             )
             return None
 
@@ -204,6 +204,7 @@ class SessionCommandHandler:
             "active": self._ralph_active,
             "next": self._ralph_next,
             "run-next": self._ralph_run_next,
+            "resume-active": self._ralph_resume_active,
             "done": self._ralph_done,
             "blocked": self._ralph_blocked,
         }
@@ -283,6 +284,28 @@ class SessionCommandHandler:
         return CommandResult(
             conversation_history=[],
             next_prompt=task.last_prompt,
+        )
+
+    def _ralph_resume_active(self, _args: list[str]):
+        prompt = self.ralph_mgr.resume_active_prompt()
+        if prompt is None:
+            console.print("[dim]No active Ralph task[/dim]")
+            return CommandResult(next_prompt=None)
+
+        self.ctx.reset()
+        active_task = self.ralph_mgr.get_active_task()
+        title = active_task.id if active_task else "active"
+        console.print(
+            Panel(
+                prompt,
+                title=f"Ralph Resume: {title}",
+                border_style="cyan",
+            )
+        )
+        console.print("[dim]Resuming active Ralph task in a fresh inner-agent run.[/dim]")
+        return CommandResult(
+            conversation_history=[],
+            next_prompt=prompt,
         )
 
     def _ralph_done(self, args: list[str]):

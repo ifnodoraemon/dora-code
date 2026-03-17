@@ -56,3 +56,25 @@ def test_ralph_manager_suggests_outcome_from_run_state(tmp_path):
     )
     assert kind == "blocked"
     assert command.startswith(f"/ralph blocked {task.id}")
+
+    kind, command = mgr.suggest_outcome(
+        task.id,
+        files_modified=["src/app.py"],
+        verification_performed=False,
+        is_stuck=False,
+        recent_failures=[],
+    )
+    assert kind == "progress"
+    assert command.startswith("/ralph resume-active")
+
+
+def test_ralph_manager_can_resume_active_prompt(tmp_path):
+    mgr = RalphLoopManager(project_dir=tmp_path)
+    task = mgr.add_task("Continue refactor", "Keep behavior unchanged.")
+    mgr.choose_next_task()
+
+    prompt = mgr.resume_active_prompt()
+
+    assert prompt is not None
+    assert task.id in prompt
+    assert "Choose the next best action dynamically" in prompt
