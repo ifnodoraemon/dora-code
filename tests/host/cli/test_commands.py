@@ -666,7 +666,7 @@ class TestToolsCommand:
             project="test",
         )
 
-        with patch("src.host.cli.commands_core.console"):
+        with patch("src.host.cli.commands_core.console") as mock_console:
             result = await handler.handle(
                 cmd="tools",
                 cmd_args=[],
@@ -681,7 +681,8 @@ class TestToolsCommand:
             )
 
             assert result.handled is True
-            tool_selector.get_tool_categories.assert_called_once()
+            tool_selector.get_tool_categories.assert_not_called()
+            mock_console.print.assert_called()
 
 
 @pytest.mark.asyncio

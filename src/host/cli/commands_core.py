@@ -44,19 +44,10 @@ class CoreCommandHandler:
 
     def __init__(self, cc: CommandContext):
         self.cc = cc
-        self.ctx = cc.ctx
-        self.tool_selector = cc.tool_selector
-        self.registry = cc.registry
-        self.skill_mgr = cc.skill_mgr
-        self.checkpoint_mgr = cc.checkpoint_mgr
-        self.task_mgr = cc.task_mgr
-        self.cost_tracker = cc.cost_tracker
-        self.cmd_history = cc.cmd_history
-        self.session_mgr = cc.session_mgr
-        self.hook_mgr = cc.hook_mgr
-        self.model_name = cc.model_name
-        self.project = cc.project
-        self.permission_mgr = cc.permission_mgr
+
+    def __getattr__(self, name):
+        """Proxy attribute access to the underlying CommandContext."""
+        return getattr(self.cc, name)
 
     async def handle_core_command(
         self,
@@ -315,20 +306,11 @@ class CoreCommandHandler:
 
     def _show_tools(self, mode: str, tool_names: list, sensitive_tools: set):
         """Show available tools."""
-        categories = self.tool_selector.get_tool_categories()
         console.print(f"[bold]Tools (mode: {mode})[/bold]")
-
-        for cat_name, cat_tools in categories.items():
-            if not cat_tools:
-                continue
-            console.print(f"\n[cyan]{cat_name}:[/cyan]")
-            for name in cat_tools:
-                in_current = name in tool_names
-                marker = "🔒" if name in sensitive_tools else "  "
-                status = "[green]✓[/green]" if in_current else "[dim]○[/dim]"
-                console.print(f"  {status}{marker} {name}")
-
-        console.print(f"\n[dim]Current mode has {len(tool_names)} tools[/dim]")
+        for name in tool_names:
+            marker = "🔒" if name in sensitive_tools else "  "
+            console.print(f"  {marker} {name}")
+        console.print(f"\n[dim]Loaded {len(tool_names)} tools[/dim]")
 
     def _show_debug(self, mode: str, tool_names: list):
         """Show debug information."""

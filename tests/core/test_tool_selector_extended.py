@@ -5,7 +5,6 @@ from src.core.tool_selector import (
     AUX_TOOLS,
     READ_TOOLS,
     WRITE_TOOLS,
-    ToolConfig,
     ToolSelector,
     get_default_selector,
     get_tools_for_mode,
@@ -39,28 +38,6 @@ class TestToolConstants:
         """Test that ADVANCED_TOOLS is defined."""
         assert isinstance(ADVANCED_TOOLS, list)
         assert len(ADVANCED_TOOLS) > 0
-
-
-class TestToolConfig:
-    """Tests for ToolConfig dataclass."""
-
-    def test_creation_with_defaults(self):
-        """Test creating ToolConfig with defaults."""
-        config = ToolConfig()
-        assert config.plan_tools == []
-        assert config.build_tools == []
-        assert config.mcp_tools == []
-
-    def test_creation_with_values(self):
-        """Test creating ToolConfig with values."""
-        config = ToolConfig(
-            plan_tools=["read_file"],
-            build_tools=["read_file", "write_file"],
-            mcp_tools=["custom_tool"]
-        )
-        assert len(config.plan_tools) == 1
-        assert len(config.build_tools) == 2
-        assert len(config.mcp_tools) == 1
 
 
 class TestToolSelectorExtended:
@@ -141,41 +118,6 @@ class TestToolSelectorExtended:
         build_tools = selector.get_tools_for_mode("build")
         assert "custom_tool" in plan_tools
         assert "custom_tool" in build_tools
-
-    def test_get_all_builtin_tools(self):
-        """Test getting all builtin tools."""
-        selector = ToolSelector()
-        all_tools = selector.get_all_builtin_tools()
-        assert isinstance(all_tools, list)
-        assert len(all_tools) > 0
-        # Should include tools from all categories
-        assert any(tool in all_tools for tool in READ_TOOLS)
-        assert any(tool in all_tools for tool in WRITE_TOOLS)
-
-    def test_get_all_builtin_tools_no_duplicates(self):
-        """Test that builtin tools list has no duplicates."""
-        selector = ToolSelector()
-        all_tools = selector.get_all_builtin_tools()
-        assert len(all_tools) == len(set(all_tools))
-
-    def test_get_tool_categories(self):
-        """Test getting tool categories."""
-        selector = ToolSelector()
-        categories = selector.get_tool_categories()
-        assert isinstance(categories, dict)
-        assert "read" in categories
-        assert "write" in categories
-        assert "aux" in categories
-        assert "advanced" in categories
-        assert "mcp" in categories
-
-    def test_get_tool_categories_with_mcp(self):
-        """Test tool categories includes registered MCP tools."""
-        selector = ToolSelector()
-        selector.register_mcp_tools(["custom1", "custom2"])
-        categories = selector.get_tool_categories()
-        assert len(categories["mcp"]) == 2
-        assert "custom1" in categories["mcp"]
 
     def test_tools_are_copied_not_referenced(self):
         """Test that get_tools_for_mode returns copies."""

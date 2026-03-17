@@ -1,7 +1,6 @@
 """Tool selection by mode."""
 
 import logging
-from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -49,16 +48,6 @@ ADVANCED_TOOLS = [
     "semantic_search",  # 语义搜索
     "index_codebase",  # 索引代码库
 ]
-
-@dataclass
-class ToolConfig:
-    """工具配置"""
-
-    # 按模式的工具列表
-    plan_tools: list[str] = field(default_factory=list)
-    build_tools: list[str] = field(default_factory=list)
-    # MCP 扩展工具
-    mcp_tools: list[str] = field(default_factory=list)
 
 
 class ToolSelector:
@@ -123,26 +112,6 @@ class ToolSelector:
             for name in tool_names:
                 if name in self.mcp_tools:
                     self.mcp_tools.remove(name)
-
-    def get_all_builtin_tools(self) -> list[str]:
-        """获取所有内置工具"""
-        all_tools = set(READ_TOOLS + WRITE_TOOLS + AUX_TOOLS + ADVANCED_TOOLS)
-        return list(all_tools)
-
-    def get_tool_categories(self) -> dict[str, list[str]]:
-        """获取工具分类（用于显示）"""
-        return {
-            "read": READ_TOOLS,
-            "write": WRITE_TOOLS,
-            "aux": AUX_TOOLS,
-            "advanced": ADVANCED_TOOLS,
-            "mcp": self.mcp_tools,
-        }
-
-
-# ========================================
-# 单例
-# ========================================
 
 _default_selector: ToolSelector | None = None
 
