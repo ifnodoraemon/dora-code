@@ -49,6 +49,7 @@ MAX_TOOL_STEPS = 15  # Prevent infinite tool loops
 MAX_INLINE_FILE_CHARS = 50_000
 MAX_INLINE_DIR_ENTRIES = 100
 _DEPENDENCY_ANALYZER = DependencyAnalyzer()
+_REFERENCE_PATTERN = r"@(\.?/?[\w\-./]+)"
 
 
 @dataclass
@@ -125,111 +126,68 @@ def _is_context_overflow(error: Exception) -> bool:
     return any(indicator in msg for indicator in indicators)
 
 
-def expand_file_references(text: str) -> str:
-    """
-    Expand @file references in user input.
+def _resolve_workspace_path(ref_path: str) -> Path | None:
+    """Resolve a referenced path inside the current workspace."""
+    path = Path(ref_path)
+    try:
+        resolved = path.resolve()
+        resolved.relative_to(Path.cwd().resolve())
+    except ValueError:
+        logger.warning(f"Blocked @reference outside workspace: {ref_path}")
+        return None
+    except Exception as error:
+        logger.warning(f"Failed to resolve @{ref_path}: {error}")
+        return None
+    return resolved if resolved.exists() else None
 
-    Supports:
-    - @./path/to/file - Include file content
-    - @./directory/ - Include directory listing
-    - @file.txt - Relative to current directory
 
-    Returns:
-        Text with file references expanded
-    """
+def _read_file_preview(path: Path) -> str:
+    """Read a bounded preview of a text file."""
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        preview = handle.read(MAX_INLINE_FILE_CHARS + 1)
+    if len(preview) > MAX_INLINE_FILE_CHARS:
+        return preview[:MAX_INLINE_FILE_CHARS] + "\n... [truncated]"
+    return preview
+
+
+def _format_directory_preview(path: Path) -> str:
+    """Render a bounded directory listing."""
+    entries = sorted(path.iterdir())
+    listing = []
+    for entry in entries[:MAX_INLINE_DIR_ENTRIES]:
+        prefix = "📁 " if entry.is_dir() else "📄 "
+        listing.append(f"{prefix}{entry.name}")
+    if len(entries) > MAX_INLINE_DIR_ENTRIES:
+        listing.append(f"... and {len(entries) - MAX_INLINE_DIR_ENTRIES} more")
+    return f"\n```\n# Directory: {path}/\n" + "\n".join(listing) + "\n```\n"
+
+
+def resolve_input_references(text: str) -> tuple[str, list[str]]:
+    """Resolve `@path` references into inline previews plus image attachments."""
     import re
-    from pathlib import Path
-
-    # Pattern: @ followed by path starting with ./ or / (avoids matching emails/mentions)
-    pattern = r'@(\./[\w\-./]+|/[\w\-./]+)'
-    cwd = Path.cwd().resolve()
-
-    def _read_preview(path: Path) -> str:
-        with path.open("r", encoding="utf-8", errors="replace") as handle:
-            preview = handle.read(MAX_INLINE_FILE_CHARS + 1)
-        if len(preview) > MAX_INLINE_FILE_CHARS:
-            return preview[:MAX_INLINE_FILE_CHARS] + "\n... [truncated]"
-        return preview
-
-    def replace_reference(match):
-        ref_path = match.group(1)
-        path = Path(ref_path)
-
-        try:
-            # Security: resolve and check path is within cwd
-            resolved = path.resolve()
-            try:
-                resolved.relative_to(cwd)
-            except ValueError:
-                logger.warning(f"Blocked @reference outside workspace: {ref_path}")
-                return match.group(0)
-
-            if path.is_file():
-                content = _read_preview(path)
-                return f"\n```{path.suffix[1:] if path.suffix else 'text'}\n# File: {path}\n{content}\n```\n"
-
-            elif path.is_dir():
-                # List directory
-                files = sorted(path.iterdir())
-                listing = []
-                for f in files[:MAX_INLINE_DIR_ENTRIES]:
-                    prefix = "📁 " if f.is_dir() else "📄 "
-                    listing.append(f"{prefix}{f.name}")
-                if len(files) > MAX_INLINE_DIR_ENTRIES:
-                    listing.append(f"... and {len(files) - MAX_INLINE_DIR_ENTRIES} more")
-                return f"\n```\n# Directory: {path}/\n" + "\n".join(listing) + "\n```\n"
-
-            else:
-                # Path doesn't exist, keep original
-                return match.group(0)
-
-        except Exception as e:
-            logger.warning(f"Failed to expand @{ref_path}: {e}")
-            return match.group(0)
-
-    return re.sub(pattern, replace_reference, text)
-
-
-def extract_image_references(text: str) -> tuple[str, list[str]]:
-    """
-    Extract @image references from user input.
-
-    Image files (png, jpg, etc.) are pulled out for multimodal handling
-    instead of being expanded as text.
-
-    Returns:
-        (text_without_images, image_paths) - cleaned text + valid image file paths
-    """
-    import re
-    from pathlib import Path
 
     from src.core.model_utils import IMAGE_EXTENSIONS
 
-    pattern = r'@(\.?/?[\w\-./]+)'
     image_paths = []
 
-    def replace_images(match):
+    def replace_reference(match):
         ref_path = match.group(1)
-        path = Path(ref_path)
-
-        # Check if it's an image file
-        if path.suffix.lower() not in IMAGE_EXTENSIONS:
-            return match.group(0)  # Not an image, leave for expand_file_references
-
-        try:
-            resolved = path.resolve()
-            cwd = Path.cwd().resolve()
-            resolved.relative_to(cwd)
-        except ValueError:
+        resolved = _resolve_workspace_path(ref_path)
+        if resolved is None:
             return match.group(0)
 
-        if path.is_file():
+        if resolved.is_file() and resolved.suffix.lower() in IMAGE_EXTENSIONS:
             image_paths.append(str(resolved))
-            return ""  # Remove from text
-
+            return ""
+        if resolved.is_file():
+            content = _read_file_preview(resolved)
+            lang = resolved.suffix[1:] if resolved.suffix else "text"
+            return f"\n```{lang}\n# File: {resolved}\n{content}\n```\n"
+        if resolved.is_dir():
+            return _format_directory_preview(resolved)
         return match.group(0)
 
-    cleaned = re.sub(pattern, replace_images, text).strip()
+    cleaned = re.sub(_REFERENCE_PATTERN, replace_reference, text).strip()
     return cleaned, image_paths
 
 
@@ -351,6 +309,23 @@ def show_runtime_status(*, task_mgr, cost_tracker) -> None:
         console.print(f"[yellow]⚠️ {budget_status['warning']}[/yellow]")
 
 
+def _read_multiline_input(first_line: str, delimiter: str) -> str:
+    """Continue reading until the closing delimiter is seen."""
+    lines = [first_line]
+    console.print("[dim]Multi-line mode (close with matching delimiter)...[/dim]")
+    while True:
+        if len(lines) >= 1000:
+            console.print(
+                "[yellow]Multi-line input limit (1000 lines) reached, closing automatically.[/yellow]"
+            )
+            break
+        line = Prompt.ask("[dim]...[/dim]")
+        lines.append(line)
+        if delimiter in line:
+            break
+    return "\n".join(lines)
+
+
 def read_user_input(
     *,
     state: ChatLoopState,
@@ -376,20 +351,7 @@ def read_user_input(
             stripped = user_input.strip()
             if not stripped.startswith(delim) or stripped.endswith(delim):
                 continue
-
-            lines = [user_input]
-            console.print("[dim]Multi-line mode (close with matching delimiter)...[/dim]")
-            while True:
-                if len(lines) >= 1000:
-                    console.print(
-                        "[yellow]Multi-line input limit (1000 lines) reached, closing automatically.[/yellow]"
-                    )
-                    break
-                line = Prompt.ask("[dim]...[/dim]")
-                lines.append(line)
-                if delim in line:
-                    break
-            user_input = "\n".join(lines)
+            user_input = _read_multiline_input(user_input, delim)
             break
 
         return InputResult(user_input=user_input, ctrl_c_count=ctrl_c_count)
@@ -539,11 +501,9 @@ async def execute_agent_turn(
     session_name: str | None,
 ) -> TurnMetrics | None:
     """Execute one non-command agent turn and persist resulting session state."""
-    user_input, image_paths = extract_image_references(user_input)
+    user_input, image_paths = resolve_input_references(user_input)
     if image_paths:
         console.print(f"[dim cyan]Images: {', '.join(Path(p).name for p in image_paths)}[/dim cyan]")
-
-    user_input = expand_file_references(user_input)
     hook_result = await hook_mgr.trigger(
         HookEvent.USER_PROMPT_SUBMIT,
         user_prompt=user_input,

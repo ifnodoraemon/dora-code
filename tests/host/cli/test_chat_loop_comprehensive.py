@@ -21,9 +21,9 @@ from src.host.cli.chat_loop import (
     build_system_prompt,
     check_piped_input,
     convert_tools_to_definitions,
-    expand_file_references,
     handle_bash_mode,
     process_tool_calls,
+    resolve_input_references,
     restore_conversation_history,
     restore_session_history,
     show_startup_info,
@@ -240,16 +240,27 @@ class TestCheckPipedInput:
                 assert is_headless is False
 
 
-class TestExpandFileReferences:
-    def test_expand_file_references_truncates_large_files(self, tmp_path, monkeypatch):
+class TestResolveInputReferences:
+    def test_resolve_input_references_truncates_large_files(self, tmp_path, monkeypatch):
         big_file = tmp_path / "large.txt"
         big_file.write_text("a" * 60000, encoding="utf-8")
         monkeypatch.chdir(tmp_path)
 
-        expanded = expand_file_references(f"inspect @{big_file}")
+        expanded, image_paths = resolve_input_references(f"inspect @{big_file}")
 
         assert "... [truncated]" in expanded
         assert len(expanded) < 53000
+        assert image_paths == []
+
+    def test_resolve_input_references_extracts_images(self, tmp_path, monkeypatch):
+        image = tmp_path / "image.png"
+        image.write_bytes(b"fake")
+        monkeypatch.chdir(tmp_path)
+
+        cleaned, image_paths = resolve_input_references(f"look @{image}")
+
+        assert cleaned == "look"
+        assert image_paths == [str(image.resolve())]
 
 
 # ============================================================================
