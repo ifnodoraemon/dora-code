@@ -268,23 +268,6 @@ def resolve_tooling(tool_selector, registry, mode: str):
     return tool_names, convert_tools_to_definitions(genai_tools)
 
 
-def handle_ralph_post_turn(
-    ralph_mgr,
-    *,
-    accumulated_text: str,
-) -> None:
-    """Record Ralph progress for the active outer task."""
-    if ralph_mgr is None:
-        return
-
-    active_ralph_task = ralph_mgr.get_active_task()
-    if active_ralph_task is None:
-        return
-
-    summary_note = accumulated_text.strip().replace("\n", " ")[:200] or "turn completed"
-    ralph_mgr.record_progress(active_ralph_task.id, summary_note)
-
-
 def prepare_user_turn(
     user_input: str,
     image_paths: list[str],
@@ -477,7 +460,6 @@ async def finalize_turn(
     ctx,
     hook_mgr,
     checkpoint_mgr,
-    ralph_mgr,
 ) -> TurnMetrics:
     """Finalize one completed agent turn."""
     if accumulated_text:
@@ -505,11 +487,6 @@ async def finalize_turn(
     else:
         checkpoint_mgr.discard_checkpoint()
 
-    handle_ralph_post_turn(
-        ralph_mgr,
-        accumulated_text=accumulated_text,
-    )
-
     await hook_mgr.trigger(HookEvent.STOP, message_count=len(ctx.messages))
 
     return TurnMetrics(
@@ -536,7 +513,6 @@ async def execute_agent_turn(
     headless: bool,
     cost_tracker,
     permission_mgr,
-    ralph_mgr,
     session_mgr,
     session_name: str | None,
 ) -> TurnMetrics | None:
@@ -615,7 +591,6 @@ async def execute_agent_turn(
         ctx=ctx,
         hook_mgr=hook_mgr,
         checkpoint_mgr=checkpoint_mgr,
-        ralph_mgr=ralph_mgr,
     )
     state.session_data = persist_session_state(
         session_mgr,
@@ -1264,8 +1239,6 @@ async def chat_loop(
     bash_executor = managers["bash_executor"]
     session_mgr = managers["session_mgr"]
     permission_mgr = managers.get("permission_mgr")
-    ralph_mgr = managers.get("ralph_mgr")
-
     sensitive_tools = registry.get_sensitive_tools()
 
 
@@ -1331,7 +1304,6 @@ async def chat_loop(
         model_name=model_name,
         project=project,
         permission_mgr=permission_mgr,
-        ralph_mgr=ralph_mgr,
     )
 
     # Setup tab completion for slash commands
@@ -1340,7 +1312,7 @@ async def chat_loop(
         "clear", "compact", "reset", "tools", "debug", "doctor", "memory",
         "commit", "review-pr", "review", "sessions", "resume", "rename", "export",
         "fork", "checkpoints", "rewind", "tasks", "task", "plugins", "plugin",
-        "ralph", "theme", "vim", "thinking", "workspace", "add-dir", "cost", "agents",
+        "theme", "vim", "thinking", "workspace", "add-dir", "cost", "agents",
         "history", "exit",
     ]
     cmd_history.setup_completer(slash_commands)
@@ -1430,7 +1402,6 @@ async def chat_loop(
                 headless=headless,
                 cost_tracker=cost_tracker,
                 permission_mgr=permission_mgr,
-                ralph_mgr=ralph_mgr,
                 session_mgr=session_mgr,
                 session_name=session_name,
             )

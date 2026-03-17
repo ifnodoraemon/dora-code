@@ -92,7 +92,7 @@ class TestCommandHandlerInitialization:
 
 
 @pytest.mark.asyncio
-class TestHelpCommand:
+class TestHelpCommandFallback:
     """Test /help command."""
 
     async def test_help_command_shows_help(self):
@@ -132,126 +132,7 @@ class TestHelpCommand:
 
 
 @pytest.mark.asyncio
-class TestRalphCommand:
-    async def test_ralph_next_prints_prompt_for_selected_task(self):
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            task_mgr=MagicMock(),
-            cost_tracker=MagicMock(),
-            cmd_history=MagicMock(),
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-            ralph_mgr=MagicMock(),
-        )
-        fake_task = MagicMock()
-        fake_task.id = "abc123"
-        handler.session_handler.ralph_mgr.choose_next_task.return_value = fake_task
-        handler.session_handler.ralph_mgr.build_prompt.return_value = "fresh prompt"
-
-        with patch("src.host.cli.commands_session.console") as mock_console:
-            result = await handler.handle(
-                cmd="ralph",
-                cmd_args=["next"],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-                build_system_prompt=MagicMock(return_value="prompt"),
-                convert_tools_to_definitions=MagicMock(return_value=[]),
-                sensitive_tools=set(),
-            )
-
-            assert result.handled is True
-            handler.session_handler.ralph_mgr.choose_next_task.assert_called_once()
-            handler.session_handler.ralph_mgr.build_prompt.assert_called_once_with(fake_task)
-            mock_console.print.assert_called()
-
-    async def test_ralph_add_delegates_to_manager(self):
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            task_mgr=MagicMock(),
-            cost_tracker=MagicMock(),
-            cmd_history=MagicMock(),
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-            ralph_mgr=MagicMock(),
-        )
-        fake_task = MagicMock()
-        fake_task.id = "task1"
-        fake_task.title = "Investigate perf"
-        handler.session_handler.ralph_mgr.add_task.return_value = fake_task
-
-        with patch("src.host.cli.commands_session.console") as mock_console:
-            result = await handler.handle(
-                cmd="ralph",
-                cmd_args=["add", "Investigate", "perf"],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-                build_system_prompt=MagicMock(return_value="prompt"),
-                convert_tools_to_definitions=MagicMock(return_value=[]),
-                sensitive_tools=set(),
-            )
-
-            assert result.handled is True
-            handler.session_handler.ralph_mgr.add_task.assert_called_once_with("Investigate perf")
-            mock_console.print.assert_called()
-
-    async def test_ralph_active_prints_current_task(self):
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            task_mgr=MagicMock(),
-            cost_tracker=MagicMock(),
-            cmd_history=MagicMock(),
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-            ralph_mgr=MagicMock(),
-        )
-        active_task = MagicMock()
-        active_task.id = "active1"
-        handler.session_handler.ralph_mgr.get_active_task.return_value = active_task
-        handler.session_handler.ralph_mgr.build_prompt.return_value = "active prompt"
-
-        with patch("src.host.cli.commands_session.console") as mock_console:
-            result = await handler.handle(
-                cmd="ralph",
-                cmd_args=["active"],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-                build_system_prompt=MagicMock(return_value="prompt"),
-                convert_tools_to_definitions=MagicMock(return_value=[]),
-                sensitive_tools=set(),
-            )
-
-            assert result.handled is True
-            handler.session_handler.ralph_mgr.get_active_task.assert_called_once()
-            handler.session_handler.ralph_mgr.build_prompt.assert_called_once_with(active_task)
-            mock_console.print.assert_called()
-
+class TestHelpCommand:
     async def test_help_command_returns_handled_true(self):
         """Test that help command returns handled=True."""
         handler = CommandHandler(

@@ -249,12 +249,6 @@ class CoreCommandHandler:
 [bold]Task Commands:[/bold]
   /tasks          - List background tasks
   /task <id>      - Show task output
-  /ralph init     - Initialize Ralph task state
-  /ralph add <t>  - Add an outer-loop task
-  /ralph list     - List Ralph tasks
-  /ralph next     - Pick next Ralph task and print its prompt
-  /ralph done <id> [note] - Mark Ralph task done
-  /ralph blocked <id> <reason> - Mark Ralph task blocked
 
 [bold]Plugin Commands:[/bold]
   /plugins        - List installed plugins

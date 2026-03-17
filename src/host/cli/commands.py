@@ -29,7 +29,6 @@ class CommandHandler:
         model_name: str,
         project: str,
         permission_mgr=None,
-        ralph_mgr=None,
     ):
         self.cc = CommandContext(
             ctx=ctx,
@@ -45,7 +44,6 @@ class CommandHandler:
             model_name=model_name,
             project=project,
             permission_mgr=permission_mgr,
-            ralph_mgr=ralph_mgr,
         )
 
         self.core_handler = CoreCommandHandler(self.cc)
