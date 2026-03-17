@@ -333,7 +333,7 @@ class CoreCommandHandler:
             /commit --amend      - Amend the last commit
         """
         # Check if in a git repo
-        if not self._is_git_repo():
+        if not self._command_available("git", ["rev-parse", "--git-dir"]):
             console.print("[red]Error: Not in a git repository[/red]")
             return
 
@@ -343,14 +343,14 @@ class CoreCommandHandler:
         custom_message = " ".join(message_args) if message_args else None
 
         # Get git status
-        status_output = self._run_git(["status", "--porcelain"])
+        status_output = self._run_command("git", ["status", "--porcelain"])
         if not status_output.strip():
             console.print("[yellow]No changes to commit.[/yellow]")
             return
 
         # Show current changes
         console.print("\n[bold cyan]Changes to commit:[/bold cyan]")
-        diff_stat = self._run_git(["diff", "--stat", "HEAD"])
+        diff_stat = self._run_command("git", ["diff", "--stat", "HEAD"])
         if diff_stat:
             console.print(diff_stat)
         else:
@@ -358,9 +358,9 @@ class CoreCommandHandler:
             console.print(status_output)
 
         # Get detailed diff for message generation
-        diff_output = self._run_git(["diff", "HEAD"])
+        diff_output = self._run_command("git", ["diff", "HEAD"])
         if not diff_output:
-            diff_output = self._run_git(["diff", "--cached"])
+            diff_output = self._run_command("git", ["diff", "--cached"])
 
         # Generate or use commit message
         if custom_message:
@@ -378,7 +378,7 @@ class CoreCommandHandler:
             return
 
         # Stage all changes
-        stage_result = self._run_git(["add", "-A"])
+        stage_result = self._run_command("git", ["add", "-A"])
         if stage_result is None:
             console.print("[red]Error staging files[/red]")
             return
@@ -388,43 +388,40 @@ class CoreCommandHandler:
         if amend:
             commit_args.append("--amend")
 
-        result = self._run_git(commit_args)
+        result = self._run_command("git", commit_args)
         if result is not None:
             console.print("\n[green]Committed successfully![/green]")
             # Show the commit
-            log_output = self._run_git(["log", "-1", "--oneline"])
+            log_output = self._run_command("git", ["log", "-1", "--oneline"])
             if log_output:
                 console.print(f"[dim]{log_output}[/dim]")
         else:
             console.print("[red]Commit failed. Check git status.[/red]")
 
-    def _is_git_repo(self) -> bool:
-        """Check if current directory is a git repository."""
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--git-dir"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            return result.returncode == 0
-        except Exception:
-            return False
+    def _command_available(self, program: str, args: list[str]) -> bool:
+        """Check whether a command succeeds."""
+        return self._run_command(program, args, timeout=5) is not None
 
-    def _run_git(self, args: list[str]) -> str | None:
-        """Run a git command and return output."""
+    def _run_command(
+        self,
+        program: str,
+        args: list[str],
+        *,
+        timeout: int = 30,
+    ) -> str | None:
+        """Run a command and return trimmed stdout on success."""
         try:
             result = subprocess.run(
-                ["git"] + [str(a) for a in args],
+                [program] + [str(arg) for arg in args],
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=timeout,
             )
-            if result.returncode == 0:
-                return result.stdout.strip()
-            return None
         except Exception:
             return None
+        if result.returncode != 0:
+            return None
+        return result.stdout.strip()
 
     def _generate_commit_message(self, status: str, diff: str) -> str:
         """Generate a commit message based on changes."""
@@ -497,7 +494,7 @@ class CoreCommandHandler:
             /review-pr --files   - Show changed files only
         """
         # Check if gh CLI is available
-        if not self._is_gh_available():
+        if not self._command_available("gh", ["--version"]):
             console.print("[red]Error: GitHub CLI (gh) is not installed.[/red]")
             console.print("[dim]Install from: https://cli.github.com/[/dim]")
             return
@@ -513,7 +510,7 @@ class CoreCommandHandler:
         if pr_number:
             view_args.append(pr_number)
 
-        pr_info = self._run_gh(view_args)
+        pr_info = self._run_command("gh", view_args)
         if not pr_info:
             if pr_number:
                 console.print(f"[red]Error: PR #{pr_number} not found[/red]")
@@ -530,7 +527,7 @@ class CoreCommandHandler:
             diff_args = ["pr", "diff"]
             if pr_number:
                 diff_args.append(pr_number)
-            diff_output = self._run_gh(diff_args)
+            diff_output = self._run_command("gh", diff_args)
             if diff_output:
                 console.print("\n[bold cyan]Diff:[/bold cyan]")
                 # Truncate if too long
@@ -545,38 +542,10 @@ class CoreCommandHandler:
             files_args = ["pr", "diff", "--stat"]
             if pr_number:
                 files_args.append(pr_number)
-            files_output = self._run_gh(files_args)
+            files_output = self._run_command("gh", files_args)
             if files_output:
                 console.print("\n[bold cyan]Changed Files:[/bold cyan]")
                 console.print(files_output)
-
-    def _is_gh_available(self) -> bool:
-        """Check if GitHub CLI is available."""
-        try:
-            result = subprocess.run(
-                ["gh", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            return result.returncode == 0
-        except Exception:
-            return False
-
-    def _run_gh(self, args: list[str]) -> str | None:
-        """Run a gh command and return output."""
-        try:
-            result = subprocess.run(
-                ["gh"] + args,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode == 0:
-                return result.stdout.strip()
-            return None
-        except Exception:
-            return None
 
     async def _handle_review(
         self,
@@ -600,36 +569,25 @@ class CoreCommandHandler:
             self._show_conversation_history(messages, limit=int(subcommand))
             return None
 
-        handlers = {
-            "goto": lambda: self._handle_review_goto(cmd_args, messages, conversation_history),
-            "search": lambda: self._handle_review_search(cmd_args, messages),
-            "all": lambda: self._show_conversation_history(messages, limit=None),
-        }
-        handler = handlers.get(subcommand)
-        if handler is None:
+        if subcommand == "goto":
+            if len(cmd_args) < 2 or not cmd_args[1].isdigit():
+                console.print("[red]Usage: /review goto <turn_number>[/red]")
+                return None
+            return self._goto_turn(messages, int(cmd_args[1]), conversation_history)
+        if subcommand == "search":
+            if len(cmd_args) < 2:
+                console.print("[red]Usage: /review search <keyword>[/red]")
+                return None
+            self._search_conversation(messages, " ".join(cmd_args[1:]))
+            return None
+        if subcommand == "all":
+            self._show_conversation_history(messages, limit=None)
+            return None
+
+        if subcommand not in {"goto", "search", "all"}:
             console.print(f"[red]Unknown subcommand: {subcommand}[/red]")
             console.print("[dim]Usage: /review [n|goto <n>|search <q>|all][/dim]")
             return None
-        return handler()
-
-    def _handle_review_goto(
-        self,
-        cmd_args: list[str],
-        messages: list,
-        conversation_history: list,
-    ) -> CommandResult | None:
-        """Handle `/review goto`."""
-        if len(cmd_args) < 2 or not cmd_args[1].isdigit():
-            console.print("[red]Usage: /review goto <turn_number>[/red]")
-            return None
-        return self._goto_turn(messages, int(cmd_args[1]), conversation_history)
-
-    def _handle_review_search(self, cmd_args: list[str], messages: list) -> None:
-        """Handle `/review search`."""
-        if len(cmd_args) < 2:
-            console.print("[red]Usage: /review search <keyword>[/red]")
-            return None
-        self._search_conversation(messages, " ".join(cmd_args[1:]))
         return None
 
     def _show_conversation_history(self, messages: list, limit: int | None = 10):
