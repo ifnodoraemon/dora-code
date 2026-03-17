@@ -32,10 +32,15 @@ class ConfigCommandHandler:
         """Proxy attribute access to the underlying command context."""
         return getattr(self.cc, name)
 
-    async def handle_config_command(
+    async def handle(
         self,
         cmd: str,
         cmd_args: list[str],
+        mode: str | None = None,
+        tool_names: list[str] | None = None,
+        tool_definitions: list | None = None,
+        conversation_history: list | None = None,
+        active_skills_content: str | None = None,
     ) -> CommandResult | None:
         """Handle configuration commands."""
         handlers = {

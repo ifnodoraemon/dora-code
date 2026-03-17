@@ -12,7 +12,7 @@ console = Console()
 
 
 class CommandHandler:
-    """Main handler that delegates to specialized command handlers."""
+    """Main slash-command router."""
 
     def __init__(
         self,
@@ -58,9 +58,11 @@ class CommandHandler:
             convert_tools_to_definitions=convert_tools_to_definitions,
         )
 
-        self.core_handler = CoreCommandHandler(self.cc)
-        self.session_handler = SessionCommandHandler(self.cc)
-        self.config_handler = ConfigCommandHandler(self.cc)
+        self.handlers = (
+            CoreCommandHandler(self.cc),
+            SessionCommandHandler(self.cc),
+            ConfigCommandHandler(self.cc),
+        )
 
     async def handle(
         self,
@@ -72,7 +74,7 @@ class CommandHandler:
         conversation_history: list,
         active_skills_content: str,
     ) -> CommandResult:
-        """Handle a slash command by delegating to the appropriate handler."""
+        """Handle a slash command."""
         fallback = CommandResult.default(
             mode=mode,
             tool_names=tool_names,
@@ -81,25 +83,18 @@ class CommandHandler:
             conversation_history=conversation_history,
         )
 
-        core_result = await self.core_handler.handle_core_command(
-            cmd,
-            cmd_args,
-            mode,
-            tool_names,
-            tool_definitions,
-            conversation_history,
-            active_skills_content,
-        )
-        if core_result:
-            return core_result
-
-        session_result = await self.session_handler.handle_session_command(cmd, cmd_args)
-        if session_result:
-            return session_result
-
-        config_result = await self.config_handler.handle_config_command(cmd, cmd_args)
-        if config_result:
-            return config_result
+        for handler in self.handlers:
+            result = await handler.handle(
+                cmd,
+                cmd_args,
+                mode,
+                tool_names,
+                tool_definitions,
+                conversation_history,
+                active_skills_content,
+            )
+            if result:
+                return result
 
         console.print(f"[yellow]Unknown command: {cmd}[/yellow]")
         return fallback

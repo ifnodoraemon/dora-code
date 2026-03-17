@@ -48,7 +48,7 @@ class CoreCommandHandler:
         """Proxy attribute access to the underlying CommandContext."""
         return getattr(self.cc, name)
 
-    async def handle_core_command(
+    async def handle(
         self,
         cmd: str,
         cmd_args: list[str],
