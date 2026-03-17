@@ -18,9 +18,6 @@ class CommandContext:
     registry: Any  # ToolRegistry
     skill_mgr: Any
     checkpoint_mgr: Any
-    task_mgr: Any
-    cost_tracker: Any
-    cmd_history: Any
     session_mgr: Any
     hook_mgr: Any
     model_name: str

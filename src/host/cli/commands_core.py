@@ -203,18 +203,8 @@ class CoreCommandHandler:
   /fork
   /checkpoints
   /rewind [id]
-  /tasks
-  /task <id>
-  /plugins
-  /plugin ...
-  /theme [name]
-  /vim
-  /thinking
   /workspace
   /add-dir <path>
-  /cost
-  /agents
-  /history
   /exit
 
 [bold]Shell:[/bold]

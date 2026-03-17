@@ -1,13 +1,12 @@
 """
 Session Management CLI Commands Handler
 
-Handles session commands: sessions, resume, rename, export, fork, checkpoints, rewind, tasks, task
+Handles session commands: sessions, resume, rename, export, fork, checkpoints, rewind
 """
 
 from datetime import datetime
 
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 from src.host.cli.command_context import CommandContext
@@ -45,8 +44,6 @@ class SessionCommandHandler:
             "fork": self._fork_session,
             "checkpoints": self._show_checkpoints,
             "rewind": lambda: self._rewind_checkpoint(cmd_args),
-            "tasks": self._show_tasks,
-            "task": lambda: self._show_task_output(cmd_args),
         }
         handler = handlers.get(cmd)
         if handler is None:
@@ -146,42 +143,3 @@ class SessionCommandHandler:
                 console.print("[yellow]No checkpoint to rewind to[/yellow]")
         except Exception as e:
             console.print(f"[red]Rewind failed: {e}[/red]")
-
-    def _show_tasks(self):
-        """List background tasks."""
-        tasks = self.task_mgr.list_tasks(limit=10)
-        if tasks:
-            table = Table(title="Background Tasks")
-            table.add_column("ID", style="cyan")
-            table.add_column("Name", style="green")
-            table.add_column("Status", style="yellow")
-            table.add_column("Progress")
-            table.add_column("Duration")
-            for t in tasks:
-                status_color = {
-                    "running": "cyan",
-                    "completed": "green",
-                    "failed": "red",
-                    "cancelled": "yellow",
-                }.get(t["status"], "white")
-                table.add_row(
-                    t["id"],
-                    t["name"][:20],
-                    f"[{status_color}]{t['status']}[/{status_color}]",
-                    f"{t['progress']}%",
-                    f"{t['duration'] or 0:.1f}s",
-                )
-            console.print(table)
-        else:
-            console.print("[dim]No tasks[/dim]")
-
-    def _show_task_output(self, cmd_args: list):
-        """Show task output."""
-        if cmd_args:
-            output = self.task_mgr.get_task_output(cmd_args[0])
-            if output:
-                console.print(Panel(output, title=f"Task {cmd_args[0]}", border_style="cyan"))
-            else:
-                console.print(f"[red]Task not found: {cmd_args[0]}[/red]")
-        else:
-            console.print("[yellow]Usage: /task <task_id>[/yellow]")

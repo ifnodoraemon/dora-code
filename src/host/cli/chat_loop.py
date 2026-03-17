@@ -95,7 +95,6 @@ class ChatRuntime:
     ctx: object
     skill_mgr: object
     checkpoint_mgr: object
-    task_mgr: object
     hook_mgr: object
     cost_tracker: object
     cmd_history: object
@@ -756,7 +755,6 @@ async def initialize_chat_runtime(
     ctx = managers["ctx"]
     skill_mgr = managers["skill_mgr"]
     checkpoint_mgr = managers["checkpoint_mgr"]
-    task_mgr = managers["task_mgr"]
     hook_mgr = managers["hook_mgr"]
     cost_tracker = managers["cost_tracker"]
     cmd_history = managers["cmd_history"]
@@ -788,7 +786,6 @@ async def initialize_chat_runtime(
         ctx=ctx,
         skill_mgr=skill_mgr,
         checkpoint_mgr=checkpoint_mgr,
-        task_mgr=task_mgr,
         hook_mgr=hook_mgr,
         cost_tracker=cost_tracker,
         cmd_history=cmd_history,
@@ -1340,9 +1337,6 @@ async def chat_loop(
         registry=runtime.registry,
         skill_mgr=runtime.skill_mgr,
         checkpoint_mgr=runtime.checkpoint_mgr,
-        task_mgr=runtime.task_mgr,
-        cost_tracker=runtime.cost_tracker,
-        cmd_history=runtime.cmd_history,
         session_mgr=runtime.session_mgr,
         hook_mgr=runtime.hook_mgr,
         model_name=runtime.model_name,
@@ -1357,9 +1351,7 @@ async def chat_loop(
         "help", "init", "mode", "model", "config", "skills",
         "clear", "compact", "reset", "doctor", "memory",
         "commit", "review", "sessions", "resume", "rename", "export",
-        "fork", "checkpoints", "rewind", "tasks", "task", "plugins", "plugin",
-        "theme", "vim", "thinking", "workspace", "add-dir", "cost", "agents",
-        "history", "exit",
+        "fork", "checkpoints", "rewind", "workspace", "add-dir", "exit",
     ]
     runtime.cmd_history.setup_completer(slash_commands)
 
