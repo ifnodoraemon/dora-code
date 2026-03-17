@@ -18,11 +18,8 @@ from textual.reactive import reactive
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
 from src.core.config import load_config
-# Import ModelClient for AI integration
-from src.core.model_client import (
-    Message,
-    ModelClient,
-)
+from src.core.model_client import ModelClient
+from src.core.model_utils import Message
 from src.core.prompts import get_system_prompt
 from src.host.tools import get_default_registry
 

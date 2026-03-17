@@ -24,36 +24,12 @@ Usage:
         print(chunk.content)
 """
 
-# Re-export base class
 from src.core.model_client_base import BaseModelClient
 from src.core.model_client_direct import DirectModelClient
-
-# Re-export client implementations
 from src.core.model_client_gateway import GatewayModelClient
-
-# Re-export all types from model_utils for backward compatibility
-from src.core.model_utils import (
-    ChatResponse,
-    ClientConfig,
-    ClientMode,
-    Message,
-    Provider,
-    StreamChunk,
-    ToolCall,
-    ToolDefinition,
-)
+from src.core.model_utils import ClientConfig, ClientMode
 
 __all__ = [
-    # Types
-    "Message",
-    "ToolDefinition",
-    "ChatResponse",
-    "StreamChunk",
-    "ToolCall",
-    "ClientConfig",
-    "ClientMode",
-    "Provider",
-    # Clients
     "BaseModelClient",
     "GatewayModelClient",
     "DirectModelClient",

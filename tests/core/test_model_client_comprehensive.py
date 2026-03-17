@@ -16,14 +16,16 @@ from unittest.mock import AsyncMock, MagicMock, patch, Mock
 from collections.abc import AsyncIterator
 
 from src.core.model_client import (
-    BaseModelClient,
+    DirectModelClient,
+    GatewayModelClient,
+    ModelClient,
+)
+from src.core.model_client_base import BaseModelClient
+from src.core.model_utils import (
     ChatResponse,
     ClientConfig,
     ClientMode,
-    DirectModelClient,
-    GatewayModelClient,
     Message,
-    ModelClient,
     Provider,
     StreamChunk,
     ToolCall,

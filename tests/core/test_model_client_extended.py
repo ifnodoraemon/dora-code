@@ -8,13 +8,9 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.core.model_client import (
-    ClientConfig,
-    ClientMode,
     GatewayModelClient,
-    Message,
-    StreamChunk,
-    ToolDefinition,
 )
+from src.core.model_utils import ClientConfig, ClientMode, Message, StreamChunk, ToolDefinition
 
 
 class TestToolDefinition:

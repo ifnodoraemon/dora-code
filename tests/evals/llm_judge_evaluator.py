@@ -11,7 +11,8 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.core.model_client import ModelClient, Message
+from src.core.model_client import ModelClient
+from src.core.model_utils import Message
 
 
 class LLMJudgeEvaluator:

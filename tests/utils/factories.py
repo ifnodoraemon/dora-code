@@ -5,10 +5,10 @@ Provides factory functions for creating test objects and mocks.
 """
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 from src.core.context_manager import ContextConfig, ContextManager
-from src.core.model_client import (
+from src.core.model_utils import (
     ChatResponse,
     ClientConfig,
     ClientMode,

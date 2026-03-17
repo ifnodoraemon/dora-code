@@ -23,8 +23,7 @@ from src.core.config import load_config
 from src.core.context_manager import ConversationSummary
 from src.core.hooks import HookEvent
 from src.core.logger import configure_root_logger
-from src.core.model_client import ClientMode, Message, ToolDefinition
-from src.core.model_utils import ChatResponse
+from src.core.model_utils import ChatResponse, ClientMode, Message, ToolDefinition
 from src.core.parallel_executor import DependencyAnalyzer
 from src.core.parallel_executor import ToolCall as PToolCall
 from src.core.prompts import get_system_prompt
@@ -34,7 +33,8 @@ from src.core.rules import (
     load_all_instructions,
     load_project_memory,
 )
-from src.host.cli.commands import MODE_COLORS, CommandHandler
+from src.host.cli.commands import CommandHandler
+from src.host.cli.commands_core import MODE_COLORS
 from src.host.cli.initialization import initialize_all_managers
 from src.host.cli.tool_execution import (
     detect_tool_loop,

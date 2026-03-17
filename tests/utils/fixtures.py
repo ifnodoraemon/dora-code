@@ -5,13 +5,13 @@ Provides reusable fixtures for test setup.
 """
 
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import pytest
 
 from src.core.context_manager import ContextManager
-from src.core.model_client import BaseModelClient
+from src.core.model_client_base import BaseModelClient
 from src.host.tools import ToolRegistry
 from tests.utils.factories import (
     create_mock_model_client,

@@ -18,15 +18,9 @@ from .log_rotation import LogRotationManager, RotationConfig, setup_rotating_log
 from .logger import setup_logger
 from .mcp_client import MCPClient, MCPServerConfig
 from .memory_layers import LayeredMemory, MemoryLayer, get_layered_memory
-from .model_client import (
-    ChatResponse,
-    ClientConfig,
-    ClientMode,
-    Message,
-    ModelClient,
-    ToolDefinition,
-)
+from .model_client import ModelClient
 from .model_manager import AVAILABLE_MODELS, ModelCapability, ModelManager
+from .model_utils import ChatResponse, ClientConfig, ClientMode, Message, ToolDefinition
 from .notifications import NotificationManager, get_notification_manager, notify
 from .parallel_executor import ExecutionStrategy, ParallelExecutor, ToolCall
 from .permissions import PermissionLevel, PermissionManager, PermissionRule

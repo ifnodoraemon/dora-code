@@ -3,14 +3,9 @@
 from unittest.mock import patch
 
 from src.core.model_client import (
-    ChatResponse,
-    ClientConfig,
-    ClientMode,
-    Message,
     ModelClient,
-    ToolCall,
-    ToolDefinition,
 )
+from src.core.model_utils import ChatResponse, ClientConfig, ClientMode, Message, ToolCall, ToolDefinition
 
 
 class TestClientConfig:

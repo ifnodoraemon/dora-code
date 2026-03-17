@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.core.model_client import ClientMode, Message, ToolDefinition
+from src.core.model_utils import ClientMode, Message, ToolDefinition
 from src.host.cli.chat_loop import (
     build_system_prompt,
     check_piped_input,

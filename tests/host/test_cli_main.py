@@ -14,17 +14,17 @@ Tests cover:
 - Project isolation
 """
 
-import asyncio
 import contextlib
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
 
 from src.host.cli.chat_loop import (
     build_system_prompt,
     convert_tools_to_definitions,
     chat_loop,
 )
-from src.core.model_client import Message, ClientMode
+from src.core.model_utils import ClientMode
 from src.core.hooks import HookEvent
 
 
