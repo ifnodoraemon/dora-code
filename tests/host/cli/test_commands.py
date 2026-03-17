@@ -2,7 +2,7 @@
 
 Tests cover:
 - CommandHandler initialization
-- All slash commands: /help, /clear, /mode, /rewind, /checkpoint, /history, /config, /budget, /project, /exit
+- Core slash commands and session/config command paths
 - Command parsing and validation
 - Command execution with various arguments
 - Error handling for invalid commands
@@ -637,52 +637,6 @@ class TestSkillsCommand:
             )
 
             assert result.handled is True
-
-
-@pytest.mark.asyncio
-class TestToolsCommand:
-    """Test /tools command."""
-
-    async def test_tools_command_shows_available_tools(self):
-        """Test that /tools shows available tools."""
-        tool_selector = MagicMock()
-        tool_selector.get_tool_categories = MagicMock(return_value={
-            "Read": ["read_file", "list_directory"],
-            "Write": ["write_file"],
-        })
-
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=tool_selector,
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            task_mgr=MagicMock(),
-            cost_tracker=MagicMock(),
-            cmd_history=MagicMock(),
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_core.console") as mock_console:
-            result = await handler.handle(
-                cmd="tools",
-                cmd_args=[],
-                mode="build",
-                tool_names=["read_file", "write_file"],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-                build_system_prompt=MagicMock(return_value="prompt"),
-                convert_tools_to_definitions=MagicMock(return_value=[]),
-                sensitive_tools={"write_file"},
-            )
-
-            assert result.handled is True
-            tool_selector.get_tool_categories.assert_not_called()
-            mock_console.print.assert_called()
 
 
 @pytest.mark.asyncio

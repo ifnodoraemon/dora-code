@@ -1,7 +1,7 @@
 """
 Core CLI Commands Handler
 
-Handles core commands: help, clear, mode, reset, context, tools, debug, init, skills, commit
+Handles core commands: help, clear, mode, reset, context, debug, init, skills, commit
 """
 
 import os
@@ -91,9 +91,7 @@ class CoreCommandHandler:
             "clear": lambda: self._handle_clear_command(result),
             "compact": lambda: self._handle_compact_command(result),
             "reset": lambda: self._handle_reset_command(result, build_system_prompt, convert_tools_to_definitions),
-            "tools": lambda: self._show_tools(mode, tool_names, sensitive_tools),
             "debug": lambda: self._show_debug(mode, tool_names),
-            "status": lambda: self._show_status(mode, tool_names),
             "doctor": self._run_doctor,
         }
 
@@ -195,74 +193,45 @@ class CoreCommandHandler:
         """Show help text."""
         console.print("""
 [bold]Commands:[/bold]
-  /help           - Show this help
-  /init           - Initialize project (create AGENTS.md)
-  /mode <name>    - Switch mode (plan/build)
-  /model [name]   - Switch/list AI models
-  /status         - Show system status
-  /config         - Configure settings
-  /context        - Show context/memory statistics
-  /skills         - Show loaded skills
-  /clear          - Clear conversation (keeps summaries)
-  /compact        - Compress context (summarize older messages)
-  /reset          - Full reset (clears everything)
-  /tools          - List available tools
-  /debug          - Show debug info
-  /doctor         - Run diagnostic checks
-  /memory         - Manage MEMORY.md, notes, and persona
+  /help
+  /init
+  /mode <plan|build>
+  /model [name]
+  /config
+  /context
+  /skills
+  /clear
+  /compact
+  /reset
+  /debug
+  /doctor
+  /memory
+  /commit <message>
+  /commit --amend
+  /review [n|goto <n>|search <q>|all]
+  /sessions
+  /resume <id>
+  /rename <name>
+  /export [path]
+  /fork
+  /checkpoints
+  /rewind [id]
+  /tasks
+  /task <id>
+  /plugins
+  /plugin ...
+  /theme [name]
+  /vim
+  /thinking
+  /workspace
+  /add-dir <path>
+  /cost
+  /agents
+  /history
+  /exit
 
-[bold]Git Commands:[/bold]
-  /commit <msg>   - Commit changes with an explicit message
-  /commit --amend - Amend the last commit
-
-[bold]Conversation History:[/bold]
-  /review         - Show recent conversation turns
-  /review <n>     - Show last n turns
-  /review goto <n> - Go back to turn n (discard later messages)
-  /review search <q> - Search conversation for keyword
-  /review all     - Show all messages
-
-[bold]Session Commands:[/bold]
-  /sessions       - List recent sessions
-  /resume <id>    - Resume a session
-  /rename <name>  - Rename current session
-  /export [path]  - Export conversation
-  /fork           - Fork current session
-
-[bold]Checkpoint Commands:[/bold]
-  /checkpoints    - List checkpoints
-  /rewind [id]    - Rewind to checkpoint (or last)
-
-[bold]Task Commands:[/bold]
-  /tasks          - List background tasks
-  /task <id>      - Show task output
-
-[bold]Plugin Commands:[/bold]
-  /plugins        - List installed plugins
-  /plugin install <source> - Install a plugin
-  /plugin enable/disable <name> - Enable/disable plugin
-
-[bold]Configuration:[/bold]
-  /theme [name]   - Switch/list themes
-  /vim            - Toggle vim mode
-  /thinking       - Toggle extended thinking mode
-  /doctor         - Run health checks
-  /workspace      - Show workspace directories
-  /add-dir <path> - Add working directory
-
-[bold]Other Commands:[/bold]
-  /cost           - Show cost/usage statistics
-  /agents         - List available subagents
-  /history        - Show command history
-  /exit           - Exit
-
-
-[bold]Shortcuts:[/bold]
-  !<cmd>          - Execute shell command directly (Bash mode)
-
-[bold]Modes:[/bold]
-  plan   - Analyze requirements, investigate code, create plans (read-only)
-  build  - Implement solutions, write code, execute tasks
+[bold]Shell:[/bold]
+  !<cmd>
 """)
 
     def _show_context(self, mode: str, tool_names: list):
@@ -299,14 +268,6 @@ class CoreCommandHandler:
         console.print(
             f"[dim]Put SKILL.md files in {skills_dir()}/<name>/ to add custom skills.[/dim]"
         )
-
-    def _show_tools(self, mode: str, tool_names: list, sensitive_tools: set):
-        """Show available tools."""
-        console.print(f"[bold]Tools (mode: {mode})[/bold]")
-        for name in tool_names:
-            marker = "🔒" if name in sensitive_tools else "  "
-            console.print(f"  {marker} {name}")
-        console.print(f"\n[dim]Loaded {len(tool_names)} tools[/dim]")
 
     def _show_debug(self, mode: str, tool_names: list):
         """Show debug information."""
@@ -531,47 +492,6 @@ class CoreCommandHandler:
             console.print(f"[bold]Turn {turn_num}[/bold] [{role_color}]{role_name}[/{role_color}]: {snippet}")
 
         console.print("\n[dim]Use /review goto <turn> to jump to a specific turn[/dim]")
-
-    def _show_status(self, mode: str, tool_names: list):
-        """Show system status information."""
-        from src.core.config import load_config
-
-        config_data = load_config()
-
-        table = Table(title="System Status", show_header=False)
-        table.add_column("Key", style="cyan")
-        table.add_column("Value", style="green")
-
-        # Session info
-        table.add_row("Session ID", self.ctx.session_id)
-        table.add_row("Project", self.project)
-        table.add_row("Mode", mode)
-
-        # Model info
-        model = config_data.get("model", "(not set)")
-        table.add_row("Model", model)
-
-        gateway = config_data.get("gateway_url")
-        if gateway:
-            table.add_row("Gateway", gateway)
-        else:
-            table.add_row("Mode", "Direct API")
-
-        # Context stats
-        stats = self.ctx.get_context_stats()
-        table.add_row("Messages", str(stats["messages"]))
-        table.add_row("Summaries", str(stats["summaries"]))
-        table.add_row("Est. Tokens", f"{stats['estimated_tokens']:,}")
-        table.add_row("Context Usage", f"{stats['usage_percent']}%")
-
-        # Tools
-        table.add_row("Tools Loaded", str(len(tool_names)))
-
-        # Cost
-        cost_stats = self.cost_tracker.get_stats()
-        table.add_row("Session Cost", f"${cost_stats.get('session_cost', 0):.4f}")
-
-        console.print(table)
 
     async def _handle_config(self, cmd_args: list[str]):
         """Handle /config command - interactive configuration."""
