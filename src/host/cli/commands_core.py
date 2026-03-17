@@ -1,7 +1,7 @@
 """
 Core CLI Commands Handler
 
-Handles core commands: help, clear, mode, reset, context, debug, init, skills, commit
+Handles core commands: help, clear, mode, reset, init, skills, commit
 """
 
 import os
@@ -86,12 +86,10 @@ class CoreCommandHandler:
                 build_system_prompt,
                 convert_tools_to_definitions,
             ),
-            "context": lambda: self._show_context(mode, tool_names),
             "skills": self._show_skills,
             "clear": lambda: self._handle_clear_command(result),
             "compact": lambda: self._handle_compact_command(result),
             "reset": lambda: self._handle_reset_command(result, build_system_prompt, convert_tools_to_definitions),
-            "debug": lambda: self._show_debug(mode, tool_names),
             "doctor": self._run_doctor,
         }
 
@@ -198,12 +196,10 @@ class CoreCommandHandler:
   /mode <plan|build>
   /model [name]
   /config
-  /context
   /skills
   /clear
   /compact
   /reset
-  /debug
   /doctor
   /memory
   /commit <message>
@@ -234,28 +230,6 @@ class CoreCommandHandler:
   !<cmd>
 """)
 
-    def _show_context(self, mode: str, tool_names: list):
-        """Show context statistics."""
-        stats = self.ctx.get_context_stats()
-        table = Table(title="Context Statistics", show_header=False)
-        table.add_column("Key", style="cyan")
-        table.add_column("Value", style="green")
-        table.add_row("Session ID", stats["session_id"])
-        table.add_row("Messages", str(stats["messages"]))
-        table.add_row("Summaries", str(stats["summaries"]))
-        table.add_row("Total Ever", str(stats["total_messages_ever"]))
-        table.add_row("Est. Tokens", f"{stats['estimated_tokens']:,}")
-        table.add_row("Last Prompt", f"{stats['last_prompt_tokens']:,}")
-        table.add_row("Threshold", f"{stats['threshold_tokens']:,}")
-        table.add_row("Usage", f"{stats['usage_percent']}%")
-        active = self.skill_mgr.get_active_skills()
-        table.add_row("Active Skills", ", ".join(active) if active else "(none)")
-        table.add_row("Mode", mode)
-        table.add_row("Loaded Tools", f"{len(tool_names)}")
-        if stats["needs_summary"]:
-            table.add_row("Status", "[yellow]Summary needed[/yellow]")
-        console.print(table)
-
     def _show_skills(self):
         """Show skills information."""
         console.print("[bold]Skills System[/bold]")
@@ -268,17 +242,6 @@ class CoreCommandHandler:
         console.print(
             f"[dim]Put SKILL.md files in {skills_dir()}/<name>/ to add custom skills.[/dim]"
         )
-
-    def _show_debug(self, mode: str, tool_names: list):
-        """Show debug information."""
-        console.print(f"Mode: {mode}")
-        console.print(f"Tools: {len(tool_names)} loaded")
-        console.print(f"MCP Tools: {self.tool_selector.mcp_tools or '(none)'}")
-        console.print(f"Project: {self.project}")
-        stats = self.ctx.get_context_stats()
-        console.print(f"Context: {stats['messages']} msgs, {stats['summaries']} summaries")
-        console.print(f"Checkpoints: {len(self.checkpoint_mgr.checkpoints)}")
-        console.print(f"Background Tasks: {self.task_mgr.get_running_count()} running")
 
     async def _handle_commit(self, cmd_args: list[str]):
         if not self._command_available("git", ["rev-parse", "--git-dir"]):

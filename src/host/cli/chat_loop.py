@@ -1355,8 +1355,8 @@ async def chat_loop(
 
     # Setup tab completion for slash commands
     slash_commands = [
-        "help", "init", "mode", "model", "config", "context", "skills",
-        "clear", "compact", "reset", "debug", "doctor", "memory",
+        "help", "init", "mode", "model", "config", "skills",
+        "clear", "compact", "reset", "doctor", "memory",
         "commit", "review", "sessions", "resume", "rename", "export",
         "fork", "checkpoints", "rewind", "tasks", "task", "plugins", "plugin",
         "theme", "vim", "thinking", "workspace", "add-dir", "cost", "agents",

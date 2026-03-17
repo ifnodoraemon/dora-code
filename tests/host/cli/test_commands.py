@@ -508,60 +508,6 @@ class TestResetCommand:
 
 
 @pytest.mark.asyncio
-class TestContextCommand:
-    """Test /context command."""
-
-    async def test_context_command_shows_stats(self):
-        """Test that /context shows context statistics."""
-        ctx = MagicMock()
-        ctx.get_context_stats = MagicMock(return_value={
-            "session_id": "test-session",
-            "messages": 5,
-            "summaries": 1,
-            "total_messages_ever": 10,
-            "estimated_tokens": 1000,
-            "last_prompt_tokens": 500,
-            "threshold_tokens": 2000,
-            "usage_percent": 50,
-            "needs_summary": False,
-        })
-        skill_mgr = MagicMock()
-        skill_mgr.get_active_skills = MagicMock(return_value=["skill1"])
-
-        handler = CommandHandler(
-            ctx=ctx,
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=skill_mgr,
-            checkpoint_mgr=MagicMock(),
-            task_mgr=MagicMock(),
-            cost_tracker=MagicMock(),
-            cmd_history=MagicMock(),
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_core.console"):
-            result = await handler.handle(
-                cmd="context",
-                cmd_args=[],
-                mode="build",
-                tool_names=["tool1", "tool2"],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-                build_system_prompt=MagicMock(return_value="prompt"),
-                convert_tools_to_definitions=MagicMock(return_value=[]),
-                sensitive_tools=set(),
-            )
-
-            assert result.handled is True
-            ctx.get_context_stats.assert_called_once()
-
-
-@pytest.mark.asyncio
 class TestSkillsCommand:
     """Test /skills command."""
 
@@ -1232,63 +1178,6 @@ class TestTasksCommand:
                 cmd_args=[],
                 mode="build",
                 tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-                build_system_prompt=MagicMock(return_value="prompt"),
-                convert_tools_to_definitions=MagicMock(return_value=[]),
-                sensitive_tools=set(),
-            )
-
-            assert result.handled is True
-
-
-@pytest.mark.asyncio
-class TestDebugCommand:
-    """Test /debug command."""
-
-    async def test_debug_command_shows_debug_info(self):
-        """Test that /debug shows debug information."""
-        ctx = MagicMock()
-        ctx.get_context_stats = MagicMock(return_value={
-            "session_id": "test-session",
-            "messages": 5,
-            "summaries": 1,
-            "total_messages_ever": 10,
-            "estimated_tokens": 1000,
-            "last_prompt_tokens": 500,
-            "threshold_tokens": 2000,
-            "usage_percent": 50,
-            "needs_summary": False,
-        })
-        tool_selector = MagicMock()
-        tool_selector.mcp_tools = ["mcp_tool1"]
-        checkpoint_mgr = MagicMock()
-        checkpoint_mgr.checkpoints = [{"id": "cp1"}]
-        task_mgr = MagicMock()
-        task_mgr.get_running_count = MagicMock(return_value=2)
-
-        handler = CommandHandler(
-            ctx=ctx,
-            tool_selector=tool_selector,
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=checkpoint_mgr,
-            task_mgr=task_mgr,
-            cost_tracker=MagicMock(),
-            cmd_history=MagicMock(),
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test-project",
-        )
-
-        with patch("src.host.cli.commands_core.console"):
-            result = await handler.handle(
-                cmd="debug",
-                cmd_args=[],
-                mode="build",
-                tool_names=["tool1", "tool2"],
                 tool_definitions=[],
                 conversation_history=[],
                 active_skills_content="",
