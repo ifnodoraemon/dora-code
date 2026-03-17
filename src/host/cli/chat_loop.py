@@ -338,7 +338,7 @@ def read_user_input(
         return InputResult(user_input=None, ctrl_c_count=ctrl_c_count, should_exit=True)
 
     try:
-        user_input = Prompt.ask(f"\n[bold {mode_color}]You ({state.mode})[/bold {mode_color}]")
+        user_input = Prompt.ask(f"\n[bold {mode_color}]>[/bold {mode_color}]")
         ctrl_c_count = 0
 
         for delim in ('"""', "'''"):
@@ -766,8 +766,6 @@ async def initialize_chat_runtime(
     sensitive_tools = registry.get_sensitive_tools()
 
     session_data = restore_session_history(session_mgr, ctx, resume_session)
-    show_startup_info(model_client, project, ctx)
-
     mode = getattr(getattr(session_data, "metadata", None), "mode", "build")
     model_name = load_config().get("model")
     if not model_name:
@@ -813,19 +811,6 @@ async def initialize_chat_runtime(
         session_data=session_data,
     )
     return runtime, state
-
-
-def show_startup_info(model_client, project: str, ctx):
-    """Display startup information."""
-    model_client.get_mode()
-    console.print(f"[bold yellow]Project: {project}[/bold yellow]")
-
-    stats = ctx.get_context_stats()
-    if stats["messages"] > 0 or stats["summaries"] > 0:
-        console.print(
-            f"[dim]Restored context: {stats['messages']} messages, "
-            f"{stats['summaries']} summaries[/dim]"
-        )
 
 
 def restore_conversation_history(ctx) -> list[Message]:
@@ -1378,8 +1363,6 @@ async def chat_loop(
         "history", "exit",
     ]
     runtime.cmd_history.setup_completer(slash_commands)
-
-    console.print("[dim]Type /help for commands[/dim]")
 
     # Main loop
     _ctrl_c_count = 0

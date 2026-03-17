@@ -26,7 +26,6 @@ from src.host.cli.chat_loop import (
     resolve_input_references,
     restore_conversation_history,
     restore_session_history,
-    show_startup_info,
     validate_client_mode,
 )
 
@@ -365,45 +364,7 @@ class TestRestoreSessionHistory:
 
 
 # ============================================================================
-# SECTION 6: Startup Info Display Tests (2 tests)
-# ============================================================================
-
-class TestShowStartupInfo:
-    """Test startup information display."""
-
-    def test_show_startup_info_gateway_mode(self):
-        """Test startup info for gateway mode."""
-        model_client = MagicMock()
-        model_client.get_mode.return_value = ClientMode.GATEWAY
-        model_client.get_mode_info.return_value = {"gateway_url": "http://localhost:8000"}
-
-        ctx = MagicMock()
-        ctx.get_context_stats.return_value = {"messages": 0, "summaries": 0}
-
-        with patch('src.host.cli.chat_loop.console'):
-            show_startup_info(model_client, "test_project", ctx)
-
-        model_client.get_mode.assert_called()
-
-    def test_show_startup_info_direct_mode(self):
-        """Test startup info for direct mode."""
-        model_client = MagicMock()
-        model_client.get_mode.return_value = ClientMode.DIRECT
-        model_client.get_mode_info.return_value = {
-            "providers": {"google": True, "openai": False}
-        }
-
-        ctx = MagicMock()
-        ctx.get_context_stats.return_value = {"messages": 5, "summaries": 1}
-
-        with patch('src.host.cli.chat_loop.console'):
-            show_startup_info(model_client, "test_project", ctx)
-
-        model_client.get_mode.assert_called()
-
-
-# ============================================================================
-# SECTION 7: Conversation History Restoration Tests (2 tests)
+# SECTION 6: Conversation History Restoration Tests (2 tests)
 # ============================================================================
 
 class TestRestoreConversationHistory:
