@@ -5,11 +5,10 @@ from rich.console import Console
 from src.host.cli.command_context import CommandContext
 from src.host.cli.command_result import CommandResult
 from src.host.cli.commands_config import ConfigCommandHandler
-from src.host.cli.commands_core import MODE_COLORS, CoreCommandHandler
+from src.host.cli.commands_core import CoreCommandHandler
 from src.host.cli.commands_session import SessionCommandHandler
 
 console = Console()
-__all__ = ["CommandHandler", "CommandResult", "MODE_COLORS"]
 
 
 class CommandHandler:
@@ -67,15 +66,12 @@ class CommandHandler:
         sensitive_tools: set,
     ) -> CommandResult:
         """Handle a slash command by delegating to the appropriate handler."""
-        result = CommandResult(
-            handled=True,
+        fallback = CommandResult.default(
             mode=mode,
             tool_names=tool_names,
             tool_definitions=tool_definitions,
-            system_prompt=None,
             active_skills_content=active_skills_content,
             conversation_history=conversation_history,
-            next_prompt=None,
         )
 
         core_result = await self.core_handler.handle_core_command(
@@ -102,4 +98,4 @@ class CommandHandler:
             return config_result
 
         console.print(f"[yellow]Unknown command: {cmd}[/yellow]")
-        return result
+        return fallback

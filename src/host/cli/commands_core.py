@@ -72,12 +72,10 @@ class CoreCommandHandler:
         sensitive_tools: set,
     ) -> CommandResult | None:
         """Handle core commands."""
-        result = CommandResult(
-            handled=True,
+        result = CommandResult.default(
             mode=mode,
             tool_names=tool_names,
             tool_definitions=tool_definitions,
-            system_prompt=None,
             active_skills_content=active_skills_content,
             conversation_history=conversation_history,
         )
@@ -85,13 +83,13 @@ class CoreCommandHandler:
         async_handlers = {
             "commit": lambda: self._handle_commit(cmd_args),
             "review-pr": lambda: self._handle_review_pr(cmd_args),
-            "review": lambda: self._handle_review_command(cmd_args, conversation_history, result),
+            "review": lambda: self._handle_review(cmd_args, conversation_history),
             "config": lambda: self._handle_config(cmd_args),
             "memory": lambda: self._handle_memory(cmd_args),
         }
         sync_handlers = {
-            "help": lambda: self._show_help(),
-            "init": lambda: self._handle_init(),
+            "help": self._show_help,
+            "init": self._handle_init,
             "mode": lambda: self._handle_mode_command(
                 cmd_args,
                 result,
@@ -100,19 +98,19 @@ class CoreCommandHandler:
                 convert_tools_to_definitions,
             ),
             "context": lambda: self._show_context(mode, tool_names),
-            "skills": lambda: self._show_skills(),
+            "skills": self._show_skills,
             "clear": lambda: self._handle_clear_command(result),
             "compact": lambda: self._handle_compact_command(result),
             "reset": lambda: self._handle_reset_command(result, build_system_prompt, convert_tools_to_definitions),
             "tools": lambda: self._show_tools(mode, tool_names, sensitive_tools),
             "debug": lambda: self._show_debug(mode, tool_names),
             "status": lambda: self._show_status(mode, tool_names),
-            "doctor": lambda: self._run_doctor(),
+            "doctor": self._run_doctor,
         }
 
         if cmd in async_handlers:
-            await async_handlers[cmd]()
-            return result
+            async_result = await async_handlers[cmd]()
+            return async_result or result
         if cmd in sync_handlers:
             sync_handlers[cmd]()
             return result
@@ -188,21 +186,6 @@ class CoreCommandHandler:
         result.system_prompt = build_system_prompt("build", "")
         result.conversation_history = []
         console.print("[green]Full reset complete[/green]")
-
-    async def _handle_review_command(
-        self,
-        cmd_args: list[str],
-        conversation_history: list,
-        result: CommandResult,
-    ) -> None:
-        """Handle /review and capture any returned state updates."""
-        review_result = await self._handle_review(cmd_args, conversation_history)
-        result.mode = review_result.mode
-        result.tool_names = review_result.tool_names
-        result.tool_definitions = review_result.tool_definitions
-        result.system_prompt = review_result.system_prompt
-        result.active_skills_content = review_result.active_skills_content
-        result.conversation_history = review_result.conversation_history
 
     def _handle_init(self):
         """Initialize project with AGENTS.md."""

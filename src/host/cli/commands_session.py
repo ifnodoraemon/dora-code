@@ -270,8 +270,7 @@ class SessionCommandHandler:
             console.print("[dim]No pending Ralph tasks[/dim]")
             return CommandResult(next_prompt=None)
 
-        if hasattr(self.ctx, "reset"):
-            self.ctx.reset()
+        self.ctx.reset()
 
         console.print(
             Panel(
