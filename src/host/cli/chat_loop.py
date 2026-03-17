@@ -1310,7 +1310,7 @@ async def chat_loop(
     slash_commands = [
         "help", "init", "mode", "model", "status", "config", "context", "skills",
         "clear", "compact", "reset", "tools", "debug", "doctor", "memory",
-        "commit", "review-pr", "review", "sessions", "resume", "rename", "export",
+        "commit", "review", "sessions", "resume", "rename", "export",
         "fork", "checkpoints", "rewind", "tasks", "task", "plugins", "plugin",
         "theme", "vim", "thinking", "workspace", "add-dir", "cost", "agents",
         "history", "exit",
