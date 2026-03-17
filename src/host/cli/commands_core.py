@@ -9,7 +9,6 @@ import subprocess
 from pathlib import Path
 
 from rich.console import Console
-from rich.panel import Panel
 from rich.table import Table
 
 from src.core.config import load_config
@@ -73,7 +72,6 @@ class CoreCommandHandler:
 
         async_handlers = {
             "commit": lambda: self._handle_commit(cmd_args),
-            "review-pr": lambda: self._handle_review_pr(cmd_args),
             "review": lambda: self._handle_review(cmd_args, conversation_history),
             "config": lambda: self._handle_config(cmd_args),
             "memory": lambda: self._handle_memory(cmd_args),
@@ -214,10 +212,8 @@ class CoreCommandHandler:
   /memory         - Manage MEMORY.md, notes, and persona
 
 [bold]Git Commands:[/bold]
-  /commit [msg]   - Smart commit (auto-generates message if not provided)
+  /commit <msg>   - Commit changes with an explicit message
   /commit --amend - Amend the last commit
-  /review-pr [n]  - View PR details (current branch or by number)
-  /review-pr --diff - Show PR with diff
 
 [bold]Conversation History:[/bold]
   /review         - Show recent conversation turns
@@ -324,74 +320,42 @@ class CoreCommandHandler:
         console.print(f"Background Tasks: {self.task_mgr.get_running_count()} running")
 
     async def _handle_commit(self, cmd_args: list[str]):
-        """
-        Handle /commit command - smart git commit workflow.
-
-        Usage:
-            /commit              - Auto-generate commit message from changes
-            /commit <message>    - Use provided commit message
-            /commit --amend      - Amend the last commit
-        """
-        # Check if in a git repo
         if not self._command_available("git", ["rev-parse", "--git-dir"]):
             console.print("[red]Error: Not in a git repository[/red]")
             return
 
-        # Parse arguments
         amend = "--amend" in cmd_args
         message_args = [a for a in cmd_args if a != "--amend"]
-        custom_message = " ".join(message_args) if message_args else None
-
-        # Get git status
         status_output = self._run_command("git", ["status", "--porcelain"])
         if not status_output.strip():
             console.print("[yellow]No changes to commit.[/yellow]")
             return
+        commit_msg = " ".join(message_args).strip()
+        if not amend and not commit_msg:
+            console.print("[red]Usage: /commit <message> or /commit --amend[/red]")
+            return
 
-        # Show current changes
-        console.print("\n[bold cyan]Changes to commit:[/bold cyan]")
-        diff_stat = self._run_command("git", ["diff", "--stat", "HEAD"])
-        if diff_stat:
-            console.print(diff_stat)
-        else:
-            # Show untracked files
-            console.print(status_output)
-
-        # Get detailed diff for message generation
-        diff_output = self._run_command("git", ["diff", "HEAD"])
-        if not diff_output:
-            diff_output = self._run_command("git", ["diff", "--cached"])
-
-        # Generate or use commit message
-        if custom_message:
-            commit_msg = custom_message
-        else:
-            commit_msg = self._generate_commit_message(status_output, diff_output)
-
-        # Show the commit message
-        console.print(Panel(commit_msg, title="Commit Message", border_style="green"))
-
-        # Ask for confirmation
         from rich.prompt import Confirm
         if not Confirm.ask("Proceed with commit?", default=True):
             console.print("[yellow]Commit cancelled.[/yellow]")
             return
 
-        # Stage all changes
         stage_result = self._run_command("git", ["add", "-A"])
         if stage_result is None:
             console.print("[red]Error staging files[/red]")
             return
 
-        # Commit
-        commit_args = ["commit", "-m", commit_msg]
+        commit_args = ["commit"]
         if amend:
             commit_args.append("--amend")
+            if commit_msg:
+                commit_args.extend(["-m", commit_msg])
+        else:
+            commit_args.extend(["-m", commit_msg])
 
         result = self._run_command("git", commit_args)
         if result is not None:
             console.print("\n[green]Committed successfully![/green]")
-            # Show the commit
             log_output = self._run_command("git", ["log", "-1", "--oneline"])
             if log_output:
                 console.print(f"[dim]{log_output}[/dim]")
@@ -422,130 +386,6 @@ class CoreCommandHandler:
         if result.returncode != 0:
             return None
         return result.stdout.strip()
-
-    def _generate_commit_message(self, status: str, diff: str) -> str:
-        """Generate a commit message based on changes."""
-        lines = status.strip().split("\n")
-
-        # Categorize changes
-        added = []
-        modified = []
-        deleted = []
-        renamed = []
-
-        for line in lines:
-            if not line.strip():
-                continue
-            status_code = line[:2]
-            file_path = line[3:].strip()
-
-            if status_code.startswith("A") or status_code == "??":
-                added.append(file_path)
-            elif status_code.startswith("M") or (len(status_code) > 1 and status_code[1] == "M"):
-                modified.append(file_path)
-            elif status_code.startswith("D"):
-                deleted.append(file_path)
-            elif status_code.startswith("R"):
-                renamed.append(file_path)
-
-        # Determine commit type
-        if added and not modified and not deleted:
-            prefix = "feat"
-            action = "add"
-        elif deleted and not added and not modified:
-            prefix = "chore"
-            action = "remove"
-        elif modified and not added and not deleted:
-            # Check if it's a fix or feature
-            if diff and ("fix" in diff.lower() or "bug" in diff.lower()):
-                prefix = "fix"
-                action = "fix"
-            else:
-                prefix = "refactor"
-                action = "update"
-        else:
-            prefix = "chore"
-            action = "update"
-
-        # Generate message
-        all_files = added + modified + deleted + renamed
-        if len(all_files) == 1:
-            file_name = Path(all_files[0]).name
-            return f"{prefix}: {action} {file_name}"
-        elif len(all_files) <= 3:
-            file_names = ", ".join(Path(f).name for f in all_files)
-            return f"{prefix}: {action} {file_names}"
-        else:
-            # Group by directory
-            dirs = {str(Path(f).parent) for f in all_files if Path(f).parent != Path(".")}
-            if dirs:
-                dir_name = list(dirs)[0] if len(dirs) == 1 else "multiple files"
-                return f"{prefix}: {action} {dir_name} ({len(all_files)} files)"
-            return f"{prefix}: {action} {len(all_files)} files"
-
-    async def _handle_review_pr(self, cmd_args: list[str]):
-        """
-        Handle /review-pr command - view and review Pull Requests.
-
-        Usage:
-            /review-pr           - View PR for current branch
-            /review-pr <number>  - View specific PR by number
-            /review-pr --diff    - Show PR diff
-            /review-pr --files   - Show changed files only
-        """
-        # Check if gh CLI is available
-        if not self._command_available("gh", ["--version"]):
-            console.print("[red]Error: GitHub CLI (gh) is not installed.[/red]")
-            console.print("[dim]Install from: https://cli.github.com/[/dim]")
-            return
-
-        # Parse arguments
-        show_diff = "--diff" in cmd_args
-        show_files = "--files" in cmd_args
-        pr_args = [a for a in cmd_args if not a.startswith("--")]
-        pr_number = pr_args[0] if pr_args else None
-
-        # Get PR info
-        view_args = ["pr", "view"]
-        if pr_number:
-            view_args.append(pr_number)
-
-        pr_info = self._run_command("gh", view_args)
-        if not pr_info:
-            if pr_number:
-                console.print(f"[red]Error: PR #{pr_number} not found[/red]")
-            else:
-                console.print("[yellow]No PR found for current branch.[/yellow]")
-                console.print("[dim]Use /review-pr <number> to view a specific PR.[/dim]")
-            return
-
-        # Display PR info
-        console.print(Panel(pr_info, title="Pull Request", border_style="cyan"))
-
-        # Show diff if requested
-        if show_diff:
-            diff_args = ["pr", "diff"]
-            if pr_number:
-                diff_args.append(pr_number)
-            diff_output = self._run_command("gh", diff_args)
-            if diff_output:
-                console.print("\n[bold cyan]Diff:[/bold cyan]")
-                # Truncate if too long
-                if len(diff_output) > 5000:
-                    console.print(diff_output[:5000])
-                    console.print(f"\n[dim]... (truncated, {len(diff_output)} chars total)[/dim]")
-                else:
-                    console.print(diff_output)
-
-        # Show files if requested
-        if show_files:
-            files_args = ["pr", "diff", "--stat"]
-            if pr_number:
-                files_args.append(pr_number)
-            files_output = self._run_command("gh", files_args)
-            if files_output:
-                console.print("\n[bold cyan]Changed Files:[/bold cyan]")
-                console.print(files_output)
 
     async def _handle_review(
         self,
