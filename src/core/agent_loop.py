@@ -1,9 +1,4 @@
-"""Lightweight agent loop policy and state tracking.
-
-This module keeps the runtime "more agentic" without forcing a rigid workflow.
-The model remains free to choose the next action, while the host tracks the
-current situation and injects compact guidance into the prompt.
-"""
+"""Lightweight agent loop state tracking."""
 
 from __future__ import annotations
 
@@ -21,15 +16,6 @@ class AgentPhase(str, Enum):
     EDITING = "editing"
     VERIFYING = "verifying"
     FINISHING = "finishing"
-
-
-class RecommendedShift(str, Enum):
-    """Preferred next shift when the loop needs stronger guidance."""
-
-    CONTINUE = "continue"
-    READ_NEW_SURFACE = "read_new_surface"
-    VERIFY_NOW = "verify_now"
-    SUMMARIZE_BLOCKER = "summarize_blocker"
 
 
 VALIDATION_MARKERS = (
@@ -110,15 +96,10 @@ class AgentState:
     tool_iterations: int = 0
     files_modified: set[str] = field(default_factory=set)
     verification_performed: bool = False
-    verification_nudged: bool = False
     last_tool_names: list[str] = field(default_factory=list)
     recent_tool_signatures: list[str] = field(default_factory=list)
     recent_failures: list[str] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
-    recommended_shift: RecommendedShift = RecommendedShift.CONTINUE
-    strategy_hint: str = ""
-    parallel_opportunities: list[str] = field(default_factory=list)
-    speculative_batches: list[str] = field(default_factory=list)
     is_stuck: bool = False
 
     def start_turn(self, goal: str) -> None:
@@ -129,28 +110,20 @@ class AgentState:
         self.tool_iterations = 0
         self.files_modified.clear()
         self.verification_performed = False
-        self.verification_nudged = False
         self.last_tool_names = []
         self.recent_tool_signatures = []
         self.recent_failures = []
         self.evidence = []
-        self.recommended_shift = RecommendedShift.CONTINUE
-        self.strategy_hint = ""
-        self.parallel_opportunities = []
-        self.speculative_batches = []
         self.is_stuck = False
 
 
 class AgentPolicyEngine:
-    """Compact policy layer to bias the loop without hard-coding a workflow."""
+    """State inference without workflow-level nudging."""
 
     MAX_RECENT_SIGNATURES = 6
 
     def _build_tool_signature(self, pending_calls: list[tuple[str, dict, str]]) -> str:
-        normalized = [
-            {"name": tool_name, "args": args}
-            for tool_name, args, _ in pending_calls
-        ]
+        normalized = [{"name": tool_name, "args": args} for tool_name, args, _ in pending_calls]
         return json.dumps(normalized, sort_keys=True, ensure_ascii=True)
 
     def determine_phase(
@@ -180,161 +153,28 @@ class AgentPolicyEngine:
 
         return AgentPhase.GATHERING
 
-    def should_nudge_verification(self, state: AgentState) -> bool:
-        """Ask the model to verify only when edits happened and verification did not."""
-        return (
-            state.recommended_shift == RecommendedShift.VERIFY_NOW
-            and not state.verification_nudged
-        )
-
-    def recommend_shift(self, state: AgentState) -> RecommendedShift:
-        """Choose the strongest useful strategy shift for the current state."""
-        if state.is_stuck:
-            if state.recent_failures:
-                return RecommendedShift.SUMMARIZE_BLOCKER
-            return RecommendedShift.READ_NEW_SURFACE
-
-        if state.files_modified and not state.verification_performed:
-            return RecommendedShift.VERIFY_NOW
-
-        return RecommendedShift.CONTINUE
-
-    def evaluate_strategy_hint(self, state: AgentState) -> str:
-        """Suggest a strategy shift when the loop is stuck or can batch work."""
-        if state.recommended_shift == RecommendedShift.SUMMARIZE_BLOCKER:
-            return (
-                "You appear to be blocked. Stop repeating the same reads or failed actions. "
-                "Summarize the blocker, identify the missing evidence, then change strategy."
-            )
-
-        if state.recommended_shift == RecommendedShift.READ_NEW_SURFACE:
-            return (
-                "You are not making progress with the current surface. Read one different file, "
-                "run one targeted search, or perform one validating check before deciding the next move."
-            )
-
-        if state.recommended_shift == RecommendedShift.VERIFY_NOW:
-            return (
-                "You have already changed files. Verify now with the highest-signal checks before doing more work."
-            )
-
-        if state.phase == AgentPhase.GATHERING:
-            return (
-                "If multiple reads or searches are independent, batch them into parallel tool calls "
-                "instead of issuing them one by one."
-            )
-
-        if state.phase == AgentPhase.VERIFYING:
-            return (
-                "Prefer the highest-signal verification first. If several checks are independent and cheap, "
-                "batch them in parallel."
-            )
-
-        return ""
-
-    def suggest_parallel_opportunities(self, state: AgentState) -> list[str]:
-        """Suggest high-value batching opportunities without hard-coding a workflow."""
-        suggestions: list[str] = []
-
-        if state.phase == AgentPhase.GATHERING:
-            suggestions.append(
-                "Batch independent file reads and searches in one step when you need multiple facts before acting."
-            )
-            if state.current_goal:
-                suggestions.append(
-                    "If the task spans multiple modules, read the entrypoint, the likely implementation file, "
-                    "and a targeted search result in parallel."
-                )
-
-        if state.phase == AgentPhase.VERIFYING:
-            suggestions.append(
-                "Batch independent cheap checks first, such as lint plus targeted tests, instead of running them serially."
-            )
-            if state.files_modified:
-                suggestions.append(
-                    "Prioritize verification that covers modified files, and parallelize checks that do not depend on each other."
-                )
-
-        if state.is_stuck:
-            suggestions.append(
-                "Change the shape of the batch: switch from repeated reads to one read plus one search plus one verification command."
-            )
-
-        return suggestions[:2]
-
-    def suggest_speculative_batches(self, state: AgentState) -> list[str]:
-        """Suggest structured batch shapes the model can adopt directly."""
-        batches: list[str] = []
-
-        if state.phase == AgentPhase.GATHERING:
-            batches.append(
-                "batch_1 = [read(target file), search(symbol or error), read(adjacent implementation)]"
-            )
-            if state.current_goal:
-                batches.append(
-                    "batch_2 = [read(entrypoint), read(likely hot file), search(goal keyword)]"
-                )
-
-        if state.phase == AgentPhase.VERIFYING:
-            batches.append(
-                "batch_1 = [run(lint or typecheck), run(targeted test or build)]"
-            )
-            if state.files_modified:
-                batches.append(
-                    "batch_2 = [run(check covering modified files), run(second independent lightweight check)]"
-                )
-
-        if state.is_stuck:
-            batches.insert(
-                0,
-                "recovery_batch = [read(one new file), search(one targeted pattern), run(one validating command)]"
-            )
-
-        return batches[:2]
-
     def update_stuck_state(self, state: AgentState, pending_calls: list[tuple[str, dict, str]]) -> None:
         """Detect repeated, low-progress behavior and mark the loop as stuck."""
         if not pending_calls:
             state.is_stuck = False
-            self.refresh_guidance(state)
             return
 
         signature = self._build_tool_signature(pending_calls)
         state.recent_tool_signatures.append(signature)
         if len(state.recent_tool_signatures) > self.MAX_RECENT_SIGNATURES:
-            state.recent_tool_signatures = state.recent_tool_signatures[-self.MAX_RECENT_SIGNATURES:]
+            state.recent_tool_signatures = state.recent_tool_signatures[-self.MAX_RECENT_SIGNATURES :]
 
         recent = state.recent_tool_signatures[-3:]
         repeated_plan = len(recent) == 3 and len(set(recent)) == 1
         too_many_tool_iterations = state.tool_iterations >= 4 and not state.files_modified
         repeated_failures = len(state.recent_failures) >= 2
-
         state.is_stuck = repeated_plan or too_many_tool_iterations or repeated_failures
-        self.refresh_guidance(state)
-
-    def refresh_guidance(self, state: AgentState) -> None:
-        """Recompute guidance derived from the current state."""
-        state.recommended_shift = self.recommend_shift(state)
-        state.strategy_hint = self.evaluate_strategy_hint(state)
-        state.parallel_opportunities = self.suggest_parallel_opportunities(state)
-        state.speculative_batches = self.suggest_speculative_batches(state)
 
     def build_prompt_suffix(self, state: AgentState) -> str:
-        """Build a small execution-context block for the current turn."""
+        """Build a compact execution-state block for the current turn."""
         modified = ", ".join(sorted(state.files_modified)) if state.files_modified else "none"
         recent_tools = ", ".join(state.last_tool_names[-5:]) if state.last_tool_names else "none"
         failures = " | ".join(state.recent_failures[-2:]) if state.recent_failures else "none"
-        strategy_hint = state.strategy_hint or "none"
-        parallel_suggestions = (
-            "\n".join(f"- {item}" for item in state.parallel_opportunities)
-            if state.parallel_opportunities
-            else "- none"
-        )
-        speculative_batches = (
-            "\n".join(f"- {item}" for item in state.speculative_batches)
-            if state.speculative_batches
-            else "- none"
-        )
 
         return (
             "\n\n=== EXECUTION CONTEXT ===\n\n"
@@ -345,25 +185,14 @@ class AgentPolicyEngine:
             f"Modified files this turn: {modified}\n"
             f"Verification: {'done' if state.verification_performed else 'pending'}\n"
             f"Stuck detector: {'triggered' if state.is_stuck else 'clear'}\n"
-            f"Recommended shift: {state.recommended_shift.value}\n"
             f"Recent tools: {recent_tools}\n"
-            f"Recent failures: {failures}\n\n"
-            f"Strategy hint: {strategy_hint}\n\n"
-            f"Parallel opportunities:\n{parallel_suggestions}\n\n"
-            f"Speculative batches:\n{speculative_batches}\n\n"
-            "Guidance:\n"
-            "- Choose the next best action; do not follow a rigid workflow.\n"
-            "- Gather only enough context to act safely.\n"
-            "- After edits, verify before finalizing when feasible.\n"
-            "- Batch independent reads, searches, and checks into parallel tool calls when useful.\n"
-            "- Reuse a speculative batch shape when it matches the task; adjust arguments to the real files or commands.\n"
-            "- If you are repeating yourself or blocked, summarize the blocker and change strategy.\n"
+            f"Recent failures: {failures}\n"
         )
 
 
 @dataclass
 class AgentLoopController:
-    """Session-level controller combining state tracking and policy decisions."""
+    """Session-level controller combining state tracking and phase inference."""
 
     state: AgentState
     policy: AgentPolicyEngine = field(default_factory=AgentPolicyEngine)
@@ -414,7 +243,6 @@ class AgentLoopController:
         lowered = result_text.lower()
         if "error" in lowered or "failed" in lowered or "denied" in lowered:
             self.state.recent_failures.append(result_text[:200])
-        self.policy.refresh_guidance(self.state)
 
     def finalize_response(self, response: ChatResponse) -> None:
         self.state.phase = self.policy.determine_phase(
@@ -423,15 +251,6 @@ class AgentLoopController:
             verification_performed=self.state.verification_performed,
             response_has_tool_calls=bool(response.tool_calls),
         )
-        self.policy.refresh_guidance(self.state)
-
-    def should_nudge_verification(self) -> bool:
-        return self.policy.should_nudge_verification(self.state)
-
-    def mark_verification_nudged(self) -> None:
-        self.state.verification_nudged = True
-        self.state.phase = AgentPhase.VERIFYING
-        self.policy.refresh_guidance(self.state)
 
     def compose_system_prompt(self, base_prompt: str) -> str:
         return f"{base_prompt}{self.policy.build_prompt_suffix(self.state)}"
