@@ -670,33 +670,32 @@ def validate_client_mode(model_client) -> bool:
 
 def restore_session_history(session_mgr, ctx, resume_session: str | None):
     """Restore session history if resuming a session."""
-    if resume_session:
-        session_data = session_mgr.resume_session(resume_session)
-        if session_data:
-            if hasattr(ctx, "clear"):
-                ctx.clear(keep_summaries=False)
-            ctx.session_id = session_data.metadata.id
-            if hasattr(ctx, "summaries"):
-                ctx.summaries = [
-                    ConversationSummary.from_dict(summary)
-                    if isinstance(summary, dict)
-                    else summary
-                    for summary in session_data.summaries
-                ]
-            console.print(
-                f"[green]Resumed session: {session_data.metadata.get_display_name()}[/green]"
-            )
-            for msg in session_data.messages:
-                role = msg.get("role", "")
-                content = msg.get("content", "")
-                if role and content:
-                    ctx.add_user_message(content) if role == "user" else ctx.add_assistant_message(
-                        content
-                    )
-            return session_data
+    if not resume_session:
+        return None
+
+    session_data = session_mgr.resume_session(resume_session)
+    if session_data is None:
+        console.print(f"[yellow]Session not found: {resume_session}[/yellow]")
+        return None
+
+    ctx.clear(keep_summaries=False)
+    ctx.session_id = session_data.metadata.id
+    ctx.summaries = [
+        ConversationSummary.from_dict(summary) if isinstance(summary, dict) else summary
+        for summary in session_data.summaries
+    ]
+    console.print(f"[green]Resumed session: {session_data.metadata.get_display_name()}[/green]")
+
+    for msg in session_data.messages:
+        role = msg.get("role")
+        content = msg.get("content")
+        if not role or content is None:
+            continue
+        if role == "user":
+            ctx.add_user_message(content)
         else:
-            console.print(f"[yellow]Session not found: {resume_session}[/yellow]")
-    return None
+            ctx.add_assistant_message(content)
+    return session_data
 
 
 def _serialize_session_entries(entries: list) -> list[dict]:
@@ -729,36 +728,26 @@ def persist_session_state(
 ):
     """Create/update the session record so session commands map to real persisted data."""
     try:
-        session = session_data
-        if session is None and hasattr(session_mgr, "load_session"):
-            session = session_mgr.load_session(ctx.session_id)
-
-        if session is None and hasattr(session_mgr, "create_session"):
+        session = session_data or session_mgr.load_session(ctx.session_id)
+        if session is None:
             session = session_mgr.create_session(project=project, name=session_name, mode=mode)
 
-        metadata = getattr(session, "metadata", None)
-        if metadata is None:
-            return session
-
-        session_id = getattr(metadata, "id", None)
-        if isinstance(session_id, str) and session_id:
-            ctx.session_id = session_id
+        metadata = session.metadata
+        ctx.session_id = metadata.id
 
         metadata.project = project
         metadata.mode = mode
-        if session_name and not getattr(metadata, "name", None):
+        if session_name and not metadata.name:
             metadata.name = session_name
 
-        stats = ctx.get_context_stats() if hasattr(ctx, "get_context_stats") else {}
-        metadata.message_count = len(getattr(ctx, "messages", []) or [])
-        if isinstance(stats, dict):
-            metadata.total_tokens = stats.get("estimated_tokens", getattr(metadata, "total_tokens", 0))
+        stats = ctx.get_context_stats()
+        metadata.message_count = len(ctx.messages)
+        metadata.total_tokens = stats.get("estimated_tokens", 0)
 
-        session.messages = _serialize_session_entries(getattr(ctx, "messages", []) or [])
-        session.summaries = _serialize_session_entries(getattr(ctx, "summaries", []) or [])
+        session.messages = _serialize_session_entries(ctx.messages)
+        session.summaries = _serialize_session_entries(ctx.summaries)
 
-        if hasattr(session_mgr, "save_session"):
-            session_mgr.save_session(session)
+        session_mgr.save_session(session)
         return session
     except Exception as e:
         logger.warning(f"Failed to persist session state: {e}")
@@ -833,6 +822,85 @@ def _merge_tool_call_delta(accumulated: list[dict], delta: dict):
         tc["function"]["name"] += func_delta["name"]
     if func_delta.get("arguments"):
         tc["function"]["arguments"] += func_delta["arguments"]
+
+
+def _append_tool_messages(
+    conversation_history: list[Message],
+    *,
+    response,
+    tool_results: list[dict[str, str]],
+) -> None:
+    """Append assistant tool-call output and tool results to history."""
+    conversation_history.append(
+        Message(
+            role="assistant",
+            content=response.content,
+            tool_calls=response.tool_calls,
+            thought=response.thought,
+        )
+    )
+    for tool_result in tool_results:
+        conversation_history.append(
+            Message(
+                role="tool",
+                content=tool_result["result"],
+                tool_call_id=tool_result["tool_call_id"],
+                name=tool_result["name"],
+            )
+        )
+
+
+async def request_tool_follow_up(
+    *,
+    model_client,
+    conversation_history: list[Message],
+    tool_results: list[dict[str, str]],
+    response,
+    ctx,
+    tool_definitions,
+    model_name: str,
+    system_prompt: str,
+) -> ChatResponse:
+    """Re-query the model after tool execution, compacting context once if needed."""
+    _append_tool_messages(
+        conversation_history,
+        response=response,
+        tool_results=tool_results,
+    )
+    messages_for_api = [Message(role="system", content=system_prompt)] + conversation_history
+
+    try:
+        return await stream_model_response(
+            model_client,
+            messages_for_api,
+            tool_definitions,
+            model_name,
+        )
+    except Exception as error:
+        if not _is_context_overflow(error):
+            raise
+
+    console.print("[yellow]Context overflow in tool loop, compacting...[/yellow]")
+    ctx._force_summarize()
+    conversation_history.clear()
+    conversation_history.extend(restore_conversation_history(ctx))
+    for tool_result in tool_results:
+        conversation_history.append(
+            Message(
+                role="tool",
+                content=tool_result["result"],
+                tool_call_id=tool_result["tool_call_id"],
+                name=tool_result["name"],
+            )
+        )
+
+    messages_for_api = [Message(role="system", content=system_prompt)] + conversation_history
+    return await stream_model_response(
+        model_client,
+        messages_for_api,
+        tool_definitions,
+        model_name,
+    )
 
 
 async def stream_model_response(
@@ -1098,73 +1166,23 @@ async def process_tool_calls(
 
             break
 
-        # === Agentic loop: send tool results back to model ===
-
-        # Add assistant message (with tool_calls) to conversation history
-        if conversation_history is not None:
-            conversation_history.append(
-                Message(
-                    role="assistant",
-                    content=response.content,
-                    tool_calls=response.tool_calls,
-                    thought=response.thought,
-                )
-            )
-
-        # Add tool result messages
-        for tr in tool_results:
-            tool_msg = Message(
-                role="tool",
-                content=tr["result"],
-                tool_call_id=tr["tool_call_id"],
-                name=tr["name"],
-            )
-            if conversation_history is not None:
-                conversation_history.append(tool_msg)
-
-        # Re-call model with updated conversation history (streaming)
+        # Re-query model with tool results
         if model_client and conversation_history is not None and tool_definitions is not None:
-            messages_for_api = [Message(role="system", content=system_prompt)] + conversation_history
             try:
-                response = await stream_model_response(
-                    model_client,
-                    messages_for_api,
-                    tool_definitions,
-                    model_name,
+                response = await request_tool_follow_up(
+                    model_client=model_client,
+                    conversation_history=conversation_history,
+                    tool_results=tool_results,
+                    response=response,
+                    ctx=ctx,
+                    tool_definitions=tool_definitions,
+                    model_name=model_name,
+                    system_prompt=system_prompt,
                 )
                 last_usage = response.usage
-            except Exception as e:
-                if _is_context_overflow(e):
-                    console.print("[yellow]Context overflow in tool loop, compacting...[/yellow]")
-                    ctx._force_summarize()
-                    # Rebuild conversation_history from compacted context
-                    conversation_history.clear()
-                    for msg in restore_conversation_history(ctx):
-                        conversation_history.append(msg)
-                    # Re-add the latest tool results
-                    for tr in tool_results:
-                        tool_msg = Message(
-                            role="tool",
-                            content=tr["result"],
-                            tool_call_id=tr["tool_call_id"],
-                            name=tr["name"],
-                        )
-                        conversation_history.append(tool_msg)
-                    messages_for_api = [Message(role="system", content=system_prompt)] + conversation_history
-                    try:
-                        response = await stream_model_response(
-                            model_client,
-                            messages_for_api,
-                            tool_definitions,
-                            model_name,
-                        )
-                        last_usage = response.usage
-                    except Exception as retry_e:
-                        console.print(f"[red]API Error after compaction: {retry_e}[/red]")
-                        break
-                else:
-                    console.print(f"[red]API Error during tool loop: {e}[/red]")
-                    break
+            except Exception as error:
+                console.print(f"[red]API Error during tool loop: {error}[/red]")
+                break
         else:
             # Fallback: no model_client provided, break after first round
             logger.warning(
@@ -1182,7 +1200,6 @@ async def chat_loop(
     prompt: str | None = None,
     print_mode: bool = False,
     max_turns: int | None = None,
-    tool_config: dict | None = None,
 ):
     """Main chat loop with automatic context management."""
     configure_root_logger()

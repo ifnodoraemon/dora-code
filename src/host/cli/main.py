@@ -134,8 +134,6 @@ def start(
     print_mode: bool = typer.Option(False, "--print", help="Print mode (non-interactive, exit after response)"),
     max_turns: int = typer.Option(0, "--max-turns", help="Maximum conversation turns (0 = unlimited)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging"),
-    allowed_tools: str = typer.Option(None, "--allowedTools", help="Comma-separated list of allowed tools"),
-    disallowed_tools: str = typer.Option(None, "--disallowedTools", help="Comma-separated list of disallowed tools"),
 ):
     """Start the code agent CLI."""
     # Setup logging
@@ -154,13 +152,6 @@ def start(
         if not resume:
             console.print("[dim]Starting new session.[/dim]")
 
-    # Parse tool permissions
-    tool_config = {}
-    if allowed_tools:
-        tool_config["allowed"] = [t.strip() for t in allowed_tools.split(",")]
-    if disallowed_tools:
-        tool_config["disallowed"] = [t.strip() for t in disallowed_tools.split(",")]
-
     asyncio.run(chat_loop(
         project=project,
         resume_session=resume,
@@ -168,7 +159,6 @@ def start(
         prompt=prompt,
         print_mode=print_mode,
         max_turns=max_turns if max_turns > 0 else None,
-        tool_config=tool_config if tool_config else None,
     ))
 
 
