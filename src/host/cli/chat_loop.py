@@ -298,12 +298,8 @@ def prepare_user_turn(
     )
 
 
-def show_runtime_status(*, task_mgr, cost_tracker) -> None:
-    """Render background-task and budget warnings before prompting."""
-    running_tasks = task_mgr.get_running_tasks()
-    if running_tasks:
-        console.print(f"[dim cyan]⏳ {len(running_tasks)} background task(s) running[/dim cyan]")
-
+def show_runtime_status(*, cost_tracker) -> None:
+    """Render only actionable runtime warnings before prompting."""
     budget_status = cost_tracker.check_budget()
     if budget_status.get("warning"):
         console.print(f"[yellow]⚠️ {budget_status['warning']}[/yellow]")
@@ -584,24 +580,16 @@ async def execute_agent_turn(
     return finalization
 
 
-def display_turn_metrics(*, metrics: TurnMetrics, state: ChatLoopState, ctx, cost_tracker, model_name: str) -> None:
-    """Print turn usage and context stats."""
+def display_turn_metrics(*, metrics: TurnMetrics, state: ChatLoopState) -> None:
+    """Print minimal turn usage stats."""
     if not metrics.usage_available:
         return
 
     state.turn_count += 1
-    stats = ctx.get_context_stats()
-    cost = cost_tracker.calculate_cost(
-        model_name,
-        int(metrics.prompt_tokens or 0),
-        int(metrics.completion_tokens or 0),
-    )
     console.print(
         f"\n[dim]Turn {state.turn_count} | "
         f"In: {int(metrics.prompt_tokens or 0):,} | "
-        f"Out: {int(metrics.completion_tokens or 0):,} | "
-        f"Cost: ${cost:.4f} | "
-        f"Ctx: {stats['usage_percent']}%[/dim]"
+        f"Out: {int(metrics.completion_tokens or 0):,}[/dim]"
     )
 
 
@@ -1398,7 +1386,7 @@ async def chat_loop(
     try:
         while True:
             mode_color = MODE_COLORS.get(state.mode, "yellow")
-            show_runtime_status(task_mgr=runtime.task_mgr, cost_tracker=runtime.cost_tracker)
+            show_runtime_status(cost_tracker=runtime.cost_tracker)
             input_result = read_user_input(
                 state=state,
                 headless=runtime.headless,
@@ -1425,9 +1413,6 @@ async def chat_loop(
             display_turn_metrics(
                 metrics=metrics,
                 state=state,
-                ctx=runtime.ctx,
-                cost_tracker=runtime.cost_tracker,
-                model_name=runtime.model_name,
             )
 
             # Print mode: exit after first response

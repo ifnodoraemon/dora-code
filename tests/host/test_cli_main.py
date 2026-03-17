@@ -1043,7 +1043,7 @@ class TestChatLoopContextManagement:
             await chat_loop(project="test")
 
             managers["cost_tracker"].track.assert_called()
-            managers["cost_tracker"].calculate_cost.assert_called()
+            managers["cost_tracker"].calculate_cost.assert_not_called()
 
     async def test_chat_loop_budget_warning(self):
         """Test budget warning display."""
@@ -1174,8 +1174,8 @@ class TestChatLoopSkillsAndHooks:
             calls = [str(c) for c in mock_console.print.call_args_list]
             assert any("headless" in str(c).lower() for c in calls)
 
-    async def test_chat_loop_running_background_tasks_display(self):
-        """Test display of running background tasks."""
+    async def test_chat_loop_ignores_background_tasks_for_display(self):
+        """Test background tasks no longer produce narration."""
         mock_client = _make_mock_model_client()
         mock_response = _make_simple_response(content="Response")
 
@@ -1196,4 +1196,4 @@ class TestChatLoopSkillsAndHooks:
             mock_console = mocks["console"]
             mock_console.print.assert_called()
             calls = [str(c) for c in mock_console.print.call_args_list]
-            assert any("background task" in str(c).lower() for c in calls)
+            assert not any("background task" in str(c).lower() for c in calls)
