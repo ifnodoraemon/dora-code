@@ -799,7 +799,6 @@ async def initialize_chat_runtime(
         session_data=session_data,
     )
     tool_names, tool_definitions = resolve_tooling(tool_selector, registry, mode)
-    console.print(f"[dim]Tools: {len(tool_definitions)} ({mode} mode)[/dim]")
 
     runtime = ChatRuntime(
         model_client=model_client,
@@ -835,14 +834,7 @@ async def initialize_chat_runtime(
 
 def show_startup_info(model_client, project: str, ctx):
     """Display startup information."""
-    client_mode = model_client.get_mode()
-    mode_info = model_client.get_mode_info()
-
-    if client_mode == ClientMode.GATEWAY:
-        console.print(f"[bold cyan]Mode: Gateway[/bold cyan] ({mode_info.get('gateway_url')})")
-    else:
-        active_providers = [p for p, v in mode_info.get("providers", {}).items() if v]
-        console.print(f"[bold green]Mode: Direct[/bold green] ({', '.join(active_providers)})")
+    model_client.get_mode()
     console.print(f"[bold yellow]Project: {project}[/bold yellow]")
 
     stats = ctx.get_context_stats()
@@ -1399,12 +1391,7 @@ async def chat_loop(
     ]
     runtime.cmd_history.setup_completer(slash_commands)
 
-    console.print(
-        Panel.fit(
-            f"[bold blue]🤖 Code Agent[/bold blue]\n[dim]Type /help for commands. Mode: {state.mode}[/dim]",
-            border_style="blue",
-        )
-    )
+    console.print("[dim]Type /help for commands[/dim]")
 
     # Main loop
     _ctrl_c_count = 0
