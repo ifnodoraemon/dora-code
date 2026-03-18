@@ -1,7 +1,7 @@
 """
 Core CLI Commands Handler
 
-Handles core commands: help, clear, mode, reset, init, skills, commit
+Handles core commands: help, clear, mode, reset, init, commit
 """
 
 import os
@@ -9,12 +9,9 @@ import subprocess
 from pathlib import Path
 
 from rich.console import Console
-from rich.table import Table
 
-from src.core.config import load_config
-from src.core.paths import config_path, memory_path, skills_dir
+from src.core.paths import memory_path
 from src.core.rules import create_default_rules
-from src.core.schema import get_default_config
 from src.host.cli.command_context import CommandContext
 from src.host.cli.command_result import CommandResult
 from src.servers.memory import (
@@ -70,7 +67,6 @@ class CoreCommandHandler:
         async_handlers = {
             "commit": lambda: self._handle_commit(cmd_args),
             "review": lambda: self._handle_review(cmd_args, conversation_history),
-            "config": lambda: self._handle_config(cmd_args),
             "memory": lambda: self._handle_memory(cmd_args),
         }
         sync_handlers = {
@@ -81,11 +77,9 @@ class CoreCommandHandler:
                 result,
                 active_skills_content,
             ),
-            "skills": self._show_skills,
             "clear": lambda: self._handle_clear_command(result),
             "compact": lambda: self._handle_compact_command(result),
             "reset": lambda: self._handle_reset_command(result),
-            "doctor": self._run_doctor,
         }
 
         if cmd in async_handlers:
@@ -185,8 +179,6 @@ class CoreCommandHandler:
   /help
   /init
   /mode <plan|build>
-  /config
-  /skills
   /clear
   /compact
   /reset
@@ -199,19 +191,6 @@ class CoreCommandHandler:
 [bold]Shell:[/bold]
   !<cmd>
 """)
-
-    def _show_skills(self):
-        """Show skills information."""
-        console.print("[bold]Skills System[/bold]")
-        active = self.skill_mgr.get_active_skills()
-        if active:
-            console.print(f"  [green]Active:[/green] {', '.join(active)}")
-        else:
-            console.print("  [dim]No skills currently active[/dim]")
-        console.print("\n[dim]Skills are loaded automatically based on conversation context.[/dim]")
-        console.print(
-            f"[dim]Put SKILL.md files in {skills_dir()}/<name>/ to add custom skills.[/dim]"
-        )
 
     async def _handle_commit(self, cmd_args: list[str]):
         if not self._command_available("git", ["rev-parse", "--git-dir"]):
@@ -426,81 +405,6 @@ class CoreCommandHandler:
 
         console.print("\n[dim]Use /review goto <turn> to jump to a specific turn[/dim]")
 
-    async def _handle_config(self, cmd_args: list[str]):
-        """Handle /config command - interactive configuration."""
-        import json
-
-        config_file = config_path()
-        config_file.parent.mkdir(parents=True, exist_ok=True)
-        if config_file.exists():
-            config_data = json.loads(config_file.read_text())
-        else:
-            config_data = get_default_config()
-
-        if not cmd_args:
-            self._show_config(config_data)
-            return None
-
-        subcommand = cmd_args[0].lower()
-        handlers = {
-            "set": lambda: self._set_config_value(cmd_args, config_data, config_file),
-            "model": lambda: self._select_config_model(config_data, config_file),
-        }
-        handler = handlers.get(subcommand)
-        if handler is None:
-            console.print("[red]Usage: /config [set <key> <value> | model][/red]")
-            return None
-        handler()
-        return None
-
-    def _show_config(self, config_data: dict) -> None:
-        """Display current config values."""
-        table = Table(title="Configuration", show_header=True)
-        table.add_column("Key", style="cyan")
-        table.add_column("Value", style="green")
-        table.add_column("Source", style="dim")
-        for key, value in config_data.items():
-            table.add_row(key, str(value), "config.json")
-        console.print(table)
-        console.print("\n[dim]Use /config set <key> <value> to change settings[/dim]")
-
-    def _set_config_value(self, cmd_args: list[str], config_data: dict, config_file: Path) -> None:
-        """Handle `/config set`."""
-        if len(cmd_args) < 3:
-            console.print("[red]Usage: /config set <key> <value>[/red]")
-            return
-        import json
-
-        key = cmd_args[1]
-        value = " ".join(cmd_args[2:])
-        config_data[key] = value
-        config_file.write_text(json.dumps(config_data, indent=2))
-        console.print(f"[green]Set {key} = {value}[/green]")
-
-    def _select_config_model(self, config_data: dict, config_file: Path) -> None:
-        """Handle `/config model`."""
-        import json
-
-        from rich.prompt import Prompt
-
-        models = [
-            "gemini-3-pro-preview",
-            "gemini-2.5-flash",
-            "gpt-4o",
-            "gpt-4o-mini",
-            "claude-sonnet-4-5-20250929",
-            "claude-opus-4-6",
-        ]
-        console.print("[bold]Available Models:[/bold]")
-        for index, model in enumerate(models, 1):
-            console.print(f"  {index}. {model}")
-        choice = Prompt.ask("Select model (number or name)", default="1")
-        selected = models[int(choice) - 1] if choice.isdigit() and 1 <= int(choice) <= len(models) else choice
-        config_data["model"] = selected
-        config_file.write_text(json.dumps(config_data, indent=2))
-        console.print(f"[green]Selected: {selected}[/green]")
-        console.print(f"[dim]Saved model to {config_file}[/dim]")
-
     async def _handle_memory(self, cmd_args: list[str]):
         """Handle /memory command - edit MEMORY.md files and inspect note memory."""
         project_memory = memory_path()
@@ -617,56 +521,3 @@ class CoreCommandHandler:
             console.print(update_user_persona(key=cmd_args[2], value=" ".join(cmd_args[3:])))
             return
         console.print("[red]Usage: /memory persona [show|set <key> <value>][/red]")
-
-    def _run_doctor(self):
-        """Run diagnostic checks (same as CLI doctor command)."""
-        import sys
-
-        console.print("[bold]🔍 Agent Diagnostics[/bold]\n")
-
-        checks = []
-
-        # Python version
-        py_version = sys.version_info
-        py_ok = py_version >= (3, 10)
-        checks.append(("Python", f"{py_version.major}.{py_version.minor}.{py_version.micro}", py_ok))
-
-        config_data = load_config(validate=False)
-        model = config_data.get("model")
-        google_key = bool(config_data.get("google_api_key"))
-        openai_key = bool(config_data.get("openai_api_key"))
-        anthropic_key = bool(config_data.get("anthropic_api_key"))
-        gateway_url = config_data.get("gateway_url")
-
-        checks.append(("model", model or "Missing", bool(model)))
-
-        if gateway_url:
-            checks.append(("Gateway", gateway_url, True))
-        else:
-            checks.append(("google_api_key", "✓" if google_key else "✗", google_key))
-            checks.append(("openai_api_key", "✓" if openai_key else "✗", openai_key))
-            checks.append(("anthropic_api_key", "✓" if anthropic_key else "✗", anthropic_key))
-
-        # Directories
-        checks.append((".agent/", "✓" if Path(".agent").exists() else "Will create", True))
-        checks.append(("AGENTS.md", "✓" if Path("AGENTS.md").exists() else "Use /init", Path("AGENTS.md").exists()))
-
-        # Git
-        try:
-            result = subprocess.run(["git", "--version"], capture_output=True, text=True, timeout=5)
-            checks.append(("Git", "✓" if result.returncode == 0 else "✗", result.returncode == 0))
-        except Exception:
-            checks.append(("Git", "✗", False))
-
-        # Display
-        table = Table(show_header=True)
-        table.add_column("Check", style="cyan")
-        table.add_column("Status")
-        table.add_column("", width=3)
-
-        for name, status, ok in checks:
-            icon = "✅" if ok else "❌"
-            style = "green" if ok else "red"
-            table.add_row(name, f"[{style}]{status}[/{style}]", icon)
-
-        console.print(table)

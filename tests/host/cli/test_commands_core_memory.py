@@ -13,7 +13,6 @@ def _make_handler(project: str = "demo-project") -> CoreCommandHandler:
         ctx=MagicMock(),
         tool_selector=MagicMock(),
         registry=MagicMock(),
-        skill_mgr=MagicMock(),
         hook_mgr=MagicMock(),
         project=project,
         permission_mgr=MagicMock(),

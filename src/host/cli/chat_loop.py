@@ -1335,7 +1335,6 @@ async def chat_loop(
         ctx=runtime.ctx,
         tool_selector=runtime.tool_selector,
         registry=runtime.registry,
-        skill_mgr=runtime.skill_mgr,
         hook_mgr=runtime.hook_mgr,
         project=project,
         permission_mgr=runtime.permission_mgr,
@@ -1345,7 +1344,7 @@ async def chat_loop(
 
     # Setup tab completion for slash commands
     slash_commands = [
-        "help", "init", "mode", "config", "skills",
+        "help", "init", "mode",
         "clear", "compact", "reset", "memory",
         "commit", "review", "exit",
     ]

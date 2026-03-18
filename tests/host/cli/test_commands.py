@@ -9,9 +9,7 @@ Tests cover:
 - Integration with core CLI dependencies
 - Mode switching (plan/build)
 - Project switching
-- Configuration updates
 - Help text generation
-- Permission checks for sensitive commands
 """
 
 from unittest.mock import MagicMock, patch
@@ -29,14 +27,12 @@ class TestCommandHandlerInitialization:
         ctx = MagicMock()
         tool_selector = MagicMock()
         registry = MagicMock()
-        skill_mgr = MagicMock()
         hook_mgr = MagicMock()
 
         handler = CommandHandler(
             ctx=ctx,
             tool_selector=tool_selector,
             registry=registry,
-            skill_mgr=skill_mgr,
             hook_mgr=hook_mgr,
             project="test-project",
         )
@@ -44,7 +40,6 @@ class TestCommandHandlerInitialization:
         assert handler.cc.ctx == ctx
         assert handler.cc.tool_selector == tool_selector
         assert handler.cc.registry == registry
-        assert handler.cc.skill_mgr == skill_mgr
         assert handler.cc.hook_mgr == hook_mgr
         assert handler.cc.project == "test-project"
 
@@ -54,7 +49,6 @@ class TestCommandHandlerInitialization:
             "ctx": MagicMock(),
             "tool_selector": MagicMock(),
             "registry": MagicMock(),
-            "skill_mgr": MagicMock(),
             "hook_mgr": MagicMock(),
         }
 
@@ -78,7 +72,6 @@ class TestHelpCommandFallback:
             ctx=ctx,
             tool_selector=MagicMock(),
             registry=MagicMock(),
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )
@@ -106,7 +99,6 @@ class TestHelpCommand:
             ctx=MagicMock(),
             tool_selector=MagicMock(),
             registry=MagicMock(),
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )
@@ -138,7 +130,6 @@ class TestClearCommand:
             ctx=ctx,
             tool_selector=MagicMock(),
             registry=MagicMock(),
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )
@@ -167,7 +158,6 @@ class TestClearCommand:
             ctx=ctx,
             tool_selector=MagicMock(),
             registry=MagicMock(),
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )
@@ -206,7 +196,6 @@ class TestModeCommand:
             ctx=ctx,
             tool_selector=tool_selector,
             registry=registry,
-            skill_mgr=MagicMock(),
             hook_mgr=hook_mgr,
             project="test",
         )
@@ -241,7 +230,6 @@ class TestModeCommand:
             ctx=ctx,
             tool_selector=tool_selector,
             registry=registry,
-            skill_mgr=MagicMock(),
             hook_mgr=hook_mgr,
             project="test",
         )
@@ -267,7 +255,6 @@ class TestModeCommand:
             ctx=MagicMock(),
             tool_selector=MagicMock(),
             registry=MagicMock(),
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )
@@ -292,7 +279,6 @@ class TestModeCommand:
             ctx=MagicMock(),
             tool_selector=MagicMock(),
             registry=MagicMock(),
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )
@@ -332,7 +318,6 @@ class TestResetCommand:
             ctx=ctx,
             tool_selector=tool_selector,
             registry=registry,
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )
@@ -368,7 +353,6 @@ class TestResetCommand:
             ctx=ctx,
             tool_selector=tool_selector,
             registry=registry,
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )
@@ -388,66 +372,6 @@ class TestResetCommand:
 
 
 @pytest.mark.asyncio
-class TestSkillsCommand:
-    """Test /skills command."""
-
-    async def test_skills_command_shows_active_skills(self):
-        """Test that /skills shows active skills."""
-        skill_mgr = MagicMock()
-        skill_mgr.get_active_skills = MagicMock(return_value=["skill1", "skill2"])
-
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=skill_mgr,
-            hook_mgr=MagicMock(),
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_core.console") as mock_console:
-            result = await handler.handle(
-                cmd="skills",
-                cmd_args=[],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-            mock_console.print.assert_called()
-
-    async def test_skills_command_with_no_active_skills(self):
-        """Test /skills when no skills are active."""
-        skill_mgr = MagicMock()
-        skill_mgr.get_active_skills = MagicMock(return_value=[])
-
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=skill_mgr,
-            hook_mgr=MagicMock(),
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_core.console"):
-            result = await handler.handle(
-                cmd="skills",
-                cmd_args=[],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-
-
-@pytest.mark.asyncio
 class TestUnknownCommand:
     """Test handling of unknown commands."""
 
@@ -457,7 +381,6 @@ class TestUnknownCommand:
             ctx=MagicMock(),
             tool_selector=MagicMock(),
             registry=MagicMock(),
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )
@@ -487,7 +410,6 @@ class TestReturnValueStructure:
             ctx=MagicMock(),
             tool_selector=MagicMock(),
             registry=MagicMock(),
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )
@@ -520,7 +442,6 @@ class TestReturnValueStructure:
             ctx=MagicMock(),
             tool_selector=MagicMock(),
             registry=MagicMock(),
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )
@@ -555,7 +476,6 @@ class TestInitCommand:
             ctx=MagicMock(),
             tool_selector=MagicMock(),
             registry=MagicMock(),
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )
@@ -586,7 +506,6 @@ class TestInitCommand:
             ctx=MagicMock(),
             tool_selector=MagicMock(),
             registry=MagicMock(),
-            skill_mgr=MagicMock(),
             hook_mgr=MagicMock(),
             project="test",
         )

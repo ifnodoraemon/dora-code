@@ -16,7 +16,6 @@ class CommandContext:
     ctx: Any  # ContextManager
     tool_selector: Any
     registry: Any  # ToolRegistry
-    skill_mgr: Any
     hook_mgr: Any
     project: str
     permission_mgr: Any = field(default=None)
