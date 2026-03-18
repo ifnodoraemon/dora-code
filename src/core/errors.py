@@ -281,8 +281,7 @@ class CircuitBreaker:
                         else self.config.timeout
                     )
                     raise CircuitBreakerOpenError(
-                        f"Circuit breaker is OPEN. "
-                        f"Try again in {remaining:.1f}s"
+                        f"Circuit breaker is OPEN. Try again in {remaining:.1f}s"
                     )
             current_state = self.state
 
@@ -335,8 +334,7 @@ class CircuitBreaker:
                         else self.config.timeout
                     )
                     raise CircuitBreakerOpenError(
-                        f"Circuit breaker is OPEN. "
-                        f"Try again in {remaining:.1f}s"
+                        f"Circuit breaker is OPEN. Try again in {remaining:.1f}s"
                     )
             current_state = self.state
 
@@ -352,9 +350,11 @@ class CircuitBreaker:
         """Decorator for circuit breaker protection"""
 
         if asyncio.iscoroutinefunction(func):
+
             @wraps(func)
             async def async_wrapper(*args, **kwargs):
                 return await self.call_async(func, *args, **kwargs)
+
             return async_wrapper
 
         @wraps(func)

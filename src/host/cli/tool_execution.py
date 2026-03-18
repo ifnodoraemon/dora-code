@@ -336,7 +336,11 @@ def detect_tool_loop(
     # Check alternating pattern (A-B-A-B)
     if len(previous_tool_calls) >= 4:
         last_four = previous_tool_calls[-4:]
-        if last_four[0] == last_four[2] and last_four[1] == last_four[3] and last_four[0] != last_four[1]:
+        if (
+            last_four[0] == last_four[2]
+            and last_four[1] == last_four[3]
+            and last_four[0] != last_four[1]
+        ):
             return True, "Loop detected: alternating pattern between tools."
 
     return False, ""

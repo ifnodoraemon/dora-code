@@ -11,14 +11,14 @@ Tests cover:
 
 import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.core.subagents import (
     AgentMessage,
-    AgentMetrics,
     AgentMessageQueue,
+    AgentMetrics,
     AgentState,
     AgentStateManager,
     SubagentConfig,
@@ -27,7 +27,6 @@ from src.core.subagents import (
     SubagentResult,
     _aggregate_results,
     _create_agent_id,
-    _execute_agent_task,
     _get_model_name,
 )
 
@@ -283,9 +282,7 @@ class TestAgentStateManager:
         manager = AgentStateManager()
 
         await manager.create_metrics("agent_1", "test")
-        await manager.update_metrics(
-            "agent_1", turns_used=5, tokens_used=200, tool_calls=3
-        )
+        await manager.update_metrics("agent_1", turns_used=5, tokens_used=200, tool_calls=3)
 
         metrics = await manager.get_metrics("agent_1")
         assert metrics.turns_used == 5
@@ -622,9 +619,7 @@ class TestSubagentManager:
 
         # This will fail because we don't have a real client, but we can verify
         # the timeout parameter is used
-        result = await manager.spawn_with_timeout(
-            "test-agent", "Do something", timeout=5.0
-        )
+        result = await manager.spawn_with_timeout("test-agent", "Do something", timeout=5.0)
 
         # Result will be failed due to mock, but we're testing the interface
         assert result.agent_name == "test-agent"
@@ -702,7 +697,7 @@ class TestIntegration:
     async def test_agent_communication_flow(self):
         """Test agent communication flow."""
         queue = AgentMessageQueue()
-        manager = AgentStateManager()
+        AgentStateManager()
 
         # Simulate agent 1 sending a request
         msg1 = AgentMessage(
