@@ -14,10 +14,7 @@ def _make_handler(project: str = "demo-project") -> CoreCommandHandler:
         tool_selector=MagicMock(),
         registry=MagicMock(),
         skill_mgr=MagicMock(),
-        checkpoint_mgr=MagicMock(),
-        session_mgr=MagicMock(),
         hook_mgr=MagicMock(),
-        model_name="test-model",
         project=project,
         permission_mgr=MagicMock(),
     )

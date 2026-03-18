@@ -185,26 +185,15 @@ class CoreCommandHandler:
   /help
   /init
   /mode <plan|build>
-  /model [name]
   /config
   /skills
   /clear
   /compact
   /reset
-  /doctor
   /memory
   /commit <message>
   /commit --amend
   /review [n|goto <n>|search <q>|all]
-  /sessions
-  /resume <id>
-  /rename <name>
-  /export [path]
-  /fork
-  /checkpoints
-  /rewind [id]
-  /workspace
-  /add-dir <path>
   /exit
 
 [bold]Shell:[/bold]

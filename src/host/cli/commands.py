@@ -4,9 +4,7 @@ from rich.console import Console
 
 from src.host.cli.command_context import CommandContext
 from src.host.cli.command_result import CommandResult
-from src.host.cli.commands_config import ConfigCommandHandler
 from src.host.cli.commands_core import CoreCommandHandler
-from src.host.cli.commands_session import SessionCommandHandler
 
 console = Console()
 
@@ -20,10 +18,7 @@ class CommandHandler:
         tool_selector,
         registry,
         skill_mgr,
-        checkpoint_mgr,
-        session_mgr,
         hook_mgr,
-        model_name: str,
         project: str,
         permission_mgr=None,
         build_system_prompt=None,
@@ -42,21 +37,14 @@ class CommandHandler:
             tool_selector=tool_selector,
             registry=registry,
             skill_mgr=skill_mgr,
-            checkpoint_mgr=checkpoint_mgr,
-            session_mgr=session_mgr,
             hook_mgr=hook_mgr,
-            model_name=model_name,
             project=project,
             permission_mgr=permission_mgr,
             build_system_prompt=build_system_prompt,
             convert_tools_to_definitions=convert_tools_to_definitions,
         )
 
-        self.handlers = (
-            CoreCommandHandler(self.cc),
-            SessionCommandHandler(self.cc),
-            ConfigCommandHandler(self.cc),
-        )
+        self.handler = CoreCommandHandler(self.cc)
 
     async def handle(
         self,
@@ -77,18 +65,17 @@ class CommandHandler:
             conversation_history=conversation_history,
         )
 
-        for handler in self.handlers:
-            result = await handler.handle(
-                cmd,
-                cmd_args,
-                mode,
-                tool_names,
-                tool_definitions,
-                conversation_history,
-                active_skills_content,
-            )
-            if result:
-                return result
+        result = await self.handler.handle(
+            cmd,
+            cmd_args,
+            mode,
+            tool_names,
+            tool_definitions,
+            conversation_history,
+            active_skills_content,
+        )
+        if result:
+            return result
 
         console.print(f"[yellow]Unknown command: {cmd}[/yellow]")
         return fallback

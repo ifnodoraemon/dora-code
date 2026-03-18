@@ -2,11 +2,11 @@
 
 Tests cover:
 - CommandHandler initialization
-- Core slash commands and session/config command paths
+- Core slash command paths
 - Command parsing and validation
 - Command execution with various arguments
 - Error handling for invalid commands
-- Integration with ContextManager, CheckpointManager, BudgetTracker
+- Integration with core CLI dependencies
 - Mode switching (plan/build)
 - Project switching
 - Configuration updates
@@ -14,7 +14,6 @@ Tests cover:
 - Permission checks for sensitive commands
 """
 
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -31,8 +30,6 @@ class TestCommandHandlerInitialization:
         tool_selector = MagicMock()
         registry = MagicMock()
         skill_mgr = MagicMock()
-        checkpoint_mgr = MagicMock()
-        session_mgr = MagicMock()
         hook_mgr = MagicMock()
 
         handler = CommandHandler(
@@ -40,10 +37,7 @@ class TestCommandHandlerInitialization:
             tool_selector=tool_selector,
             registry=registry,
             skill_mgr=skill_mgr,
-            checkpoint_mgr=checkpoint_mgr,
-            session_mgr=session_mgr,
             hook_mgr=hook_mgr,
-            model_name="test-model",
             project="test-project",
         )
 
@@ -51,10 +45,7 @@ class TestCommandHandlerInitialization:
         assert handler.cc.tool_selector == tool_selector
         assert handler.cc.registry == registry
         assert handler.cc.skill_mgr == skill_mgr
-        assert handler.cc.checkpoint_mgr == checkpoint_mgr
-        assert handler.cc.session_mgr == session_mgr
         assert handler.cc.hook_mgr == hook_mgr
-        assert handler.cc.model_name == "test-model"
         assert handler.cc.project == "test-project"
 
     def test_init_stores_all_attributes(self):
@@ -64,14 +55,11 @@ class TestCommandHandlerInitialization:
             "tool_selector": MagicMock(),
             "registry": MagicMock(),
             "skill_mgr": MagicMock(),
-            "checkpoint_mgr": MagicMock(),
-            "session_mgr": MagicMock(),
             "hook_mgr": MagicMock(),
         }
 
         handler = CommandHandler(
             **mocks,
-            model_name="gpt-4",
             project="my-project",
         )
 
@@ -91,10 +79,7 @@ class TestHelpCommandFallback:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -122,10 +107,7 @@ class TestHelpCommand:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -157,10 +139,7 @@ class TestClearCommand:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -189,10 +168,7 @@ class TestClearCommand:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -231,10 +207,7 @@ class TestModeCommand:
             tool_selector=tool_selector,
             registry=registry,
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=hook_mgr,
-            model_name="test",
             project="test",
         )
 
@@ -269,10 +242,7 @@ class TestModeCommand:
             tool_selector=tool_selector,
             registry=registry,
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=hook_mgr,
-            model_name="test",
             project="test",
         )
 
@@ -298,10 +268,7 @@ class TestModeCommand:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -326,10 +293,7 @@ class TestModeCommand:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -369,10 +333,7 @@ class TestResetCommand:
             tool_selector=tool_selector,
             registry=registry,
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -408,10 +369,7 @@ class TestResetCommand:
             tool_selector=tool_selector,
             registry=registry,
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -443,10 +401,7 @@ class TestSkillsCommand:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=skill_mgr,
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -474,287 +429,13 @@ class TestSkillsCommand:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=skill_mgr,
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
         with patch("src.host.cli.commands_core.console"):
             result = await handler.handle(
                 cmd="skills",
-                cmd_args=[],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-
-
-@pytest.mark.asyncio
-class TestCheckpointsCommand:
-    """Test /checkpoints command."""
-
-    async def test_checkpoints_command_lists_checkpoints(self):
-        """Test that /checkpoints lists available checkpoints."""
-        checkpoint_mgr = MagicMock()
-        checkpoint_mgr.list_checkpoints = MagicMock(return_value=[
-            {
-                "id": "cp1",
-                "created_at": "2024-01-01T10:00:00",
-                "files_count": 5,
-                "prompt": "Test checkpoint",
-            },
-            {
-                "id": "cp2",
-                "created_at": "2024-01-01T11:00:00",
-                "files_count": 3,
-                "prompt": "Another checkpoint",
-            },
-        ])
-
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=checkpoint_mgr,
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_session.console"):
-            result = await handler.handle(
-                cmd="checkpoints",
-                cmd_args=[],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-            checkpoint_mgr.list_checkpoints.assert_called_once_with(limit=10)
-
-    async def test_checkpoints_command_with_no_checkpoints(self):
-        """Test /checkpoints when no checkpoints exist."""
-        checkpoint_mgr = MagicMock()
-        checkpoint_mgr.list_checkpoints = MagicMock(return_value=[])
-
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=checkpoint_mgr,
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_session.console"):
-            result = await handler.handle(
-                cmd="checkpoints",
-                cmd_args=[],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-
-
-@pytest.mark.asyncio
-class TestRewindCommand:
-    """Test /rewind command for checkpoint restoration."""
-
-    async def test_rewind_to_specific_checkpoint(self):
-        """Test rewinding to a specific checkpoint."""
-        checkpoint_mgr = MagicMock()
-        checkpoint_mgr.rewind = MagicMock(return_value={
-            "restored_files": ["file1.py", "file2.py"],
-            "failed_files": [],
-        })
-
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=checkpoint_mgr,
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_session.console"):
-            result = await handler.handle(
-                cmd="rewind",
-                cmd_args=["cp123"],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-            checkpoint_mgr.rewind.assert_called_once_with("cp123", mode="code")
-
-    async def test_rewind_to_last_checkpoint(self):
-        """Test rewinding to last checkpoint without args."""
-        checkpoint_mgr = MagicMock()
-        checkpoint_mgr.rewind_last = MagicMock(return_value={
-            "restored_files": ["file1.py"],
-            "failed_files": [],
-        })
-
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=checkpoint_mgr,
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_session.console"):
-            result = await handler.handle(
-                cmd="rewind",
-                cmd_args=[],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-            checkpoint_mgr.rewind_last.assert_called_once_with(mode="code")
-
-    async def test_rewind_with_failed_files(self):
-        """Test rewind when some files fail to restore."""
-        checkpoint_mgr = MagicMock()
-        checkpoint_mgr.rewind = MagicMock(return_value={
-            "restored_files": ["file1.py"],
-            "failed_files": ["file2.py"],
-        })
-
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=checkpoint_mgr,
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_session.console") as mock_console:
-            result = await handler.handle(
-                cmd="rewind",
-                cmd_args=["cp123"],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-            # Verify warning about failed files
-            mock_console.print.assert_called()
-
-
-@pytest.mark.asyncio
-class TestSessionsCommand:
-    """Test /sessions command."""
-
-    async def test_sessions_command_lists_sessions(self):
-        """Test that /sessions lists recent sessions."""
-        session_mgr = MagicMock()
-
-        # Create proper mock objects with string representations
-        session1 = MagicMock()
-        session1.id = "sess1"
-        session1.name = "Session 1"
-        session1.message_count = 10
-        session1.updated_at = datetime.now().timestamp()
-        session1.__str__ = MagicMock(return_value="sess1")
-
-        session2 = MagicMock()
-        session2.id = "sess2"
-        session2.name = "Session 2"
-        session2.message_count = 5
-        session2.updated_at = datetime.now().timestamp()
-        session2.__str__ = MagicMock(return_value="sess2")
-
-        session_mgr.list_sessions = MagicMock(return_value=[session1, session2])
-
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=session_mgr,
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test-project",
-        )
-
-        with patch("src.host.cli.commands_session.console"):
-            result = await handler.handle(
-                cmd="sessions",
-                cmd_args=[],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-            session_mgr.list_sessions.assert_called_once_with(
-                project="test-project", limit=10
-            )
-
-    async def test_sessions_command_with_no_sessions(self):
-        """Test /sessions when no sessions exist."""
-        session_mgr = MagicMock()
-        session_mgr.list_sessions = MagicMock(return_value=[])
-
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=session_mgr,
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_session.console"):
-            result = await handler.handle(
-                cmd="sessions",
                 cmd_args=[],
                 mode="build",
                 tool_names=[],
@@ -777,10 +458,7 @@ class TestUnknownCommand:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -810,10 +488,7 @@ class TestReturnValueStructure:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -846,10 +521,7 @@ class TestReturnValueStructure:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -874,243 +546,6 @@ class TestReturnValueStructure:
 
 
 @pytest.mark.asyncio
-class TestSessionManagementCommands:
-    """Test session management commands."""
-
-    async def test_resume_session_with_valid_id(self):
-        """Test /resume with valid session ID."""
-        session_mgr = MagicMock()
-        session_data = MagicMock()
-        session_data.metadata.get_display_name = MagicMock(return_value="Test Session")
-        session_mgr.resume_session = MagicMock(return_value=session_data)
-
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=session_mgr,
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_session.console"):
-            result = await handler.handle(
-                cmd="resume",
-                cmd_args=["sess123"],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-            session_mgr.resume_session.assert_called_once_with("sess123")
-
-    async def test_resume_session_without_args(self):
-        """Test /resume without arguments shows usage."""
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_session.console") as mock_console:
-            result = await handler.handle(
-                cmd="resume",
-                cmd_args=[],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-            mock_console.print.assert_called()
-
-    async def test_rename_session_with_name(self):
-        """Test /rename with new session name."""
-        ctx = MagicMock()
-        ctx.session_id = "sess123"
-        session_mgr = MagicMock()
-        session_mgr.rename_session = MagicMock()
-
-        handler = CommandHandler(
-            ctx=ctx,
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=session_mgr,
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_session.console"):
-            result = await handler.handle(
-                cmd="rename",
-                cmd_args=["New", "Session", "Name"],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-            session_mgr.rename_session.assert_called_once_with("sess123", "New Session Name")
-
-    async def test_export_session_with_path(self):
-        """Test /export with custom path."""
-        ctx = MagicMock()
-        ctx.session_id = "sess123"
-        session_mgr = MagicMock()
-        session_mgr.export_session = MagicMock()
-
-        handler = CommandHandler(
-            ctx=ctx,
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=session_mgr,
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_session.console"):
-            result = await handler.handle(
-                cmd="export",
-                cmd_args=["/tmp/export.md"],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-            session_mgr.export_session.assert_called_once()
-
-    async def test_fork_session(self):
-        """Test /fork command."""
-        ctx = MagicMock()
-        ctx.session_id = "sess123"
-        session_mgr = MagicMock()
-        forked_session = MagicMock()
-        forked_session.metadata.id = "sess456"
-        session_mgr.fork_session = MagicMock(return_value=forked_session)
-
-        handler = CommandHandler(
-            ctx=ctx,
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=session_mgr,
-            hook_mgr=MagicMock(),
-            model_name="test",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_session.console"):
-            result = await handler.handle(
-                cmd="fork",
-                cmd_args=[],
-                mode="build",
-                tool_names=[],
-                tool_definitions=[],
-                conversation_history=[],
-                active_skills_content="",
-            )
-
-            assert result.handled is True
-            session_mgr.fork_session.assert_called_once_with("sess123")
-
-
-@pytest.mark.asyncio
-class TestModelCommand:
-    """Test /model command."""
-
-    async def test_model_command_switch_model(self):
-        """Test /model with model name to switch."""
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="gpt-4",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_config.console"):
-            with patch("src.host.cli.commands_config.ModelManager") as mock_mgr_class:
-                mock_mgr = MagicMock()
-                mock_mgr.switch_model = MagicMock(return_value=True)
-                mock_mgr.get_current_model = MagicMock(return_value="gpt-3.5")
-                mock_mgr_class.return_value = mock_mgr
-
-                result = await handler.handle(
-                    cmd="model",
-                    cmd_args=["gpt-3.5"],
-                    mode="build",
-                    tool_names=[],
-                    tool_definitions=[],
-                    conversation_history=[],
-                    active_skills_content="",
-                            )
-
-                assert result.handled is True
-
-    async def test_model_command_list_models(self):
-        """Test /model without args lists available models."""
-        handler = CommandHandler(
-            ctx=MagicMock(),
-            tool_selector=MagicMock(),
-            registry=MagicMock(),
-            skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
-            hook_mgr=MagicMock(),
-            model_name="gpt-4",
-            project="test",
-        )
-
-        with patch("src.host.cli.commands_config.console"):
-            with patch("src.host.cli.commands_config.ModelManager") as mock_mgr_class:
-                mock_mgr = MagicMock()
-                mock_mgr.format_model_list = MagicMock(return_value="Model list")
-                mock_mgr_class.return_value = mock_mgr
-
-                result = await handler.handle(
-                    cmd="model",
-                    cmd_args=[],
-                    mode="build",
-                    tool_names=[],
-                    tool_definitions=[],
-                    conversation_history=[],
-                    active_skills_content="",
-                            )
-
-                assert result.handled is True
-
-
-@pytest.mark.asyncio
 class TestInitCommand:
     """Test /init command."""
 
@@ -1121,10 +556,7 @@ class TestInitCommand:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 
@@ -1155,10 +587,7 @@ class TestInitCommand:
             tool_selector=MagicMock(),
             registry=MagicMock(),
             skill_mgr=MagicMock(),
-            checkpoint_mgr=MagicMock(),
-            session_mgr=MagicMock(),
             hook_mgr=MagicMock(),
-            model_name="test",
             project="test",
         )
 

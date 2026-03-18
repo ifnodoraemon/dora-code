@@ -1336,10 +1336,7 @@ async def chat_loop(
         tool_selector=runtime.tool_selector,
         registry=runtime.registry,
         skill_mgr=runtime.skill_mgr,
-        checkpoint_mgr=runtime.checkpoint_mgr,
-        session_mgr=runtime.session_mgr,
         hook_mgr=runtime.hook_mgr,
-        model_name=runtime.model_name,
         project=project,
         permission_mgr=runtime.permission_mgr,
         build_system_prompt=build_system_prompt,
@@ -1348,10 +1345,9 @@ async def chat_loop(
 
     # Setup tab completion for slash commands
     slash_commands = [
-        "help", "init", "mode", "model", "config", "skills",
-        "clear", "compact", "reset", "doctor", "memory",
-        "commit", "review", "sessions", "resume", "rename", "export",
-        "fork", "checkpoints", "rewind", "workspace", "add-dir", "exit",
+        "help", "init", "mode", "config", "skills",
+        "clear", "compact", "reset", "memory",
+        "commit", "review", "exit",
     ]
     runtime.cmd_history.setup_completer(slash_commands)
 

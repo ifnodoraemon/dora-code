@@ -17,10 +17,7 @@ class CommandContext:
     tool_selector: Any
     registry: Any  # ToolRegistry
     skill_mgr: Any
-    checkpoint_mgr: Any
-    session_mgr: Any
     hook_mgr: Any
-    model_name: str
     project: str
     permission_mgr: Any = field(default=None)
     build_system_prompt: Any = field(default=None)
