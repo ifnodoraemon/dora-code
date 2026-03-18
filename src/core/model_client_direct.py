@@ -9,11 +9,8 @@ import base64
 import json
 import logging
 import random
-import uuid
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
-
-from src.core.provider_adapters import AnthropicAdapter, GoogleAdapter, OpenAIAdapter
 
 from src.core.model_client_base import BaseModelClient
 from src.core.model_utils import (
@@ -25,6 +22,7 @@ from src.core.model_utils import (
     ToolDefinition,
     get_content_text,
 )
+from src.core.provider_adapters import AnthropicAdapter, GoogleAdapter, OpenAIAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +43,12 @@ def _build_google_content_parts(content, types_module):
                 parts.append(types_module.Part(text=part["text"]))
             elif part.get("type") == "image":
                 source = part["source"]
-                parts.append(types_module.Part.from_bytes(
-                    data=base64.b64decode(source["data"]),
-                    mime_type=source["media_type"],
-                ))
+                parts.append(
+                    types_module.Part.from_bytes(
+                        data=base64.b64decode(source["data"]),
+                        mime_type=source["media_type"],
+                    )
+                )
         return parts
     return []
 
@@ -65,10 +65,12 @@ def _build_openai_content_parts(content):
             elif part.get("type") == "image":
                 source = part["source"]
                 data_url = f"data:{source['media_type']};base64,{source['data']}"
-                parts.append({
-                    "type": "image_url",
-                    "image_url": {"url": data_url},
-                })
+                parts.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_url},
+                    }
+                )
         return parts
     return content or ""
 
@@ -84,14 +86,16 @@ def _build_anthropic_content_parts(content):
                 parts.append({"type": "text", "text": part["text"]})
             elif part.get("type") == "image":
                 source = part["source"]
-                parts.append({
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": source["media_type"],
-                        "data": source["data"],
-                    },
-                })
+                parts.append(
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": source["media_type"],
+                            "data": source["data"],
+                        },
+                    }
+                )
         return parts
     return [{"type": "text", "text": str(content or "")}]
 
@@ -289,7 +293,11 @@ class DirectModelClient(BaseModelClient):
         if not response.candidates:
             logger.warning("No candidates in Gemini response")
             return ChatResponse(
-                content=None, tool_calls=None, finish_reason="error", usage=None, raw=response,
+                content=None,
+                tool_calls=None,
+                finish_reason="error",
+                usage=None,
+                raw=response,
             )
 
         candidate = response.candidates[0]
@@ -327,7 +335,11 @@ class DirectModelClient(BaseModelClient):
         if not response.choices:
             logger.warning("No choices in OpenAI response")
             return ChatResponse(
-                content=None, tool_calls=None, finish_reason="error", usage=None, raw=response,
+                content=None,
+                tool_calls=None,
+                finish_reason="error",
+                usage=None,
+                raw=response,
             )
         choice = response.choices[0]
 

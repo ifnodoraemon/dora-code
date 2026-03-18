@@ -495,7 +495,9 @@ async def execute_agent_turn(
     """Execute one non-command agent turn and persist resulting session state."""
     user_input, image_paths = resolve_input_references(user_input)
     if image_paths:
-        console.print(f"[dim cyan]Images: {', '.join(Path(p).name for p in image_paths)}[/dim cyan]")
+        console.print(
+            f"[dim cyan]Images: {', '.join(Path(p).name for p in image_paths)}[/dim cyan]"
+        )
     hook_result = await hook_mgr.trigger(
         HookEvent.USER_PROMPT_SUBMIT,
         user_prompt=user_input,
@@ -637,7 +639,9 @@ def validate_client_mode(model_client) -> bool:
             console.print(
                 "[dim]Set at least one of: google_api_key, openai_api_key, anthropic_api_key in .agent/config.json[/dim]"
             )
-            console.print("[dim]Or configure Gateway mode with gateway_url in .agent/config.json[/dim]")
+            console.print(
+                "[dim]Or configure Gateway mode with gateway_url in .agent/config.json[/dim]"
+            )
             return False
 
     return True
@@ -1117,7 +1121,6 @@ async def process_tool_calls(
                     )
                     continue
 
-
                 pending_calls.append((tool_name, args, tool_call_id))
 
             # Execute tools: parallel for multiple independent calls, sequential for single/sensitive
@@ -1344,9 +1347,16 @@ async def chat_loop(
 
     # Setup tab completion for slash commands
     slash_commands = [
-        "help", "init", "mode",
-        "clear", "compact", "reset", "memory",
-        "commit", "review", "exit",
+        "help",
+        "init",
+        "mode",
+        "clear",
+        "compact",
+        "reset",
+        "memory",
+        "commit",
+        "review",
+        "exit",
     ]
     runtime.cmd_history.setup_completer(slash_commands)
 

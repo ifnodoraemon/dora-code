@@ -64,8 +64,7 @@ def task(
         if status is not None and parsed_status is None:
             return _dump({"ok": False, "error": f"invalid status: {status}"})
         tasks = [
-            task.to_dict()
-            for task in manager.list_tasks(status=parsed_status, parent_id=parent_id)
+            task.to_dict() for task in manager.list_tasks(status=parsed_status, parent_id=parent_id)
         ]
         return _dump({"ok": True, "tasks": tasks, "tree": manager.get_task_tree()})
 
