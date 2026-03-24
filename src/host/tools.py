@@ -467,8 +467,16 @@ TOOL_SPECS: list[ToolSpec] = [
     ToolSpec("src.servers.ask_user", "ask_user",      sensitive=False, timeout=300.0),
 
     # ── Browser ──────────────────────────────────────────────────────
-    ToolSpec("src.servers.browser", "browse_page",     sensitive=False, timeout=60.0),
-    ToolSpec("src.servers.browser", "take_screenshot", sensitive=False, timeout=60.0),
+    ToolSpec("src.servers.browser", "browse_page",        sensitive=False, timeout=60.0),
+    ToolSpec("src.servers.browser", "take_screenshot",    sensitive=False, timeout=60.0),
+    ToolSpec("src.servers.browser", "browser_click",      sensitive=False, timeout=30.0),
+    ToolSpec("src.servers.browser", "browser_fill",       sensitive=False, timeout=30.0),
+    ToolSpec("src.servers.browser", "browser_evaluate",   sensitive=False, timeout=30.0),
+    ToolSpec("src.servers.browser", "browser_wait",       sensitive=False, timeout=60.0),
+    ToolSpec("src.servers.browser", "browser_pdf",        sensitive=False, timeout=30.0),
+    ToolSpec("src.servers.browser", "browser_get_html",   sensitive=False, timeout=30.0),
+    ToolSpec("src.servers.browser", "browser_close_page", sensitive=False, timeout=10.0),
+    ToolSpec("src.servers.browser", "browser_list_pages", sensitive=False, timeout=10.0),
 
     # ── Database ─────────────────────────────────────────────────────
     ToolSpec("src.servers.database", "db_read_query",     sensitive=False, timeout=60.0),
