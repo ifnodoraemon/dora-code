@@ -11,6 +11,7 @@ import random
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
+from src.core.errors import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpenError
 from src.core.model_client_base import BaseModelClient
 from src.core.model_utils import (
     ChatResponse,
@@ -36,6 +37,10 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES = 3
 INITIAL_DELAY = 1.0
 MAX_DELAY = 60.0
+
+# CircuitBreaker defaults
+BREAKER_FAILURE_THRESHOLD = 5
+BREAKER_TIMEOUT = 60.0
 
 
 # Re-export for backward compatibility
@@ -104,6 +109,14 @@ class DirectModelClient(BaseModelClient):
     def __init__(self, config: ClientConfig):
         self.config = config
         self._providers: dict[Provider, Any] = {}
+        self._circuit_breakers: dict[Provider, CircuitBreaker] = {}
+
+        breaker_config = CircuitBreakerConfig(
+            failure_threshold=BREAKER_FAILURE_THRESHOLD,
+            timeout=BREAKER_TIMEOUT,
+        )
+        for provider in Provider:
+            self._circuit_breakers[provider] = CircuitBreaker(breaker_config)
 
     async def __aenter__(self):
         """Context manager entry - ensure providers are connected."""
@@ -194,15 +207,28 @@ class DirectModelClient(BaseModelClient):
 
         model = kwargs.get("model", self.config.model)
         provider = self._detect_provider(model)
+        breaker = self._circuit_breakers.get(provider)
 
-        if provider == Provider.GOOGLE:
-            return await _retry_async(self._chat_google, messages, tools, **kwargs)
-        elif provider == Provider.OPENAI:
-            return await _retry_async(self._chat_openai, messages, tools, **kwargs)
-        elif provider == Provider.ANTHROPIC:
-            return await _retry_async(self._chat_anthropic, messages, tools, **kwargs)
-        else:
-            return await _retry_async(self._chat_ollama, messages, tools, **kwargs)
+        async def _chat_with_provider():
+            if provider == Provider.GOOGLE:
+                return await self._chat_google(messages, tools, **kwargs)
+            elif provider == Provider.OPENAI:
+                return await self._chat_openai(messages, tools, **kwargs)
+            elif provider == Provider.ANTHROPIC:
+                return await self._chat_anthropic(messages, tools, **kwargs)
+            else:
+                return await self._chat_ollama(messages, tools, **kwargs)
+
+        try:
+            if breaker:
+                return await breaker.call_async(_chat_with_provider)
+            return await _chat_with_provider()
+        except CircuitBreakerOpenError as e:
+            logger.error(f"Circuit breaker open for {provider.value}: {e}")
+            raise RuntimeError(
+                f"Provider {provider.value} is temporarily unavailable. "
+                f"Please try again in a moment."
+            ) from e
 
     async def _chat_google(
         self,
