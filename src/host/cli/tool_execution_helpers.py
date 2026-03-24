@@ -2,7 +2,7 @@
 Tool Execution Helpers
 
 Extracted from tool_execution.py for better maintainability.
-Handles HITL approval, permission checks, and display formatting.
+Handles HITL approval, permission checks, display formatting, and caching.
 """
 
 import json
@@ -16,6 +16,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 
+from src.core.cache import get_tool_cache
 from src.core.diff import print_diff
 from src.core.permissions import (
     OperationType,
@@ -203,13 +204,29 @@ async def execute_tool_with_approval(
     args: dict[str, Any],
     registry: Any,
     hitl_context: HitlContext | None = None,
+    use_cache: bool = True,
 ) -> str:
     """
-    Execute a tool with optional HITL approval.
+    Execute a tool with optional HITL approval and caching.
+
+    Args:
+        tool_name: Name of the tool
+        args: Tool arguments
+        registry: Tool registry
+        hitl_context: Optional HITL context for approval
+        use_cache: Whether to use caching (default: True)
 
     Returns:
         Tool result as string.
     """
+    cache = get_tool_cache() if use_cache else None
+
+    if cache and cache.is_cacheable(tool_name):
+        cached = cache.get(tool_name, args)
+        if cached is not None:
+            logger.debug(f"Cache hit for {tool_name}")
+            return cached
+
     if hitl_context:
         approved, error_msg = await request_hitl_approval(hitl_context)
         if not approved:
@@ -218,7 +235,12 @@ async def execute_tool_with_approval(
     console.print(f"[cyan]Running {tool_name}...[/cyan]")
     try:
         result = await registry.call_tool(tool_name, args)
-        return str(result) if result else ""
+        result_str = str(result) if result else ""
+
+        if cache and cache.is_cacheable(tool_name):
+            cache.set(tool_name, args, result_str)
+
+        return result_str
     except Exception as e:
         logger.error(f"Tool {tool_name} failed: {e}", exc_info=True)
         return f"Error executing {tool_name}: {e}"
