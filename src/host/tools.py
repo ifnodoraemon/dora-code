@@ -1,5 +1,5 @@
 """
-Simplified Tool Registry - Direct Function Calls
+Simplified Tool Registry - Direct Function Calls with Lazy Loading
 
 This module provides a simplified alternative to MCP server architecture.
 Instead of spawning subprocess and communicating via JSON-RPC, it directly
@@ -10,6 +10,7 @@ Benefits:
 - Simpler debugging (direct stack traces)
 - Easier testing (just call the function)
 - ~80% less code complexity
+- Lazy loading for faster startup
 
 Usage:
     from src.host.tools import ToolRegistry, get_default_registry
@@ -24,6 +25,7 @@ Usage:
 """
 
 import asyncio
+import importlib
 import inspect
 import logging
 import threading
@@ -37,6 +39,64 @@ from google.genai import types
 from src.core.config import load_config
 
 logger = logging.getLogger(__name__)
+
+
+class LazyToolFunction:
+    """
+    Lazy loader for tool functions.
+
+    Only imports the module when the function is first called.
+    This significantly reduces startup time.
+    """
+
+    def __init__(self, module: str, func_name: str):
+        self._module = module
+        self._func_name = func_name
+        self._loaded_func: Callable | None = None
+        self._load_error: str | None = None
+
+    def _load(self) -> Callable:
+        """Load the actual function on first access."""
+        if self._loaded_func is not None:
+            return self._loaded_func
+
+        if self._load_error:
+            raise ImportError(self._load_error)
+
+        try:
+            mod = importlib.import_module(self._module)
+            self._loaded_func = getattr(mod, self._func_name)
+            return self._loaded_func
+        except (ImportError, AttributeError) as e:
+            self._load_error = f"Failed to load {self._module}.{self._func_name}: {e}"
+            raise ImportError(self._load_error)
+
+    def __call__(self, *args, **kwargs):
+        """Forward call to the actual function."""
+        func = self._load()
+        return func(*args, **kwargs)
+
+    async def __acall__(self, *args, **kwargs):
+        """Forward async call to the actual function."""
+        func = self._load()
+        return await func(*args, **kwargs)
+
+    @property
+    def __name__(self) -> str:
+        return self._func_name
+
+    @property
+    def __doc__(self) -> str:
+        try:
+            func = self._load()
+            return func.__doc__ or ""
+        except ImportError:
+            return f"Tool from {self._module}.{self._func_name}"
+
+    @property
+    def __signature__(self) -> inspect.Signature:
+        func = self._load()
+        return inspect.signature(func)
 
 
 @dataclass
@@ -291,23 +351,24 @@ class ToolRegistry:
             raise ValueError(f"Tool '{name}' not found. Available: {available}")
 
         try:
-            # Call the function
-            if inspect.iscoroutinefunction(tool.function):
-                # Async function - use wait_for
-                # Async function - use wait_for
+            func = tool.function
+
+            # Handle LazyToolFunction
+            if isinstance(func, LazyToolFunction):
+                loaded_func = func._load()
+                is_async = inspect.iscoroutinefunction(loaded_func)
+            else:
+                is_async = inspect.iscoroutinefunction(func)
+
+            if is_async:
                 try:
-                    result = await asyncio.wait_for(
-                        tool.function(**arguments), timeout=tool.timeout
-                    )
+                    result = await asyncio.wait_for(func(**arguments), timeout=tool.timeout)
                 except asyncio.TimeoutError:
                     error_msg = f"Tool '{name}' timed out after {tool.timeout} seconds."
                     logger.error(error_msg)
                     return error_msg
             else:
-                # Sync function - run directly (cannot timeout easily without threads/processes)
-                # For critical safety, we might want to run this in a thread executor with timeout,
-                # but for now we'll just run it. Most heavy tools should be async.
-                result = tool.function(**arguments)
+                result = func(**arguments)
 
             result_str = str(result) if result is not None else "Success"
 
@@ -323,7 +384,6 @@ class ToolRegistry:
 
         except Exception as e:
             logger.error(f"Tool {name} failed: {e}", exc_info=True)
-            # Return error message for graceful handling in chat loop
             return f"Error executing {name}: {type(e).__name__}: {e}"
 
 
@@ -420,9 +480,7 @@ TOOL_SPECS: list[ToolSpec] = [
 
 
 def _create_default_registry() -> ToolRegistry:
-    """Create and populate the default tool registry."""
-    import importlib
-
+    """Create and populate the default tool registry with lazy loading."""
     registry = ToolRegistry()
 
     # Load configuration for custom timeouts
@@ -438,23 +496,29 @@ def _create_default_registry() -> ToolRegistry:
     for spec in TOOL_SPECS:
         tool_name = spec.name or spec.func_name
         timeout = float(tool_timeouts.get(tool_name, spec.timeout))
-        try:
-            module = importlib.import_module(spec.module)
-            func = getattr(module, spec.func_name)
-            registry.register(
-                func,
-                name=spec.name,
-                sensitive=spec.sensitive,
-                timeout=timeout,
-            )
-        except (ImportError, AttributeError) as e:
-            if spec.critical:
+
+        # Use lazy loading proxy instead of importing immediately
+        lazy_func = LazyToolFunction(spec.module, spec.func_name)
+
+        # For critical tools, verify import works at startup
+        if spec.critical:
+            try:
+                lazy_func._load()
+            except ImportError as e:
                 logger.error(f"Failed to import critical tool {tool_name}: {e}")
                 failed_critical.append((spec.module, str(e)))
-            else:
-                logger.warning(f"Failed to import tool {tool_name}: {e}")
+                continue
 
-    logger.info(f"Tool registry initialized with {len(registry.get_tool_names())} tools")
+        registry.register(
+            lazy_func,
+            name=spec.name,
+            sensitive=spec.sensitive,
+            timeout=timeout,
+        )
+
+    logger.info(
+        f"Tool registry initialized with {len(registry.get_tool_names())} tools (lazy loading)"
+    )
 
     # Critical tools must be available
     if failed_critical:
