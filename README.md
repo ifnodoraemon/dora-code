@@ -33,8 +33,8 @@
 ## ⚡ 30 秒快速开始
 
 ```bash
-git clone https://github.com/ifnodoraemon/doraemon-code.git
-cd doraemon-code && pip install -e .
+git clone https://github.com/ifnodoraemon/dora-code.git
+cd dora-code && pip install -e .
 cp .env.example .env
 
 export GOOGLE_API_KEY=your_key   # 或 OPENAI_API_KEY / ANTHROPIC_API_KEY
@@ -615,7 +615,7 @@ Git 集成:
 ## 📁 项目结构
 
 ```
-doraemon-code/
+dora-code/
 ├── src/
 │   ├── core/                      # 核心基础设施
 │   │   ├── model_client.py        # 统一 LLM 接口
@@ -747,6 +747,6 @@ MIT License - 自由使用、修改、分发
 
 *从口袋里掏出任何你需要的工具*
 
-[GitHub](https://github.com/ifnodoraemon/doraemon-code) · [Issues](https://github.com/ifnodoraemon/doraemon-code/issues)
+[GitHub](https://github.com/ifnodoraemon/dora-code) · [Issues](https://github.com/ifnodoraemon/dora-code/issues)
 
 </div>

@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "doraemon-code"
+name = "dora-code"
 version = "0.8.0"
 description = "Doraemon Code - Your AI Coding Assistant"
 readme = "README.md"
@@ -160,9 +160,9 @@ doraemon = "src.host.cli:entry_point"
 dora = "src.host.cli:entry_point"
 
 [project.urls]
-Homepage = "https://github.com/doraemon-code/doraemon-code"
-Repository = "https://github.com/doraemon-code/doraemon-code"
-"Bug Tracker" = "https://github.com/doraemon-code/doraemon-code/issues"
+Homepage = "https://github.com/ifnodoraemon/dora-code"
+Repository = "https://github.com/ifnodoraemon/dora-code"
+"Bug Tracker" = "https://github.com/ifnodoraemon/dora-code/issues"
 
 # Ruff configuration
 [tool.ruff]

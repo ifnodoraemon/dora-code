@@ -154,4 +154,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-For more details on each release, see the [GitHub Releases](https://github.com/ifnodoraemon/doraemon-code/releases) page.
+For more details on each release, see the [GitHub Releases](https://github.com/ifnodoraemon/dora-code/releases) page.

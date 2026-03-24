@@ -72,8 +72,8 @@
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/ifnodoraemon/doraemon-code.git
-cd doraemon-code
+git clone https://github.com/ifnodoraemon/dora-code.git
+cd dora-code
 
 # 2. 创建虚拟环境 (推荐使用 uv)
 python3 -m venv .venv
