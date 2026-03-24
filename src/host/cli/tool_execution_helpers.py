@@ -17,7 +17,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 
 from src.core.cache import get_tool_cache
-from src.core.diff import print_diff
+from src.core.diff import print_inline_diff, print_diff
 from src.core.permissions import (
     OperationType,
     PermissionLevel,
@@ -128,9 +128,9 @@ def build_write_diff_preview(args: dict[str, Any]) -> tuple[str, str] | None:
 
 
 def display_diff_preview(path: str, content: str) -> None:
-    """Display diff preview for file changes."""
+    """Display diff preview for file changes with inline visualization."""
     console.print(f"\n[bold yellow]📝 Proposing changes:[/bold yellow] {path}")
-    print_diff(path, content)
+    print_inline_diff(path, content)
 
 
 def _render_preview_field(title: str, content: str, lang: str) -> None:
