@@ -4,14 +4,14 @@
     "category": "advanced",
     "difficulty": "hard",
     "description": "Extract function from long method",
-    "prompt": "Refactor this long function by extracting helper functions",
+    "prompt": "Edit app.py and refactor the long function by extracting helper functions.",
     "setup": {
       "files": {
         "app.py": "def process_data(data):\n    # validation\n    if not data: return None\n    # processing\n    result = []\n    for item in data:\n        if item > 0:\n            result.append(item * 2)\n    # formatting\n    return ', '.join(map(str, result))"
       }
     },
     "assertions": [
-      {"type": "tool_used", "tool": "edit_file"},
+      {"type": "tool_used", "tool": "write"},
       {"type": "pattern_exists", "pattern": "def validate"},
       {"type": "pattern_exists", "pattern": "def process"},
       {"type": "pattern_exists", "pattern": "def format"}
@@ -23,14 +23,14 @@
     "category": "advanced",
     "difficulty": "hard",
     "description": "Apply dependency injection",
-    "prompt": "Refactor this class to use dependency injection instead of creating dependencies internally",
+    "prompt": "Edit service.py and refactor the class to use dependency injection instead of creating dependencies internally.",
     "setup": {
       "files": {
         "service.py": "class UserService:\n    def __init__(self):\n        self.db = Database()\n        self.cache = Cache()\n    def get_user(self, id):\n        return self.db.query(id)"
       }
     },
     "assertions": [
-      {"type": "tool_used", "tool": "edit_file"},
+      {"type": "tool_used", "tool": "write"},
       {"type": "pattern_exists", "pattern": "__init__.*db.*cache"},
       {"type": "pattern_not_exists", "pattern": "Database\\(\\)"},
       {"type": "pattern_not_exists", "pattern": "Cache\\(\\)"}
@@ -42,14 +42,14 @@
     "category": "advanced",
     "difficulty": "very_hard",
     "description": "Convert to async/await",
-    "prompt": "Convert this synchronous code to use async/await",
+    "prompt": "Edit api.py and convert this synchronous code to use async/await.",
     "setup": {
       "files": {
         "api.py": "def fetch_data(url):\n    response = requests.get(url)\n    return response.json()\n\ndef process_urls(urls):\n    results = []\n    for url in urls:\n        data = fetch_data(url)\n        results.append(data)\n    return results"
       }
     },
     "assertions": [
-      {"type": "tool_used", "tool": "edit_file"},
+      {"type": "tool_used", "tool": "write"},
       {"type": "pattern_exists", "pattern": "async def fetch_data"},
       {"type": "pattern_exists", "pattern": "await"},
       {"type": "pattern_exists", "pattern": "asyncio"}

@@ -7,7 +7,7 @@
     "prompt": "Create a file named hello.txt with the content 'Hello, World!'",
     "assertions": [
       {"type": "file_exists", "path": "hello.txt"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ]
   }
 ]

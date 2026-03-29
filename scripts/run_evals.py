@@ -1,104 +1,58 @@
 #!/usr/bin/env python3
-"""
-Evaluation Runner Script
-
-Usage:
-    python scripts/run_evals.py --category basic
-    python scripts/run_evals.py --category advanced
-    python scripts/run_evals.py --all
-"""
+"""Minimal real-agent eval runner."""
 
 import argparse
 import json
 import sys
+import tempfile
 from pathlib import Path
 
-# Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from rich.console import Console
-from rich.table import Table
-
-console = Console()
+from tests.evals.agent_adapter import create_doraemon_agent
+from tests.evals.agent_evaluator import AgentEvaluator
 
 
-def load_tasks(category: str = None) -> list[dict]:
-    """Load evaluation tasks from JSON files."""
-    tasks = []
+def load_tasks(category: str | None = None) -> list[dict]:
+    tasks: list[dict] = []
     tasks_dir = Path("tasks")
+    pattern = f"{category}/*.json" if category else "**/*.json"
 
-    if category:
-        pattern = f"{category}/*.json"
-    else:
-        pattern = "**/*.json"
-
-    for task_file in tasks_dir.glob(pattern):
-        with open(task_file) as f:
-            file_tasks = json.load(f)
-            if isinstance(file_tasks, list):
-                tasks.extend(file_tasks)
-            else:
-                tasks.append(file_tasks)
+    for task_file in sorted(tasks_dir.glob(pattern)):
+        with open(task_file, encoding="utf-8") as f:
+            data = json.load(f)
+        tasks.extend(data if isinstance(data, list) else [data])
 
     return tasks
 
 
-def display_task_summary(tasks: list[dict]):
-    """Display summary of loaded tasks."""
-    table = Table(title="Evaluation Tasks Summary")
-    table.add_column("Category", style="cyan")
-    table.add_column("Difficulty", style="yellow")
-    table.add_column("Count", style="green")
-
-    # Group by category and difficulty
-    summary = {}
-    for task in tasks:
-        cat = task.get("category", "unknown")
-        diff = task.get("difficulty", "unknown")
-        key = (cat, diff)
-        summary[key] = summary.get(key, 0) + 1
-
-    for (cat, diff), count in sorted(summary.items()):
-        table.add_row(cat, diff, str(count))
-
-    console.print(table)
-    console.print(f"\n[bold]Total Tasks:[/bold] {len(tasks)}")
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Run Doraemon Code evaluations")
-    parser.add_argument("--category", choices=["basic", "advanced", "adversarial"],
-                       help="Task category to run")
-    parser.add_argument("--all", action="store_true", help="Run all tasks")
-    parser.add_argument("--list", action="store_true", help="List tasks without running")
-    parser.add_argument("--trials", type=int, default=3, help="Number of trials per task")
-
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Run real agent evaluations")
+    parser.add_argument("--category", choices=["basic", "advanced", "adversarial"])
+    parser.add_argument("--all", action="store_true")
+    parser.add_argument("--limit", type=int, default=0)
     args = parser.parse_args()
 
-    if args.all:
-        tasks = load_tasks()
-    elif args.category:
-        tasks = load_tasks(args.category)
-    else:
-        console.print("[red]Error: Specify --category or --all[/red]")
-        return 1
+    if not args.all and not args.category:
+        parser.error("Specify --category or --all")
 
-    if args.list:
-        display_task_summary(tasks)
-        return 0
+    tasks = load_tasks(None if args.all else args.category)
+    if args.limit > 0:
+        tasks = tasks[: args.limit]
 
-    console.print(f"[bold]Loaded {len(tasks)} evaluation tasks.[/bold]\n")
-    console.print("[red]scripts/run_evals.py is not wired to the active evaluation harness.[/red]")
-    console.print("Use one of these instead:")
-    console.print("  `python3 scripts/ci_eval_runner.py --scope quick`")
-    console.print(
-        "  `REAL_API_BASE=... REAL_API_KEY=... REAL_MODEL=... python3 -m pytest -q tests/integration/test_real_protocols.py`"
-    )
-    console.print(
-        "[yellow]Reason:[/yellow] this script currently only loads task files and would otherwise report a false success."
-    )
-    return 2
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as tmp:
+        json.dump(tasks, tmp, ensure_ascii=False, indent=2)
+        temp_task_file = tmp.name
+
+    evaluator = AgentEvaluator(temp_task_file)
+    agent = create_doraemon_agent()
+    try:
+        report = evaluator.run_evaluation(agent)
+        evaluator.print_report(report)
+        return 0 if report["summary"]["success_rate"] > 0 else 1
+    finally:
+        agent.close()
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

@@ -10,7 +10,7 @@ User Level (~/.doraemon/):
 
 Project Level (.agent/):
     Project-specific data, stored in the project directory.
-    ├── config.json       # MCP server configuration
+    ├── config.json       # Project model and runtime configuration
     ├── conversations/    # Session history
     ├── checkpoints/      # File snapshots
     ├── traces/           # Execution traces
@@ -272,7 +272,13 @@ class Trace:
             TraceEvent(
                 type="turn_start",
                 name=self._current_turn_id,
-                data={"user_input": user_input[:500]},
+                data={
+                    "user_input": user_input[:500],
+                    "input": {
+                        "role": "user",
+                        "content": user_input,
+                    },
+                },
             )
         )
         return self._current_turn_id
@@ -329,6 +335,15 @@ class Trace:
                     "span_id": span_id,
                     "session_id": self.session_id,
                     "turn_id": self._current_turn_id,
+                    "tool_name": tool_name,
+                    "input": {
+                        "arguments": args,
+                    },
+                    "output": {
+                        "content": result,
+                        "error": error,
+                    },
+                    "success": error is None,
                     "args": args,
                     "result": result[:2000] if result else None,
                     "error": error,
@@ -357,6 +372,11 @@ class Trace:
                     "span_id": span_id,
                     "session_id": self.session_id,
                     "turn_id": self._current_turn_id,
+                    "model": model,
+                    "input": {
+                        "messages": messages or [],
+                    },
+                    "output": response or {},
                     "input_messages": [
                         {"role": m.get("role"), "content": str(m.get("content", ""))[:1000]}
                         for m in (messages or [])
@@ -402,6 +422,7 @@ class Trace:
         trace_file = traces_dir / f"{self.session_id}.json"
 
         data = {
+            "schema_version": 2,
             "session_id": self.session_id,
             "start_time": self._start_time,
             "end_time": time.time(),

@@ -108,6 +108,7 @@ class DirectModelClient(BaseModelClient):
 
     def __init__(self, config: ClientConfig):
         self.config = config
+        self.model = config.model
         self._providers: dict[Provider, Any] = {}
         self._circuit_breakers: dict[Provider, CircuitBreaker] = {}
 

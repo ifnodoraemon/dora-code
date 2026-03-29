@@ -254,6 +254,11 @@ class ReActAgent(BaseAgent):
                     break
 
                 if len(thought.tool_calls) > 1:
+                    self.state.add_assistant_message(
+                        content=thought.response,
+                        tool_calls=thought.tool_calls,
+                        thought=thought.reasoning,
+                    )
                     results = await self._execute_tools_parallel(thought.tool_calls)
                     for tc_data, (result, error) in zip(thought.tool_calls, results):
                         call_id = tc_data.get("id") or str(uuid.uuid4())
@@ -286,6 +291,11 @@ class ReActAgent(BaseAgent):
                         break
 
                     elif action.type == ActionType.TOOL_CALL:
+                        self.state.add_assistant_message(
+                            content=thought.response,
+                            tool_calls=thought.tool_calls,
+                            thought=thought.reasoning,
+                        )
                         result, error = await self._execute_tool_with_permission(
                             action.tool_name,
                             action.tool_args,
@@ -482,33 +492,63 @@ class ReActAgent(BaseAgent):
             if tool_calls:
                 for tc in tool_calls:
                     if hasattr(tc, "function"):
-                        parsed_calls.append(
-                            {
-                                "id": getattr(tc, "id", str(uuid.uuid4())),
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            }
-                        )
+                        name = tc.function.name
+                        arguments = tc.function.arguments
                     else:
-                        parsed_calls.append(
-                            {
-                                "id": getattr(tc, "id", str(uuid.uuid4())),
-                                "name": tc.get("name"),
-                                "arguments": tc.get("arguments"),
-                            }
-                        )
+                        function = tc.get("function", {}) if isinstance(tc, dict) else {}
+                        name = tc.get("name") or function.get("name")
+                        arguments = tc.get("arguments")
+                        if arguments is None:
+                            arguments = function.get("arguments")
+
+                    if not name:
+                        continue
+
+                    parsed_calls.append(
+                        {
+                            "id": getattr(tc, "id", None) or tc.get("id", str(uuid.uuid4())),
+                            "type": "function",
+                            "name": name,
+                            "arguments": arguments,
+                            "function": {
+                                "name": name,
+                                "arguments": arguments,
+                            },
+                        }
+                    )
 
             return {
                 "content": content,
                 "tool_calls": parsed_calls,
-                "is_finished": not tool_calls,
+                "is_finished": not parsed_calls,
             }
 
         if isinstance(response, dict):
+            parsed_calls = []
+            for tc in response.get("tool_calls", []):
+                function = tc.get("function", {}) if isinstance(tc, dict) else {}
+                name = tc.get("name") or function.get("name")
+                arguments = tc.get("arguments")
+                if arguments is None:
+                    arguments = function.get("arguments")
+                if not name:
+                    continue
+                parsed_calls.append(
+                    {
+                        "id": tc.get("id", str(uuid.uuid4())),
+                        "type": "function",
+                        "name": name,
+                        "arguments": arguments,
+                        "function": {
+                            "name": name,
+                            "arguments": arguments,
+                        },
+                    }
+                )
             return {
                 "content": response.get("content"),
-                "tool_calls": response.get("tool_calls", []),
-                "is_finished": not response.get("tool_calls"),
+                "tool_calls": parsed_calls,
+                "is_finished": not parsed_calls,
             }
 
         return {"content": str(response), "tool_calls": [], "is_finished": True}

@@ -4,10 +4,10 @@
     "category": "basic",
     "difficulty": "easy",
     "description": "Generate simple Python function",
-    "prompt": "Create a Python function that adds two numbers",
+    "prompt": "Create a file named add.py containing a Python function add(a, b) that returns the sum of two numbers.",
     "assertions": [
       {"type": "file_exists", "path": "*.py"},
-      {"type": "tool_used", "tool": "write_file"},
+      {"type": "tool_used", "tool": "write"},
       {"type": "pattern_exists", "pattern": "def.*add"},
       {"type": "pattern_exists", "pattern": "return"}
     ],
@@ -18,7 +18,7 @@
     "category": "basic",
     "difficulty": "medium",
     "description": "Generate class with methods",
-    "prompt": "Create a Calculator class with add, subtract, multiply, and divide methods",
+    "prompt": "Create a file named calculator.py containing a Calculator class with add, subtract, multiply, and divide methods.",
     "assertions": [
       {"type": "file_exists", "path": "*.py"},
       {"type": "pattern_exists", "pattern": "class Calculator"},
@@ -34,14 +34,14 @@
     "category": "basic",
     "difficulty": "medium",
     "description": "Add error handling",
-    "prompt": "Add try-except error handling to the divide method to handle division by zero",
+    "prompt": "Edit calc.py and add try-except error handling to the divide method so division by zero is handled cleanly.",
     "setup": {
       "files": {
         "calc.py": "class Calculator:\n    def divide(self, a, b):\n        return a / b"
       }
     },
     "assertions": [
-      {"type": "tool_used", "tool": "edit_file"},
+      {"type": "tool_used", "tool": "write"},
       {"type": "pattern_exists", "pattern": "try"},
       {"type": "pattern_exists", "pattern": "except.*ZeroDivision"}
     ],
@@ -52,7 +52,7 @@
     "category": "basic",
     "difficulty": "hard",
     "description": "Generate unit tests",
-    "prompt": "Create unit tests for the Calculator class using pytest",
+    "prompt": "Create a file named test_calculator.py with pytest unit tests for the Calculator class in calculator.py.",
     "setup": {
       "files": {
         "calculator.py": "class Calculator:\n    def add(self, a, b): return a + b"
@@ -71,14 +71,14 @@
     "category": "basic",
     "difficulty": "hard",
     "description": "Add type hints",
-    "prompt": "Add type hints to all functions in utils.py",
+    "prompt": "Edit utils.py and add Python type hints to all functions.",
     "setup": {
       "files": {
         "utils.py": "def process(data):\n    return data.upper()\n\ndef calculate(x, y):\n    return x + y"
       }
     },
     "assertions": [
-      {"type": "tool_used", "tool": "edit_file"},
+      {"type": "tool_used", "tool": "write"},
       {"type": "pattern_exists", "pattern": "def process.*str.*->.*str"},
       {"type": "pattern_exists", "pattern": "def calculate.*int.*int.*->.*int"}
     ],

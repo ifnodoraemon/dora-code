@@ -27,6 +27,7 @@ class GatewayModelClient(BaseModelClient):
 
     def __init__(self, config: ClientConfig):
         self.config = config
+        self.model = config.model
         self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self):

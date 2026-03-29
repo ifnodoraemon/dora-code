@@ -7,6 +7,7 @@ Enables testing of Doraemon Code Agent in automated evaluation scenarios.
 
 import asyncio
 import logging
+import os
 import random
 import sys
 import time
@@ -20,6 +21,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 logger = logging.getLogger(__name__)
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 # ========================================
@@ -185,6 +187,10 @@ class AgentAdapter(ABC):
         self._conversation_history.clear()
         self._total_token_usage = TokenUsage()
 
+    def close(self) -> None:
+        """Release adapter resources."""
+        return None
+
     def _record_tool_call(self, tool_call: ToolCall) -> None:
         """Record a tool call."""
         self._tool_calls.append(tool_call)
@@ -231,6 +237,7 @@ class DoraemonAgentAdapter(AgentAdapter):
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.auto_approve_tools = auto_approve_tools
+        self._loop = asyncio.new_event_loop()
 
         # Lazy initialization
         self._model_client = None
@@ -244,13 +251,13 @@ class DoraemonAgentAdapter(AgentAdapter):
             return
 
         try:
-            from src.core.context_manager import ContextManager
+            from src.agent.adapter import AgentSession
             from src.core.llm.model_client import ModelClient
-            from src.host.tools import get_tool_registry
+            from src.core.llm.model_utils import ClientConfig
 
-            self._model_client = ModelClient(model=self.model)
-            self._context_manager = ContextManager(project="eval")
-            self._tool_registry = get_tool_registry()
+            self._agent_session_cls = AgentSession
+            self._model_client_cls = ModelClient
+            self._client_config_cls = ClientConfig
             self._initialized = True
             logger.info("DoraemonAgentAdapter initialized successfully")
 
@@ -332,98 +339,91 @@ class DoraemonAgentAdapter(AgentAdapter):
             metadata={
                 "model": self.model,
                 "attempts": attempt + 1,
+                "trace_path": response.get("trace_path") if success else None,
+                "trace_events": response.get("trace_events", []) if success else [],
             },
         )
 
     def _execute_with_timeout(self, prompt: str) -> dict[str, Any]:
         """Execute the prompt with timeout control."""
-        # Run async execution in event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        try:
-            result = loop.run_until_complete(
-                asyncio.wait_for(
-                    self._async_execute(prompt),
-                    timeout=self.timeout,
-                )
+        asyncio.set_event_loop(self._loop)
+        return self._loop.run_until_complete(
+            asyncio.wait_for(
+                self._async_execute(prompt),
+                timeout=self.timeout,
             )
-            return result
-        finally:
-            loop.close()
+        )
 
     async def _async_execute(self, prompt: str) -> dict[str, Any]:
         """Async execution of the agent task."""
-        tool_calls: list[ToolCall] = []
-        total_output = ""
-        token_usage = TokenUsage()
+        real_api_base = os.getenv("REAL_API_BASE")
+        real_api_key = os.getenv("REAL_API_KEY")
+        real_model = os.getenv("REAL_MODEL")
 
-        # Add message to context
-        self._context_manager.add_message("user", prompt)
+        if real_api_base and real_api_key and real_model:
+            from src.core.llm.model_utils import ClientMode
 
-        # Get conversation history for API
-        messages = self._context_manager.get_messages_for_api()
+            config = self._client_config_cls(
+                mode=ClientMode.DIRECT,
+                model=real_model,
+                openai_api_base=real_api_base,
+                openai_api_key=real_api_key,
+            )
+        else:
+            config = self._client_config_cls.from_env()
+            if real_model:
+                config.model = real_model
+            elif self.model:
+                config.model = self.model
 
-        # Get available tools
-        tools = self._tool_registry.get_tool_definitions() if self._tool_registry else []
-
-        # Call model
-        response = await self._model_client.chat_async(
-            messages=messages,
-            tools=tools,
+        model_client = await self._model_client_cls.create(config)
+        session = self._agent_session_cls(
+            model_client=model_client,
+            mode="build",
+            enable_trace=True,
+            project_dir=REPO_ROOT,
         )
 
-        # Process response
-        if hasattr(response, "content"):
-            total_output = response.content or ""
+        try:
+            await session.initialize()
+            result = await session.turn(prompt)
+            trace = session.get_trace()
+            trace_path = session.save_trace()
 
-        # Track token usage
-        if hasattr(response, "usage"):
-            usage = response.usage
+            tool_calls: list[ToolCall] = []
+            if trace:
+                for event in trace.events:
+                    if event.type != "tool_call":
+                        continue
+                    data = event.data if isinstance(event.data, dict) else {}
+                    input_data = data.get("input", {})
+                    output_data = data.get("output", {})
+                    tool_calls.append(
+                        ToolCall(
+                            name=event.name,
+                            arguments=input_data.get("arguments", data.get("args", {})),
+                            result=output_data.get("content", data.get("result")),
+                            success=bool(data.get("success", not data.get("error"))),
+                            execution_time=event.duration if hasattr(event, "duration") else 0.0,
+                        )
+                    )
+
             token_usage = TokenUsage(
-                prompt_tokens=getattr(usage, "prompt_tokens", 0),
-                completion_tokens=getattr(usage, "completion_tokens", 0),
-                total_tokens=getattr(usage, "total_tokens", 0),
+                total_tokens=result.tokens_used,
             )
 
-        # Process tool calls
-        if hasattr(response, "tool_calls") and response.tool_calls:
-            for tc in response.tool_calls:
-                tool_start = time.time()
-
-                # Execute tool
-                try:
-                    if self._tool_registry:
-                        result = self._tool_registry.execute(
-                            tc.name,
-                            tc.arguments,
-                            auto_approve=self.auto_approve_tools,
-                        )
-                        tool_success = True
-                    else:
-                        result = "Tool registry not available"
-                        tool_success = False
-                except Exception as e:
-                    result = f"Error: {str(e)}"
-                    tool_success = False
-
-                tool_call = ToolCall(
-                    name=tc.name,
-                    arguments=tc.arguments if hasattr(tc, "arguments") else {},
-                    result=str(result),
-                    success=tool_success,
-                    execution_time=time.time() - tool_start,
-                )
-                tool_calls.append(tool_call)
-
-        # Add assistant response to context
-        self._context_manager.add_message("assistant", total_output)
-
-        return {
-            "output": total_output,
-            "tool_calls": tool_calls,
-            "token_usage": token_usage,
-        }
+            return {
+                "output": result.response or "",
+                "tool_calls": tool_calls,
+                "token_usage": token_usage,
+                "trace_path": str(trace_path) if trace_path else None,
+                "trace_events": [event.to_dict() for event in trace.events] if trace else [],
+            }
+        finally:
+            try:
+                session.close()
+            finally:
+                await model_client.close()
 
     def get_tool_calls(self) -> list[ToolCall]:
         """Get all tool calls made during execution."""
@@ -432,8 +432,11 @@ class DoraemonAgentAdapter(AgentAdapter):
     def reset(self) -> None:
         """Reset agent state."""
         super().reset()
-        if self._context_manager:
-            self._context_manager.clear()
+
+    def close(self) -> None:
+        """Close the shared event loop used by the adapter."""
+        if not self._loop.is_closed():
+            self._loop.close()
 
 
 # ========================================
