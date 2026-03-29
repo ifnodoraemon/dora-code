@@ -14,7 +14,11 @@ from tests.evals.agent_adapter import create_doraemon_agent
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run professional coding benchmarks")
-    parser.add_argument("--suite", choices=["humaneval_plus", "repo_patch"], required=True)
+    parser.add_argument(
+        "--suite",
+        choices=["humaneval_plus", "repo_patch", "terminal_bench"],
+        required=True,
+    )
     parser.add_argument("--dataset", help="Optional dataset JSON path")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--output", help="Optional output JSON path")

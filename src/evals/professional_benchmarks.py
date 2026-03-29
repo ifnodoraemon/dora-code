@@ -65,6 +65,7 @@ class ProfessionalBenchmarkRunner:
         mapping = {
             "humaneval_plus": base / "humaneval_plus_sample.json",
             "repo_patch": base / "repo_patch_sample.json",
+            "terminal_bench": base / "terminal_bench_sample.json",
         }
         if suite not in mapping:
             raise ValueError(f"Unsupported suite: {suite}")
@@ -101,6 +102,16 @@ class ProfessionalBenchmarkRunner:
                 files=files,
                 verify=verify,
                 metadata={"repo": item.get("repo"), "base_commit": item.get("base_commit")},
+            )
+
+        if suite == "terminal_bench":
+            return BenchmarkTask(
+                id=item["id"],
+                suite=suite,
+                prompt=item["instruction"],
+                files=item.get("files", {}),
+                verify=item["verify"],
+                metadata={"category": item.get("category", "terminal")},
             )
 
         raise ValueError(f"Unsupported suite: {suite}")

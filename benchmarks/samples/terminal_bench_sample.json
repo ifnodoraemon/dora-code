@@ -1,0 +1,12 @@
+[
+  {
+    "id": "terminal_sample_001",
+    "category": "filesystem",
+    "instruction": "Create a file named greeting.txt containing exactly: hello from terminal bench",
+    "files": {},
+    "verify": {
+      "type": "command",
+      "command": "python3 - <<'PY'\nfrom pathlib import Path\ncontent = Path('greeting.txt').read_text(encoding='utf-8')\nassert content == 'hello from terminal bench'\nprint('ok')\nPY"
+    }
+  }
+]
