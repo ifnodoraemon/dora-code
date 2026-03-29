@@ -1,0 +1,8 @@
+[
+  {
+    "task_id": "human_eval_sample_001",
+    "prompt": "def add(a: int, b: int) -> int:\n    \"\"\"Return the sum of two integers.\"\"\"",
+    "entry_point": "add",
+    "test": "def check(candidate):\n    assert candidate(1, 2) == 3\n    assert candidate(-5, 5) == 0\n    assert candidate(10, -3) == 7"
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "instance_id": "repo_patch_sample_001",
+    "problem_statement": "Edit math_utils.py so subtract(a, b) returns a - b instead of a + b. Verify the tests pass.",
+    "files": {
+      "math_utils.py": "def subtract(a, b):\n    return a + b\n",
+      "test_math_utils.py": "from math_utils import subtract\n\n\ndef test_subtract():\n    assert subtract(5, 3) == 2\n    assert subtract(3, 5) == -2\n"
+    },
+    "verify": {
+      "type": "command",
+      "command": "python3 -m pytest -q test_math_utils.py"
+    }
+  }
+]

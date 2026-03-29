@@ -152,6 +152,16 @@ class ReActAgent(BaseAgent):
             )
 
         except asyncio.TimeoutError:
+            if self._trace:
+                self._trace.event(
+                    "error",
+                    "llm_timeout",
+                    {
+                        "model": getattr(self.llm, "model", "unknown"),
+                        "timeout_seconds": 60.0,
+                        "message_count": len(messages),
+                    },
+                )
             return Thought(
                 reasoning="LLM call timed out",
                 is_finished=True,
