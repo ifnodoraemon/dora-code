@@ -120,3 +120,36 @@ def test_real_gateway_openai_and_anthropic_routes():
     assert openai_payload["choices"]
     assert anthropic_payload["model"] == model
     assert anthropic_payload["type"] == "message"
+
+
+@pytest.mark.integration
+def test_real_gateway_openai_streaming_route():
+    """Exercise the local gateway OpenAI streaming route against the live upstream."""
+    base_url = _require_env("REAL_API_BASE").rstrip("/")
+    api_key = _require_env("REAL_API_KEY")
+    model = _require_env("REAL_MODEL")
+
+    os.environ["OPENAI_API_KEY"] = api_key
+    os.environ["OPENAI_API_BASE"] = base_url
+    os.environ["AGENT_API_KEY"] = api_key
+
+    gateway_server = _reload_gateway_server()
+
+    with TestClient(gateway_server.app) as client:
+        with client.stream(
+            "POST",
+            "/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": "reply with pong"}],
+                "max_tokens": 32,
+                "temperature": 0,
+                "stream": True,
+            },
+        ) as response:
+            response.raise_for_status()
+            events = [line for line in response.iter_lines() if line]
+
+    assert any(line.startswith("data: ") for line in events)
+    assert events[-1] == "data: [DONE]"
