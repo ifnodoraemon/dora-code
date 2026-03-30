@@ -30,6 +30,7 @@ class AgentEvaluator:
             "difficulty": task.get("difficulty", "medium"),
             "category": task.get("category", "general"),
             "success": False,
+            "failure_type": None,
             "execution_time": 0.0,
             "tool_calls": [],
             "errors": [],
@@ -48,18 +49,31 @@ class AgentEvaluator:
                 response = agent.execute(task["prompt"])
                 result["execution_time"] = time.time() - start_time
                 result["tool_calls"] = self.extract_tool_calls(response)
+                result["trace_path"] = response.metadata.get("trace_path")
+
+                if not getattr(response, "success", True):
+                    result["errors"] = list(getattr(response, "errors", []) or ["Agent execution failed"])
+                    result["failure_type"] = "execution_error"
+                    result["assertions"] = {
+                        "success": False,
+                        "reasons": [f"FAIL execution_error: {error}" for error in result["errors"]],
+                    }
+                    return result
 
                 assertions = task.get("assertions", [])
                 if assertions:
                     result["assertions"] = self.check_assertions(response, assertions, sandbox_dir)
                     result["success"] = result["assertions"]["success"]
+                    if not result["success"]:
+                        result["failure_type"] = "assertion_failure"
                 else:
                     result["success"] = response.success
-
-                result["trace_path"] = response.metadata.get("trace_path")
+                    if not result["success"]:
+                        result["failure_type"] = "execution_error"
 
             except Exception as e:
                 result["errors"].append(str(e))
+                result["failure_type"] = "evaluator_error"
             finally:
                 os.chdir(original_cwd)
 
@@ -211,6 +225,15 @@ class AgentEvaluator:
                 "avg_execution_time": (
                     sum(r["execution_time"] for r in self.results) / total_tasks if total_tasks else 0.0
                 ),
+                "execution_failures": sum(
+                    1 for r in self.results if r.get("failure_type") == "execution_error"
+                ),
+                "assertion_failures": sum(
+                    1 for r in self.results if r.get("failure_type") == "assertion_failure"
+                ),
+                "evaluator_failures": sum(
+                    1 for r in self.results if r.get("failure_type") == "evaluator_error"
+                ),
             },
             "by_category": by_category,
             "by_difficulty": by_difficulty,
@@ -228,11 +251,17 @@ class AgentEvaluator:
         print(f"  成功任务: {summary['successful_tasks']}")
         print(f"  成功率: {summary['success_rate'] * 100:.1f}%")
         print(f"  平均耗时: {summary['avg_execution_time']:.2f}s")
+        print(f"  执行失败: {summary['execution_failures']}")
+        print(f"  断言失败: {summary['assertion_failures']}")
+        print(f"  评测器失败: {summary['evaluator_failures']}")
 
         if report["failed_tasks"]:
             print("\n失败任务:")
             for task in report["failed_tasks"]:
                 print(f"  - {task['task_name']} (ID: {task['task_id']})")
+                if task.get("errors"):
+                    for error in task["errors"][:2]:
+                        print(f"    ERROR: {error}")
                 for reason in task.get("assertions", {}).get("reasons", [])[:4]:
                     if reason.startswith("FAIL"):
                         print(f"    {reason}")
