@@ -16,7 +16,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run professional coding benchmarks")
     parser.add_argument(
         "--suite",
-        choices=["humaneval_plus", "repo_patch", "terminal_bench"],
+        choices=["humaneval_plus", "repo_patch", "terminal_bench", "real_repo"],
         required=True,
     )
     parser.add_argument("--dataset", help="Optional dataset JSON path")

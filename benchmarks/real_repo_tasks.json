@@ -1,0 +1,58 @@
+[
+  {
+    "instance_id": "real_repo_001_tool_replay_shape",
+    "source_commit": "3dfdc1e",
+    "theme": "tool-call replay",
+    "problem_statement": "Edit replay.py so normalize_tool_call(tool_call) returns an OpenAI-compatible assistant tool call shape. Preserve the id, set type to function, and nest the tool name and arguments under function. Verify the tests pass.",
+    "files": {
+      "replay.py": "def normalize_tool_call(tool_call: dict) -> dict:\n    return {\n        'id': tool_call.get('id', ''),\n        'name': tool_call.get('name', ''),\n        'arguments': tool_call.get('arguments', {}),\n    }\n",
+      "test_replay.py": "from replay import normalize_tool_call\n\n\ndef test_normalize_tool_call_openai_shape():\n    payload = normalize_tool_call({'id': 'call_1', 'name': 'write', 'arguments': {'path': 'a.py'}})\n    assert payload['id'] == 'call_1'\n    assert payload['type'] == 'function'\n    assert payload['function']['name'] == 'write'\n    assert payload['function']['arguments'] == {'path': 'a.py'}\n"
+    },
+    "verify": {
+      "type": "command",
+      "command": "python3 -m pytest -q test_replay.py"
+    }
+  },
+  {
+    "instance_id": "real_repo_002_normalize_anthropic_base",
+    "source_commit": "1fe465c",
+    "theme": "provider base url normalization",
+    "problem_statement": "Edit urls.py so normalize_anthropic_base_url(base_url) strips a trailing /v1 from Anthropic-compatible endpoints while leaving other paths unchanged. Verify the tests pass.",
+    "files": {
+      "urls.py": "def normalize_anthropic_base_url(base_url: str | None) -> str | None:\n    return base_url\n",
+      "test_urls.py": "from urls import normalize_anthropic_base_url\n\n\ndef test_none_passthrough():\n    assert normalize_anthropic_base_url(None) is None\n\n\ndef test_strip_trailing_v1():\n    assert normalize_anthropic_base_url('https://api.example.com/v1') == 'https://api.example.com'\n\n\ndef test_keep_non_v1_path():\n    assert normalize_anthropic_base_url('https://api.example.com/custom') == 'https://api.example.com/custom'\n"
+    },
+    "verify": {
+      "type": "command",
+      "command": "python3 -m pytest -q test_urls.py"
+    }
+  },
+  {
+    "instance_id": "real_repo_003_eval_provider_selection",
+    "source_commit": "0117042",
+    "theme": "provider selection",
+    "problem_statement": "Edit adapter_config.py so build_direct_config(real_api_base, real_api_key, real_model) chooses Anthropic credentials when the model starts with claude- and OpenAI credentials otherwise. Verify the tests pass.",
+    "files": {
+      "adapter_config.py": "def build_direct_config(real_api_base: str, real_api_key: str, real_model: str) -> dict:\n    return {\n        'model': real_model,\n        'openai_api_base': real_api_base,\n        'openai_api_key': real_api_key,\n    }\n",
+      "test_adapter_config.py": "from adapter_config import build_direct_config\n\n\ndef test_claude_model_uses_anthropic_keys():\n    config = build_direct_config('https://api.example.com/v1', 'key', 'claude-sonnet-4-6')\n    assert config['model'] == 'claude-sonnet-4-6'\n    assert config['anthropic_api_base'] == 'https://api.example.com/v1'\n    assert config['anthropic_api_key'] == 'key'\n    assert 'openai_api_base' not in config\n\n\ndef test_openai_model_uses_openai_keys():\n    config = build_direct_config('https://api.example.com/v1', 'key', 'gpt-5.4')\n    assert config['model'] == 'gpt-5.4'\n    assert config['openai_api_base'] == 'https://api.example.com/v1'\n    assert config['openai_api_key'] == 'key'\n    assert 'anthropic_api_base' not in config\n"
+    },
+    "verify": {
+      "type": "command",
+      "command": "python3 -m pytest -q test_adapter_config.py"
+    }
+  },
+  {
+    "instance_id": "real_repo_004_non_openai_payload_error",
+    "source_commit": "0117042",
+    "theme": "provider compatibility errors",
+    "problem_statement": "Edit parser.py so extract_choices(response) raises a clear RuntimeError when the provider returns a raw string or HTML instead of an OpenAI chat object. Verify the tests pass.",
+    "files": {
+      "parser.py": "def extract_choices(response):\n    return response.choices\n",
+      "test_parser.py": "import pytest\n\nfrom parser import extract_choices\n\n\nclass Response:\n    def __init__(self):\n        self.choices = ['ok']\n\n\ndef test_valid_chat_response():\n    assert extract_choices(Response()) == ['ok']\n\n\ndef test_string_payload_raises_clear_error():\n    with pytest.raises(RuntimeError, match='non-OpenAI'):\n        extract_choices('<html>gateway page</html>')\n"
+    },
+    "verify": {
+      "type": "command",
+      "command": "python3 -m pytest -q test_parser.py"
+    }
+  }
+]
