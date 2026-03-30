@@ -6,7 +6,7 @@ This guide covers how to extend and develop for the Doraemon AI agent.
 
 - [Development Setup](#development-setup)
 - [Project Structure](#project-structure)
-- [Adding a New MCP Server](#adding-a-new-mcp-server)
+- [Adding a New Tool Module](#adding-a-new-tool-module)
 - [Extending the Command System](#extending-the-command-system)
 - [Adding New Metrics](#adding-new-metrics)
 - [Testing Guide](#testing-guide)
@@ -53,6 +53,33 @@ pytest tests/core/test_container.py -v
 pytest tests/ -k "test_cache" -v
 ```
 
+### Real Provider Regression
+
+For real provider checks, prefer running the minimal protocol tests first and then the agent evals.
+
+PackyAPI Anthropic-compatible example:
+
+```bash
+REAL_API_BASE='https://www.packyapi.com/v1' \
+REAL_API_KEY='***' \
+REAL_MODEL='claude-sonnet-4-6' \
+python3 -m pytest -q tests/integration/test_real_protocols.py -k 'test_real_anthropic_protocol_upstream'
+
+REAL_API_BASE='https://www.packyapi.com/v1' \
+REAL_API_KEY='***' \
+REAL_MODEL='claude-sonnet-4-6' \
+python3 scripts/run_evals.py --category basic
+```
+
+Current real-eval baseline as of `2026-03-30`:
+
+- `basic`: `5/6`
+- `advanced --limit 3`: `3/3`
+
+Known issue:
+
+- `basic/code_005` fails due to task assertion mismatch on the expected typed function signature, not because of provider protocol failure.
+
 ### Code Quality
 
 ```bash
@@ -92,15 +119,15 @@ doraemon/
 │   ├── host/               # CLI host
 │   │   ├── cli.py          # Main CLI
 │   │   ├── cli_commands.py # Command handlers
-│   │   ├── client.py       # MCP client
+│   │   ├── client.py       # In-process tool client
 │   │   └── tui.py          # Textual UI
-│   ├── servers/            # MCP servers
+│   ├── servers/            # Built-in tool modules
 │   │   ├── computer.py     # Code execution
 │   │   ├── fs_edit.py      # File editing
 │   │   ├── fs_ops.py       # File operations
 │   │   ├── fs_read.py      # File reading
 │   │   ├── fs_write.py     # File writing
-│   │   ├── memory.py       # Vector memory
+│   │   ├── memory.py       # File-backed notes
 │   │   ├── task.py         # Task management
 │   │   └── web.py          # Web fetching
 │   └── services/           # Shared services
@@ -117,31 +144,21 @@ doraemon/
 
 ---
 
-## Adding a New MCP Server
+## Adding a New Tool Module
 
-### Step 1: Create the Server File
+### Step 1: Create the Tool File
 
 Create `src/servers/my_server.py`:
 
 ```python
-"""
-My Custom MCP Server
-
-Provides custom functionality for Doraemon Code.
-"""
+"""My custom tool module."""
 
 import logging
-from mcp.server.fastmcp import FastMCP
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create MCP server instance
-mcp = FastMCP("DoraemonMyServer")
-
-
-@mcp.tool()
 def my_tool(param1: str, param2: int = 10) -> str:
     """
     Description of what this tool does.
@@ -163,37 +180,12 @@ def my_tool(param1: str, param2: int = 10) -> str:
         logger.error(f"my_tool failed: {e}")
         return f"Error: {str(e)}"
 
-
-@mcp.tool()
 def another_tool(data: dict) -> str:
     """Another tool with dict parameter."""
     return f"Received: {data}"
-
-
-# Entry point
-if __name__ == "__main__":
-    mcp.run()
 ```
 
-### Step 2: Register in Configuration
-
-Add to `.agent/config.json`:
-
-```json
-{
-  "mcpServers": {
-    "my_server": {
-      "command": "python3",
-      "args": ["src/servers/my_server.py"],
-      "env": {
-        "MY_VAR": "value"
-      }
-    }
-  }
-}
-```
-
-### Step 3: Mark as Sensitive (if needed)
+### Step 2: Mark as Sensitive (if needed)
 
 If your tool has side effects, add to sensitive tools:
 
@@ -205,7 +197,7 @@ If your tool has side effects, add to sensitive tools:
 }
 ```
 
-### Step 4: Add Tests
+### Step 3: Add Tests
 
 Create `tests/servers/test_my_server.py`:
 
@@ -265,8 +257,8 @@ async def cmd_mycommand(ctx: CommandContext, args: list[str]) -> bool:
     arg = args[0]
     ctx.console.print(f"[green]Executing with arg: {arg}[/green]")
     
-    # Access MCP client
-    result = await ctx.mcp_client.call_tool("some_tool", {"param": arg})
+    # Access tool client
+    result = await ctx.tool_client.call_tool("some_tool", {"param": arg})
     
     # Access current mode
     current_mode = ctx.get("mode")
@@ -280,7 +272,7 @@ The `CommandContext` provides:
 
 ```python
 ctx.console       # Rich Console for output
-ctx.mcp_client    # MCP client for tool calls
+ctx.tool_client   # Tool client for tool calls
 ctx.chat          # Chat session reference
 ctx.client        # GenAI client
 ctx.get("key")    # Get context value
@@ -334,7 +326,7 @@ def my_feature():
 tests/
 ├── core/           # Unit tests for core modules
 ├── integration/    # Integration tests
-├── servers/        # MCP server tests
+├── servers/        # Tool module tests
 └── evals/          # Evaluation tests
 ```
 
@@ -399,16 +391,8 @@ import pytest
 def temp_config():
     """Temporary configuration for testing."""
     return {
-        "mcpServers": {},
         "persona": {"name": "Test"}
     }
-
-@pytest.fixture
-def mock_mcp_client():
-    """Mock MCP client."""
-    client = MagicMock()
-    client.tool_map = {"read_file": "fs_read"}
-    return client
 ```
 
 ---

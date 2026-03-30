@@ -2,7 +2,7 @@
 
 > **"从口袋里掏出任何你需要的工具"**
 
-一个**开源的、本地运行的 Claude Code 替代品**，支持 Google/OpenAI/Anthropic/Ollama 多种模型，用 3 个统一工具替代 15+ 分散工具。
+一个**开源的、本地运行的 Claude Code 替代品**，支持 Google/OpenAI/Anthropic 及 OpenAI-compatible 模型，用 3 个统一工具替代 15+ 分散工具。
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -19,11 +19,11 @@
 │                                                                            │
 │   Claude Code          vs          Doraemon Code                           │
 │   ──────────                       ──────────────                          │
-│   • 仅 Anthropic 模型              • Google/OpenAI/Anthropic/Ollama        │
+│   • 仅 Anthropic 模型              • Google/OpenAI/Anthropic/OpenAI-compatible │
 │   • 云端运行                       • 完全本地运行                          │
 │   • 闭源                           • MIT 开源                              │
 │   • 15+ 分散工具                   • 3 核心统一工具                        │
-│   • 多进程 MCP                     • 单进程直调 (零开销)                   │
+│   • 外部工具桥接                   • 单进程直调 (零开销)                   │
 │                                                                            │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -49,7 +49,42 @@ JSON
 doraemon
 ```
 
-模型配置统一放在 `.agent/config.json`。可选字段还包括 `embedding_model` 和 `rerank_model`。
+模型配置统一放在 `.agent/config.json`。
+
+### Provider Base URL 规则
+
+- 用户配置统一填写到 `/v1`
+- OpenAI-compatible: 直接使用用户提供的 `/v1` 地址
+- Anthropic-compatible: 用户也填写 `/v1`，运行时会自动归一化为根地址，避免 SDK 生成重复 `/v1/v1/messages`
+
+例如：
+
+```json
+{
+  "model": "claude-sonnet-4-6",
+  "anthropic_api_base": "https://www.packyapi.com/v1"
+}
+```
+
+### 当前真实联调状态
+
+截至 `2026-03-30`，用真实上游验证过的状态：
+
+- PackyAPI `Anthropic` 兼容接口可用
+  - `REAL_API_BASE='https://www.packyapi.com/v1'`
+  - `REAL_MODEL='claude-sonnet-4-6'`
+- OpenAI-compatible 聚合端点存在明显差异
+  - 直连接入时默认优先尝试 `Responses API`
+  - 若上游不支持 `/responses`，自动回退到 `chat.completions`
+
+当前真实评测结果：
+
+- `basic`: `5/6`
+- `advanced` 抽样 `3/3`
+
+已确认失败点：
+
+- `code_005` 失败原因是函数签名未满足断言，不是协议层失败
 
 ---
 
@@ -119,10 +154,10 @@ doraemon
 │  │          │                   │                   │                  │   │
 │  │          └───────────────────┼───────────────────┘                  │   │
 │  │                              ▼                                       │   │
-│  │                    ┌───────────────┐                                │   │
-│  │                    │    Ollama     │                                │   │
-│  │                    │  (本地模型)   │                                │   │
-│  │                    └───────────────┘                                │   │
+│  │                    ┌────────────────────┐                           │   │
+│  │                    │ OpenAI-compatible  │                           │   │
+│  │                    │ custom endpoints   │                           │   │
+│  │                    └────────────────────┘                           │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐      │
@@ -480,8 +515,6 @@ doraemon
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ 其他工具 (示例)                                                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  semantic_search(query)              语义搜索                               │
-│  index_codebase(path)                索引代码库                            │
 │  fetch_url(url)                      获取网页内容                          │
 │  web_search(query)                   网络搜索                              │
 │  note(...)                           结构化记忆入口                        │
@@ -643,14 +676,13 @@ dora-code/
 │   │   │   └── main.py            # 入口 + 主循环
 │   │   └── tools.py               # 工具注册表
 │   │
-│   ├── servers/                   # 工具模块 (默认直调, 保持 MCP 兼容)
+│   ├── servers/                   # 工具模块 (默认直调)
 │   │   ├── filesystem.py          # read/write/search
 │   │   ├── run.py                 # run + 兼容别名
 │   │   ├── _services/             # 内部服务模块
 │   │   ├── lsp.py                 # 语言服务
 │   │   ├── lint.py                # 代码检查
 │   │   ├── web.py                 # 网络请求
-│   │   ├── semantic_search.py     # 语义搜索
 │   │   ├── memory.py              # 笔记系统
 │   │   ├── task.py                # 任务管理
 │   │   └── ...

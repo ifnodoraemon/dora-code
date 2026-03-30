@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Doraemon Code is an AI coding assistant built on the Model Context Protocol (MCP) with a Host-Server architecture. It supports multiple LLM providers through a unified gateway and provides both CLI and Web UI interfaces.
+Doraemon Code is an AI coding assistant with a direct in-process tool runtime. It supports multiple LLM providers through a unified gateway and provides both CLI and Web UI interfaces.
 
 ## 🎯 Six Core Design Principles
 
@@ -234,7 +234,7 @@ python -m src.gateway.server
 
 **Servers (Limbs)**: `src/servers/`
 - Provide specialized capabilities via direct function calls
-- No subprocess overhead (FastMCP-based)
+- No subprocess overhead
 - Examples: filesystem, shell, git, browser, database
 
 ### Key Components
@@ -266,7 +266,7 @@ python -m src.gateway.server
 - Prevents accidental modifications during planning
 
 **5. Gateway System** (`src/gateway/`)
-- Unified API for multiple providers (Google, OpenAI, Anthropic, Ollama)
+- Unified API for multiple providers (Google, OpenAI, Anthropic)
 - Provider adapters convert between unified format and provider-specific format
 - FastAPI server with CORS for web UI integration
 
@@ -362,15 +362,10 @@ def my_tool(param: str) -> str:
     return result
 ```
 
-### Adding New MCP Servers
+### Adding New Tool Modules
 
 Create in `src/servers/`:
 ```python
-from fastmcp import FastMCP
-
-mcp = FastMCP("server_name")
-
-@mcp.tool()
 def my_server_tool(param: str) -> str:
     """Tool implementation"""
     return result
@@ -431,12 +426,6 @@ AGENT_LOG_LEVEL=INFO
 `.agent/config.json`:
 ```json
 {
-  "mcpServers": {
-    "memory": {
-      "command": "python3",
-      "args": ["src/servers/memory.py"]
-    }
-  },
   "persona": {
     "name": "Doraemon Code",
     "role": "AI Assistant"
@@ -468,7 +457,7 @@ src/
 │   │   ├── main.py          # Main chat loop
 │   │   └── commands.py      # Slash command handlers
 │   └── tools.py             # Tool registry
-├── servers/           # MCP servers (capabilities)
+├── servers/           # Built-in tool modules
 │   ├── filesystem.py        # File operations
 │   ├── shell.py             # Command execution
 │   ├── git.py               # Version control
@@ -526,9 +515,8 @@ src/
 - **Language**: Python 3.10+
 - **Framework**: FastAPI (gateway & web UI)
 - **LLM SDKs**: google-genai, openai, anthropic
-- **MCP**: FastMCP for server implementation
+- **Tool Runtime**: In-process registry
 - **CLI**: Typer, Rich, Textual
-- **Database**: ChromaDB (vector storage)
 - **Browser**: Playwright
 - **Testing**: pytest, pytest-asyncio, pytest-cov
 
@@ -540,3 +528,21 @@ src/
 - Linter: Ruff
 - Formatter: Ruff
 - Type checker: MyPy
+
+## Real Provider Notes
+
+- User-facing provider URLs should be configured to the `/v1` base URL.
+- OpenAI-compatible direct mode now prefers the Responses API and only falls back to Chat Completions when `/responses` is unavailable.
+- Anthropic-compatible direct mode accepts `/v1` from the user and normalizes it internally before constructing the SDK client.
+
+Known good real-provider path as of `2026-03-30`:
+
+```bash
+REAL_API_BASE='https://www.packyapi.com/v1'
+REAL_MODEL='claude-sonnet-4-6'
+```
+
+Current real eval status:
+
+- `basic`: `5/6`
+- `advanced --limit 3`: `3/3`

@@ -1,6 +1,6 @@
 # Doraemon API Documentation
 
-This document provides a comprehensive API reference for Doraemon's core modules and MCP servers.
+This document provides a comprehensive API reference for Doraemon's core modules and built-in tool modules.
 
 ## Table of Contents
 
@@ -11,7 +11,7 @@ This document provides a comprehensive API reference for Doraemon's core modules
   - [Metrics](#metrics)
   - [Error Handling](#error-handling)
   - [Telemetry](#telemetry)
-- [MCP Servers](#mcp-servers)
+- [Built-in Tool Modules](#built-in-tool-modules)
   - [File System Read](#file-system-read)
   - [File System Write](#file-system-write)
   - [File System Edit](#file-system-edit)
@@ -118,6 +118,27 @@ if config.has("database.host"):
 # Get section
 db_config = config.get_section("database")
 ```
+
+### Provider Base URLs
+
+Direct model clients use provider-specific base URL handling:
+
+- `openai_api_base`
+  - expects an OpenAI-compatible API base
+  - user-facing recommendation is to provide the full `/v1` base URL
+- `anthropic_api_base`
+  - user-facing recommendation is also to provide the full `/v1` base URL
+  - runtime normalizes the value before constructing the Anthropic SDK client
+  - this avoids invalid URLs like `/v1/v1/messages`
+
+### OpenAI Direct Mode
+
+Direct OpenAI clients now prefer the Responses API by default:
+
+- first attempt: `client.responses.create(...)`
+- fallback: `client.chat.completions.create(...)` when the upstream does not support `/responses`
+
+If an upstream returns non-OpenAI payloads, such as HTML or other string bodies, the client raises an explicit runtime error instead of failing later with attribute errors on `choices`.
 
 ---
 
@@ -371,7 +392,7 @@ trace.log("operation_end", "process_request", {"status": 200}, duration_ms=18.7)
 
 ---
 
-## MCP Servers
+## Built-in Tool Modules
 
 ### File System Read
 
@@ -608,7 +629,7 @@ See `src.core.user_errors` for user-friendly error messages.
 | Code | Description |
 |------|-------------|
 | `TOOL_NOT_FOUND` | Requested tool doesn't exist |
-| `SERVER_UNAVAILABLE` | MCP server temporarily unavailable |
+| `SERVER_UNAVAILABLE` | Tool module temporarily unavailable |
 | `API_RATE_LIMITED` | API rate limit exceeded |
 | `PATH_OUTSIDE_SANDBOX` | Path access denied (outside workspace) |
 | `CODE_EXECUTION_TIMEOUT` | Code execution timed out |
@@ -635,33 +656,6 @@ Location: `.agent/config.json`
 ```json
 {
   "model": "gemini-3-pro-preview",
-  "mcpServers": {
-    "filesystem": {
-      "command": "python3",
-      "args": ["src/servers/filesystem.py"],
-      "env": {}
-    },
-    "memory": {
-      "command": "python3",
-      "args": ["src/servers/memory.py"],
-      "env": {}
-    },
-    "web": {
-      "command": "python3",
-      "args": ["src/servers/web.py"],
-      "env": {}
-    },
-    "run": {
-      "command": "python3",
-      "args": ["src/servers/run.py"],
-      "env": {}
-    },
-    "task": {
-      "command": "python3",
-      "args": ["src/servers/task.py"],
-      "env": {}
-    }
-  },
   "persona": {
     "name": "Agent",
     "role": "AI Assistant"
