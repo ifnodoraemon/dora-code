@@ -12,9 +12,9 @@
     },
     "assertions": [
       {"type": "tool_used", "tool": "write"},
-      {"type": "pattern_exists", "pattern": "def validate"},
-      {"type": "pattern_exists", "pattern": "def process"},
-      {"type": "pattern_exists", "pattern": "def format"}
+      {"type": "pattern_exists", "pattern": "def\\s+_?validate"},
+      {"type": "pattern_exists", "pattern": "def\\s+_?process"},
+      {"type": "pattern_exists", "pattern": "def\\s+_?format"}
     ],
     "expected_outcome": "Long function split into smaller functions"
   },
