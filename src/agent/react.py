@@ -137,11 +137,14 @@ class ReActAgent(BaseAgent):
         """
         messages = self._build_messages(observation)
         tools = self.get_tool_definitions_for_api()
+        # Allow slow first-turn reasoning on real coding tasks, but still cap a
+        # single LLM call so the agent can surface a bounded timeout.
+        llm_timeout = min(self.timeout, 300.0)
 
         try:
             response = await asyncio.wait_for(
                 self._call_llm(messages, tools),
-                timeout=60.0,
+                timeout=llm_timeout,
             )
 
             return Thought(
@@ -158,19 +161,13 @@ class ReActAgent(BaseAgent):
                     "llm_timeout",
                     {
                         "model": getattr(self.llm, "model", "unknown"),
-                        "timeout_seconds": 60.0,
+                        "timeout_seconds": llm_timeout,
                         "message_count": len(messages),
                     },
                 )
-            return Thought(
-                reasoning="LLM call timed out",
-                is_finished=True,
-            )
+            raise TimeoutError(f"LLM call timed out after {llm_timeout:.0f}s")
         except Exception as e:
-            return Thought(
-                reasoning=f"Error in thinking: {e}",
-                is_finished=True,
-            )
+            raise RuntimeError(f"Error in thinking: {e}") from e
 
     async def act(self, thought: Thought) -> Action:
         """

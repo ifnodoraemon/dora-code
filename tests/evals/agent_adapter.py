@@ -216,8 +216,8 @@ class DoraemonAgentAdapter(AgentAdapter):
     def __init__(
         self,
         model: str | None = None,
-        timeout: float = 300.0,
-        max_retries: int = 3,
+        timeout: float = 900.0,
+        max_retries: int = 1,
         retry_delay: float = 1.0,
         auto_approve_tools: bool = True,
     ):
@@ -637,7 +637,7 @@ class AgentFactory:
 
 def create_doraemon_agent(
     model: str | None = None,
-    timeout: float = 300.0,
+    timeout: float = 900.0,
     **kwargs,
 ) -> DoraemonAgentAdapter:
     """
