@@ -54,5 +54,61 @@
       "type": "command",
       "command": "python3 -m pytest -q test_parser.py"
     }
+  },
+  {
+    "instance_id": "real_repo_005_trace_event_shape",
+    "source_commit": "3dfdc1e",
+    "theme": "trace logging",
+    "problem_statement": "Edit trace_utils.py so build_tool_trace(name, arguments, content) returns a trace event payload with nested input/output fields matching the production trace shape. Verify the tests pass.",
+    "files": {
+      "trace_utils.py": "def build_tool_trace(name: str, arguments: dict, content: str) -> dict:\n    return {\n        'tool_name': name,\n        'args': arguments,\n        'result': content,\n    }\n",
+      "test_trace_utils.py": "from trace_utils import build_tool_trace\n\n\ndef test_trace_payload_shape():\n    payload = build_tool_trace('write', {'path': 'a.py'}, 'ok')\n    assert payload['tool_name'] == 'write'\n    assert payload['input']['arguments'] == {'path': 'a.py'}\n    assert payload['output']['content'] == 'ok'\n"
+    },
+    "verify": {
+      "type": "command",
+      "command": "python3 -m pytest -q test_trace_utils.py"
+    }
+  },
+  {
+    "instance_id": "real_repo_006_router_preferred_provider",
+    "source_commit": "1fe465c",
+    "theme": "gateway routing",
+    "problem_statement": "Edit router_logic.py so get_provider(model_id, preferred_provider, adapters, model_cache) always returns the preferred provider when it is enabled, even if the model cache points somewhere else. Verify the tests pass.",
+    "files": {
+      "router_logic.py": "def get_provider(model_id: str, preferred_provider: str | None, adapters: dict, model_cache: dict) -> str | None:\n    return model_cache.get(model_id)\n",
+      "test_router_logic.py": "from router_logic import get_provider\n\n\ndef test_preferred_provider_wins_when_enabled():\n    provider = get_provider('minimax-m2.5', 'anthropic', {'anthropic': object(), 'openai': object()}, {'minimax-m2.5': 'openai'})\n    assert provider == 'anthropic'\n\n\ndef test_cached_provider_used_without_preference():\n    provider = get_provider('minimax-m2.5', None, {'anthropic': object(), 'openai': object()}, {'minimax-m2.5': 'openai'})\n    assert provider == 'openai'\n"
+    },
+    "verify": {
+      "type": "command",
+      "command": "python3 -m pytest -q test_router_logic.py"
+    }
+  },
+  {
+    "instance_id": "real_repo_007_llm_timeout_trace",
+    "source_commit": "1aa4b96",
+    "theme": "timeout attribution",
+    "problem_statement": "Edit timeout_trace.py so make_timeout_event(model, timeout_seconds, message_count) returns an error event payload named llm_timeout with all three fields preserved. Verify the tests pass.",
+    "files": {
+      "timeout_trace.py": "def make_timeout_event(model: str, timeout_seconds: float, message_count: int) -> dict:\n    return {\n        'model': model,\n    }\n",
+      "test_timeout_trace.py": "from timeout_trace import make_timeout_event\n\n\ndef test_timeout_event_shape():\n    event = make_timeout_event('claude-sonnet-4-6', 300.0, 2)\n    assert event['name'] == 'llm_timeout'\n    assert event['data']['model'] == 'claude-sonnet-4-6'\n    assert event['data']['timeout_seconds'] == 300.0\n    assert event['data']['message_count'] == 2\n"
+    },
+    "verify": {
+      "type": "command",
+      "command": "python3 -m pytest -q test_timeout_trace.py"
+    }
+  },
+  {
+    "instance_id": "real_repo_008_responses_fallback",
+    "source_commit": "0117042",
+    "theme": "responses fallback",
+    "problem_statement": "Edit responses_fallback.py so should_fallback(error_message) returns True when the upstream likely does not support /responses, but returns False for non-OpenAI string payload errors. Verify the tests pass.",
+    "files": {
+      "responses_fallback.py": "def should_fallback(error_message: str) -> bool:\n    return 'responses' in error_message.lower()\n",
+      "test_responses_fallback.py": "from responses_fallback import should_fallback\n\n\ndef test_fallback_on_responses_not_found():\n    assert should_fallback('404 /responses not found') is True\n\n\ndef test_no_fallback_on_string_payload_error():\n    assert should_fallback('Provider returned non-OpenAI responses payload (string body)') is False\n"
+    },
+    "verify": {
+      "type": "command",
+      "command": "python3 -m pytest -q test_responses_fallback.py"
+    }
   }
 ]
