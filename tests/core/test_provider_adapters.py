@@ -84,6 +84,7 @@ def test_google_convert_messages_maps_tool_result_to_user_function_response():
 
     assert contents[0].role == "model"
     assert contents[1].role == "user"
+    assert [part.text for part in contents[1].parts if part.text] == []
     function_responses = [part.function_response for part in contents[1].parts if part.function_response]
     assert len(function_responses) == 1
     assert function_responses[0].name == "read"

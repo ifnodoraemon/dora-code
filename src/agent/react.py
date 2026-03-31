@@ -598,7 +598,17 @@ class ReActAgent(BaseAgent):
             }
         )
 
-        for msg in self.state.get_recent_messages(20):
+        recent_messages = self.state.get_recent_messages(20)
+        if recent_messages:
+            start_idx = 0
+            while start_idx < len(recent_messages):
+                role = recent_messages[start_idx].role
+                if role in {"user", "tool"}:
+                    break
+                start_idx += 1
+            recent_messages = recent_messages[start_idx:] if start_idx < len(recent_messages) else []
+
+        for msg in recent_messages:
             messages.append(msg.to_api_format())
 
         return messages

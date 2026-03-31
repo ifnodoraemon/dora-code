@@ -148,7 +148,7 @@ class GoogleAdapter:
             gemini_role = "user" if role in {"user", "tool"} else "model"
             parts = []
 
-            if msg.get("content"):
+            if role != "tool" and msg.get("content"):
                 parts.extend(build_google_content_parts(msg["content"], types_module))
 
             if msg.get("thought"):
