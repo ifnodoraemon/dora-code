@@ -364,14 +364,19 @@ class DoraemonAgentAdapter(AgentAdapter):
         real_api_key = os.getenv("REAL_API_KEY")
         real_model = os.getenv("REAL_MODEL")
 
-        if real_api_base and real_api_key and real_model:
+        use_google_direct = bool(real_api_key and real_model and real_model.startswith("gemini-"))
+        use_http_provider_direct = bool(real_api_base and real_api_key and real_model)
+
+        if use_google_direct or use_http_provider_direct:
             from src.core.llm.model_utils import ClientMode
 
             config_kwargs: dict[str, Any] = {
                 "mode": ClientMode.DIRECT,
                 "model": real_model,
             }
-            if real_model.startswith("claude-"):
+            if real_model.startswith("gemini-"):
+                config_kwargs["google_api_key"] = real_api_key
+            elif real_model.startswith("claude-"):
                 config_kwargs["anthropic_api_base"] = real_api_base
                 config_kwargs["anthropic_api_key"] = real_api_key
             else:

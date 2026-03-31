@@ -521,6 +521,25 @@ class ReActAgent(BaseAgent):
                                 "name": name,
                                 "arguments": arguments,
                             },
+                            **(
+                                {"thought_signature": thought_signature}
+                                if (
+                                    thought_signature := (
+                                        getattr(tc, "thought_signature", None)
+                                        or (
+                                            tc.get("thought_signature")
+                                            if isinstance(tc, dict)
+                                            else None
+                                        )
+                                        or (
+                                            function.get("thought_signature")
+                                            if isinstance(tc, dict)
+                                            else None
+                                        )
+                                    )
+                                )
+                                else {}
+                            ),
                         }
                     )
 
@@ -550,6 +569,14 @@ class ReActAgent(BaseAgent):
                             "name": name,
                             "arguments": arguments,
                         },
+                        **(
+                            {"thought_signature": thought_signature}
+                            if (
+                                thought_signature := tc.get("thought_signature")
+                                or function.get("thought_signature")
+                            )
+                            else {}
+                        ),
                     }
                 )
             return {

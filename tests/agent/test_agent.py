@@ -278,6 +278,27 @@ class TestReActAgent:
         assert thought.response == "Hello!"
         assert thought.is_finished is True
 
+    def test_parse_llm_response_preserves_thought_signature(self, agent):
+        """Should preserve Gemini thought signatures on tool calls."""
+        response = {
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "thought_signature": "sig_123",
+                    "function": {
+                        "name": "write",
+                        "arguments": '{"path":"add.py","content":"def add(a, b):\\n    return a + b\\n"}',
+                    },
+                }
+            ],
+        }
+
+        parsed = agent._parse_llm_response(response)
+
+        assert parsed["tool_calls"][0]["thought_signature"] == "sig_123"
+
     @pytest.mark.asyncio
     async def test_act_respond(self, agent):
         """Should act with respond when no tool calls."""

@@ -79,11 +79,11 @@ class TestTypeExtraction:
         registry.register(typed_func)
         tools = registry.get_genai_tools()
 
-        props = tools[0].parameters["properties"]
-        assert props["s"]["type"] == "string"
-        assert props["i"]["type"] == "integer"
-        assert props["f"]["type"] == "number"
-        assert props["b"]["type"] == "boolean"
+        props = tools[0].parameters.properties
+        assert props["s"].type.value == "STRING"
+        assert props["i"].type.value == "INTEGER"
+        assert props["f"].type.value == "NUMBER"
+        assert props["b"].type.value == "BOOLEAN"
 
     def test_optional_type(self):
         """Test extraction of optional types (int | None)."""
@@ -96,8 +96,8 @@ class TestTypeExtraction:
         registry.register(optional_func)
         tools = registry.get_genai_tools()
 
-        props = tools[0].parameters["properties"]
-        assert props["optional"]["type"] == "integer"
+        props = tools[0].parameters.properties
+        assert props["optional"].type.value == "INTEGER"
 
     def test_required_params(self):
         """Test required parameter detection."""
@@ -110,7 +110,7 @@ class TestTypeExtraction:
         registry.register(mixed_func)
         tools = registry.get_genai_tools()
 
-        required = tools[0].parameters["required"]
+        required = tools[0].parameters.required
         assert "required" in required
         assert "optional" not in required
 
@@ -130,10 +130,10 @@ class TestTypeExtraction:
         registry.register(literal_func)
         tools = registry.get_genai_tools()
 
-        props = tools[0].parameters["properties"]
-        assert props["mode"]["type"] == "string"
-        assert props["mode"]["enum"] == ["read", "write"]
-        assert "Execution mode." in props["mode"]["description"]
+        props = tools[0].parameters.properties
+        assert props["mode"].type.value == "STRING"
+        assert props["mode"].enum == ["read", "write"]
+        assert "Execution mode." in props["mode"].description
 
 
 class TestToolCalling:

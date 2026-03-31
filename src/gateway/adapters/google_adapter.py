@@ -250,11 +250,18 @@ class GoogleAdapter(BaseAdapter):
         if request.tools:
             function_declarations = []
             for tool in request.tools:
+                json_schema = types.JSONSchema.model_validate(
+                    tool.parameters or {"type": "object"}
+                )
                 function_declarations.append(
                     types.FunctionDeclaration(
                         name=tool.name,
                         description=tool.description,
-                        parameters=tool.parameters,  # type: ignore
+                        parameters=types.Schema.from_json_schema(
+                            json_schema=json_schema,
+                            api_option="GEMINI_API",
+                            raise_error_on_unsupported_field=False,
+                        ),
                     )
                 )
             config_kwargs["tools"] = [types.Tool(function_declarations=function_declarations)]

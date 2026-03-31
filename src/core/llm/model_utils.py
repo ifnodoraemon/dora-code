@@ -148,10 +148,15 @@ class ToolDefinition:
         """Convert to Google GenAI format."""
         from google.genai import types
 
+        json_schema = types.JSONSchema.model_validate(self.parameters or {"type": "object"})
         return types.FunctionDeclaration(
             name=self.name,
             description=self.description,
-            parameters=self.parameters,
+            parameters=types.Schema.from_json_schema(
+                json_schema=json_schema,
+                api_option="GEMINI_API",
+                raise_error_on_unsupported_field=False,
+            ),
         )
 
 

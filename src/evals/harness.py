@@ -28,7 +28,7 @@ from google.genai import types
 from src.core.config.config import load_config
 from src.core.logger import TraceLogger
 from src.evals.model_grader import ModelGrader
-from src.host.client import MultiServerMCPClient
+from src.host.client import InProcessToolClient
 
 console = Console()
 
@@ -114,10 +114,8 @@ class EvaluationHarness:
             except OSError as e:
                 raise RuntimeError(f"Failed to change to sandbox directory: {e}") from e
 
-            mcp_client = MultiServerMCPClient(tracer=tracer)
-            # 注意：这里需要确保 connect_to_config 能在沙箱中找到 server 脚本
-            # 由于我们在 client.py 做了绝对路径解析，这里通常没问题
-            await mcp_client.connect_to_config(config)
+            tool_client = InProcessToolClient(tracer=tracer)
+            await tool_client.connect_to_config(config)
 
             api_key = os.getenv("GOOGLE_API_KEY")
             if not api_key:
@@ -126,13 +124,20 @@ class EvaluationHarness:
 
             # Setup Tools using new SDK
             active_tools = []
-            for _server_name, session in mcp_client.sessions.items():
+            for _server_name, session in tool_client.sessions.items():
                 result = await session.list_tools()
                 for tool in result.tools:
+                    json_schema = types.JSONSchema.model_validate(
+                        tool.inputSchema or {"type": "object"}
+                    )
                     func_decl = types.FunctionDeclaration(
                         name=tool.name,
                         description=tool.description or "",
-                        parameters=tool.inputSchema,
+                        parameters=types.Schema.from_json_schema(
+                            json_schema=json_schema,
+                            api_option="GEMINI_API",
+                            raise_error_on_unsupported_field=False,
+                        ),
                     )
                     active_tools.append(func_decl)
 
@@ -178,7 +183,7 @@ class EvaluationHarness:
                                 except (TypeError, ValueError):
                                     args_dict = {}
 
-                            res = await mcp_client.call_tool(fc.name, args_dict)
+                            res = await tool_client.call_tool(fc.name, args_dict)
                             # Send function response using new SDK
                             response_part = types.Part.from_function_response(
                                 name=fc.name, response={"result": res}
@@ -194,7 +199,7 @@ class EvaluationHarness:
                     tracer.log("model_output", "final", final_output)
                     break
 
-            await mcp_client.cleanup()
+            await tool_client.cleanup()
 
         except Exception as e:
             error = str(e)

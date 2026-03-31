@@ -1,9 +1,9 @@
 """
 Simplified Tool Registry - Direct Function Calls with Lazy Loading
 
-This module provides a simplified alternative to MCP server architecture.
-Instead of spawning subprocess and communicating via JSON-RPC, it directly
-imports and calls tool functions.
+This module provides the in-process tool registry used by the runtime.
+Instead of spawning subprocesses and communicating over a sidecar protocol,
+it directly imports and calls tool functions.
 
 Benefits:
 - Zero subprocess overhead (~10ms savings per call)
@@ -165,7 +165,17 @@ class ToolRegistry:
 
     def _extract_parameters(self, func: Callable) -> dict[str, Any]:
         """Extract JSON Schema parameters from function signature."""
-        sig = inspect.signature(func)
+        try:
+            sig = inspect.signature(func)
+        except (ImportError, ValueError, TypeError) as e:
+            logger.warning(f"Falling back to generic tool schema for {func}: {e}")
+            return {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": True,
+            }
+
         properties = {}
         required = []
         descriptions = self._extract_param_descriptions(func.__doc__ or "")
@@ -309,10 +319,15 @@ class ToolRegistry:
             if tool_names is not None and tool.name not in tool_names:
                 continue
 
+            json_schema = types.JSONSchema.model_validate(tool.parameters or {"type": "object"})
             decl = types.FunctionDeclaration(
                 name=tool.name,
                 description=tool.description,
-                parameters=tool.parameters,
+                parameters=types.Schema.from_json_schema(
+                    json_schema=json_schema,
+                    api_option="GEMINI_API",
+                    raise_error_on_unsupported_field=False,
+                ),
             )
             declarations.append(decl)
 
@@ -468,10 +483,6 @@ TOOL_SPECS: list[ToolSpec] = [
     ToolSpec("src.servers.lsp", "lsp_references",  sensitive=False, timeout=60.0),
     ToolSpec("src.servers.lsp", "lsp_rename",      sensitive=True,  timeout=60.0),
     ToolSpec("src.servers.lsp", "lsp_definition",  sensitive=False, timeout=30.0),
-
-    # ── Semantic Search (optional: requires chromadb+protobuf) ───────────
-    # ToolSpec("src.servers.semantic_search", "semantic_search", sensitive=False, timeout=120.0),
-    # ToolSpec("src.servers.semantic_search", "index_codebase",  sensitive=False, timeout=300.0),
 
     # ── Misc ─────────────────────────────────────────────────────────
     ToolSpec("src.servers.ask_user", "ask_user",      sensitive=False, timeout=300.0),

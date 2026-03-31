@@ -19,6 +19,21 @@ from src.core.llm.model_utils import (
 )
 
 logger = logging.getLogger(__name__)
+_GEMINI_THOUGHT_SIGNATURE_PREFIX = "base64:"
+
+
+def _serialize_gemini_thought_signature(value: Any) -> Any:
+    """Convert binary Gemini thought signatures into JSON-safe text."""
+    if isinstance(value, bytes):
+        return _GEMINI_THOUGHT_SIGNATURE_PREFIX + base64.b64encode(value).decode("ascii")
+    return value
+
+
+def _deserialize_gemini_thought_signature(value: Any) -> Any:
+    """Restore serialized Gemini thought signatures back to raw bytes."""
+    if isinstance(value, str) and value.startswith(_GEMINI_THOUGHT_SIGNATURE_PREFIX):
+        return base64.b64decode(value[len(_GEMINI_THOUGHT_SIGNATURE_PREFIX) :])
+    return value
 
 
 # ========================================
@@ -130,7 +145,7 @@ class GoogleAdapter:
                 system_instruction = get_content_text(msg.get("content", ""))
                 continue
 
-            gemini_role = "user" if role == "user" else "model"
+            gemini_role = "user" if role in {"user", "tool"} else "model"
             parts = []
 
             if msg.get("content"):
@@ -151,6 +166,7 @@ class GoogleAdapter:
 
                     fc_obj = types_module.FunctionCall(name=func.get("name"), args=args)
                     thought_sig = tc.get("thought_signature") or func.get("thought_signature")
+                    thought_sig = _deserialize_gemini_thought_signature(thought_sig)
                     parts.append(
                         types_module.Part(function_call=fc_obj, thought_signature=thought_sig)
                     )
@@ -198,11 +214,18 @@ class GoogleAdapter:
                     function_declarations.append(t.to_genai_format())
                 else:
                     func = t.get("function", t)
+                    json_schema = types_module.JSONSchema.model_validate(
+                        func.get("parameters", {}) or {"type": "object"}
+                    )
                     function_declarations.append(
                         types_module.FunctionDeclaration(
                             name=func.get("name"),
                             description=func.get("description", ""),
-                            parameters=func.get("parameters", {}),
+                            parameters=types_module.Schema.from_json_schema(
+                                json_schema=json_schema,
+                                api_option="GEMINI_API",
+                                raise_error_on_unsupported_field=False,
+                            ),
                         )
                     )
             gen_config_dict["tools"] = [
@@ -251,9 +274,13 @@ class GoogleAdapter:
                     },
                 }
                 if hasattr(part, "thought_signature") and part.thought_signature:
-                    tc_dict["thought_signature"] = part.thought_signature
+                    tc_dict["thought_signature"] = _serialize_gemini_thought_signature(
+                        part.thought_signature
+                    )
                 elif isinstance(part, dict) and part.get("thought_signature"):
-                    tc_dict["thought_signature"] = part.get("thought_signature")
+                    tc_dict["thought_signature"] = _serialize_gemini_thought_signature(
+                        part.get("thought_signature")
+                    )
                 tool_calls.append(tc_dict)
 
         content = "".join(texts) if texts else None
