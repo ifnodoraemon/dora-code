@@ -7,7 +7,7 @@
   {
     "id": "code-002",
     "prompt": "Write a Python script to calculate the factorial of a number and execute it for n=5.",
-    "rubric": "1. Must use 'execute_python' tool. 2. Must return the result 120. 3. Code must be correct."
+    "rubric": "1. Must use 'run' tool. 2. Must return the result 120. 3. Code must be correct."
   },
   {
     "id": "mem-002",

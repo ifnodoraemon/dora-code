@@ -8,7 +8,7 @@
       {"type": "file_exists", "path": "hello.py"},
       {"type": "file_contains", "path": "hello.py", "pattern": "print"},
       {"type": "file_contains", "path": "hello.py", "pattern": "Hello, World!"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "expected_steps": 1,
     "timeout": 30,
@@ -20,7 +20,7 @@
     "difficulty": "easy",
     "prompt": "Read the contents of README.md and tell me the project name",
     "assertions": [
-      {"type": "tool_used", "tool": "read_file"},
+      {"type": "tool_used", "tool": "read"},
       {"type": "output_contains", "pattern": "Doraemon"}
     ],
     "expected_steps": 1,
@@ -35,7 +35,7 @@
     "assertions": [
       {"type": "file_exists", "path": "test_dir/test.txt"},
       {"type": "file_contains", "path": "test_dir/test.txt", "pattern": "test"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "expected_steps": 2,
     "timeout": 30,
@@ -50,7 +50,7 @@
       {"type": "file_exists", "path": "math_utils.py"},
       {"type": "file_contains", "path": "math_utils.py", "pattern": "def add"},
       {"type": "file_contains", "path": "math_utils.py", "pattern": "return"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "expected_steps": 1,
     "timeout": 30,
@@ -68,7 +68,7 @@
       {"type": "file_contains", "path": "calculator.py", "pattern": "def subtract"},
       {"type": "file_contains", "path": "calculator.py", "pattern": "def multiply"},
       {"type": "file_contains", "path": "calculator.py", "pattern": "def divide"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "expected_steps": 1,
     "timeout": 45,
@@ -83,7 +83,7 @@
       {"type": "file_exists", "path": "fibonacci.py"},
       {"type": "file_contains", "path": "fibonacci.py", "pattern": "def"},
       {"type": "file_contains", "path": "fibonacci.py", "pattern": "return"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "expected_steps": 1,
     "timeout": 45,
@@ -96,7 +96,7 @@
     "prompt": "Add error handling to the divide method in calculator.py to handle division by zero",
     "assertions": [
       {"type": "file_contains", "path": "calculator.py", "pattern": "ZeroDivisionError"},
-      {"type": "tool_used", "tool": "edit_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "expected_steps": 1,
     "timeout": 45,
@@ -109,7 +109,7 @@
     "prompt": "Add docstrings to all methods in the Calculator class",
     "assertions": [
       {"type": "file_contains", "path": "calculator.py", "pattern": "\"\"\""},
-      {"type": "tool_used", "tool": "edit_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "expected_steps": 4,
     "timeout": 60,
@@ -121,8 +121,8 @@
     "difficulty": "hard",
     "prompt": "Find and fix the bug in fibonacci.py that causes incorrect results for n=0",
     "assertions": [
-      {"type": "tool_used", "tool": "read_file"},
-      {"type": "tool_used", "tool": "edit_file"},
+      {"type": "tool_used", "tool": "read"},
+      {"type": "tool_used", "tool": "write"},
       {"type": "file_contains", "path": "fibonacci.py", "pattern": "if n == 0"}
     ],
     "expected_steps": 2,

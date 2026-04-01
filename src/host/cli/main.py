@@ -88,15 +88,15 @@ async def run_chat_loop(
     console.print(f"[dim]Session: {session.session_id}[/dim]")
     console.print()
 
-        if initial_prompt:
-            result = await session.turn(initial_prompt)
-            if result.response:
-                console.print(Markdown(result.response))
-        if headless:
-            trace_path = await session.aclose()
-            if trace_path:
-                console.print(f"[dim]Trace saved: {trace_path}[/dim]")
-            return
+    if initial_prompt:
+        result = await session.turn(initial_prompt)
+        if result.response:
+            console.print(Markdown(result.response))
+    if headless:
+        trace_path = await session.aclose()
+        if trace_path:
+            console.print(f"[dim]Trace saved: {trace_path}[/dim]")
+        return
 
     try:
         while True:

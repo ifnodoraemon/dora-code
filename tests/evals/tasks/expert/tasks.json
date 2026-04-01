@@ -5,7 +5,7 @@
     "difficulty": 10,
     "name": "完整 Todo 应用",
     "prompt": "Create a complete todo application with FastAPI backend, React frontend, SQLite database, and pytest tests. Include authentication.",
-    "expected_tools": ["write_file", "execute_python"],
+    "expected_tools": ["write", "run"],
     "expected_steps": 10,
     "success_criteria": [
       "完整的后端 API",
@@ -24,7 +24,7 @@
     "difficulty": 10,
     "name": "实现复杂算法",
     "prompt": "Implement a distributed consensus algorithm (Raft) with proper state management, leader election, and log replication.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 5,
     "success_criteria": [
       "实现了核心算法",
@@ -42,7 +42,7 @@
     "difficulty": 10,
     "name": "设计分布式系统",
     "prompt": "Design a scalable distributed caching system like Redis. Include architecture, data structures, and replication strategy.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 5,
     "success_criteria": [
       "完整的架构设计",
@@ -60,7 +60,7 @@
     "difficulty": 9,
     "name": "机器学习集成",
     "prompt": "Create a sentiment analysis API using a pre-trained model. Include model loading, inference, and API endpoints.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 4,
     "success_criteria": [
       "模型加载正确",
@@ -78,7 +78,7 @@
     "difficulty": 9,
     "name": "DevOps 配置",
     "prompt": "Create a complete CI/CD pipeline with Docker, GitHub Actions, and deployment scripts. Include testing and monitoring.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 5,
     "success_criteria": [
       "Dockerfile 正确",

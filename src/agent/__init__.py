@@ -13,7 +13,7 @@ Usage:
     # Define tools
     tools = [
         ToolDefinition(
-            name="read_file",
+            name="read",
             description="Read a file",
             parameters={"type": "object", "properties": {"path": {"type": "string"}}},
         ),

@@ -4,7 +4,9 @@
 演示如何使用完整的评估系统
 """
 
+import asyncio
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -35,7 +37,7 @@ class MockAgent:
         return {
             "success": success,
             "response": f"Executed: {prompt}",
-            "tool_calls": ["write_file"] if success else [],
+            "tool_calls": ["write"] if success else [],
         }
 
 
@@ -108,7 +110,7 @@ def test_metrics_collection():
             "task_id": f"test-{i}",
             "success": i % 2 == 0,  # 50% 成功率
             "execution_time": 1.0 + i * 0.1,
-            "tool_calls": ["write_file", "read_file"],
+            "tool_calls": ["write", "read"],
             "difficulty": (i % 5) + 1,
             "category": "test_category",
         }
@@ -194,6 +196,17 @@ def test_llm_judge_evaluator():
     assert scores["overall_score"] == 8.2
     assert scores["task_completion"]["score"] == 8
     assert len(scores["strengths"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_llm_judge_evaluator_works_inside_running_loop():
+    """评测器在已有事件循环中也应能工作。"""
+    from tests.evals.llm_judge_evaluator import LLMJudgeEvaluator
+
+    judge = LLMJudgeEvaluator()
+    result = judge._run_async(asyncio.sleep(0, result=SimpleNamespace(value=9)))
+
+    assert result.value == 9
 
 
 @pytest.mark.slow

@@ -4,7 +4,7 @@
     "prompt": "Create a python script named 'fib.py' in drafts/ that prints the 10th fibonacci number.",
     "rubric": "Code logic must be correct.",
     "assertions": [
-      {"type": "tool_used", "tool": "write_file"},
+      {"type": "tool_used", "tool": "write"},
       {"type": "file_exists", "path": "drafts/fib.py"},
       {"type": "output_contains", "pattern": "success"}
     ]

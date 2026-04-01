@@ -26,6 +26,7 @@ from src.agent import (
     ToolDefinition,
     create_doraemon_agent,
 )
+from src.agent.adapter import _collect_modified_paths
 from src.host.tools import LazyToolFunction
 
 
@@ -428,6 +429,41 @@ class TestReActAgent:
         assert len(agent.state.messages) == 0
         assert agent.state.turn_count == 0
         assert agent.state.is_finished is False
+
+
+class TestUnifiedWriteTracking:
+    def test_collect_modified_paths_includes_move_destination(self):
+        tool_calls = [
+            ToolCall(
+                id="call_1",
+                name="write",
+                arguments={"path": "old.txt", "operation": "move", "destination": "new.txt"},
+            )
+        ]
+
+        assert _collect_modified_paths(tool_calls) == ["old.txt", "new.txt"]
+
+    @pytest.mark.asyncio
+    async def test_checkpoint_paths_include_move_destination(self):
+        checkpoints = SimpleNamespace(snapshot=MagicMock())
+        agent = DoraemonAgent(
+            llm_client=AsyncMock(),
+            tool_registry=SimpleNamespace(get_tool_names=lambda: [], _tools={}),
+            hooks=None,
+            checkpoints=checkpoints,
+            skills=None,
+            enable_trace=False,
+        )
+
+        await agent._create_checkpoint(
+            "write",
+            {"path": "old.txt", "operation": "move", "destination": "new.txt"},
+        )
+
+        assert [call.args[0] for call in checkpoints.snapshot.call_args_list] == [
+            "old.txt",
+            "new.txt",
+        ]
 
 
 class TestAgentIntegration:

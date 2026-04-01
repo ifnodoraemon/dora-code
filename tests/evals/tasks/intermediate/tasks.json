@@ -5,7 +5,7 @@
     "difficulty": 4,
     "name": "批量文件操作",
     "prompt": "Create 5 text files named file1.txt through file5.txt, each containing its number (e.g., file1.txt contains '1')",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 5,
     "success_criteria": [
       "创建了5个文件",
@@ -20,7 +20,7 @@
     "difficulty": 5,
     "name": "实现数据结构",
     "prompt": "Implement a Stack class in Python with push, pop, peek, and is_empty methods. Include proper error handling. Save to stack.py",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "success_criteria": [
       "文件 stack.py 存在",
@@ -37,7 +37,7 @@
     "difficulty": 5,
     "name": "实现算法",
     "prompt": "Write a function to perform binary search on a sorted list. Include docstring and type hints. Save to search.py",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "success_criteria": [
       "文件 search.py 存在",
@@ -54,7 +54,7 @@
     "difficulty": 6,
     "name": "调试逻辑错误",
     "prompt": "The binary_search function in search.py has a bug that causes infinite loop for some inputs. Find and fix it.",
-    "expected_tools": ["read_file", "edit_file"],
+    "expected_tools": ["read", "write"],
     "expected_steps": 2,
     "success_criteria": [
       "识别了无限循环问题",
@@ -69,7 +69,7 @@
     "difficulty": 6,
     "name": "代码重构优化",
     "prompt": "Refactor the Stack class to use composition instead of inheritance from list. Maintain the same interface.",
-    "expected_tools": ["read_file", "edit_file"],
+    "expected_tools": ["read", "write"],
     "expected_steps": 2,
     "success_criteria": [
       "使用了组合模式",
@@ -85,7 +85,7 @@
     "difficulty": 6,
     "name": "创建模块结构",
     "prompt": "Create a data_structures package with __init__.py, stack.py, queue.py, and linked_list.py. Each should implement the respective data structure.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 4,
     "success_criteria": [
       "创建了包结构",
@@ -101,7 +101,7 @@
     "difficulty": 6,
     "name": "编写单元测试",
     "prompt": "Write unit tests for the Stack class using pytest. Test all methods including edge cases. Save to test_stack.py",
-    "expected_tools": ["read_file", "write_file"],
+    "expected_tools": ["read", "write"],
     "expected_steps": 2,
     "success_criteria": [
       "文件 test_stack.py 存在",
@@ -118,7 +118,7 @@
     "difficulty": 5,
     "name": "多步骤上下文",
     "prompt": "Create a config.json file with {'debug': false}. Then read it, change debug to true, and save it back.",
-    "expected_tools": ["write_file", "read_file", "edit_file"],
+    "expected_tools": ["write", "read", "write"],
     "expected_steps": 3,
     "success_criteria": [
       "创建了初始配置",
@@ -149,7 +149,7 @@
     "difficulty": 6,
     "name": "设计简单API",
     "prompt": "Design a simple REST API interface for a todo list. Create api.py with endpoint definitions and request/response models using dataclasses.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "success_criteria": [
       "文件 api.py 存在",

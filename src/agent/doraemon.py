@@ -253,19 +253,24 @@ class DoraemonAgent(ReActAgent):
 
     def _is_modifying_tool(self, name: str) -> bool:
         """Check if a tool modifies files."""
-        modifying_tools = {
-            "write",
-            "edit",
-            "delete",
-            "move",
-            "write_file",
-            "edit_file",
-            "delete_file",
-            "move_file",
-            "multi_edit",
-            "notebook_edit",
-        }
-        return name in modifying_tools
+        return name == "write"
+
+    @staticmethod
+    def _get_checkpoint_paths(args: dict[str, Any]) -> list[str]:
+        """Resolve paths that should be snapshotted for a write operation."""
+        paths: list[str] = []
+
+        path = args.get("path")
+        if path:
+            paths.append(path)
+
+        operation = args.get("operation", "create")
+        if operation in {"move", "copy"}:
+            destination = args.get("destination")
+            if destination:
+                paths.append(destination)
+
+        return paths
 
     async def _create_checkpoint(
         self,
@@ -276,15 +281,14 @@ class DoraemonAgent(ReActAgent):
         if not self.checkpoints:
             return
 
-        path = args.get("path")
-        if path:
+        for path in self._get_checkpoint_paths(args):
             try:
                 self.checkpoints.snapshot(
                     path,
                     reason=f"Before {tool_name}",
                 )
             except Exception as e:
-                logger.warning(f"Failed to create checkpoint: {e}")
+                logger.warning("Failed to create checkpoint for %s: %s", path, e)
 
     async def run(
         self,

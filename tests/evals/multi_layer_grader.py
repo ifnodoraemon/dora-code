@@ -561,7 +561,7 @@ if __name__ == "__main__":
     result = {
         "success": True,
         "output": "文件创建成功",
-        "tool_calls": ["write_file"],
+        "tool_calls": ["write"],
         "execution_time": 5.0,
         "errors": [],
     }

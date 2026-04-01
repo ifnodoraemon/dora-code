@@ -5,7 +5,7 @@
     "category": "api_integration",
     "difficulty": "medium",
     "prompt": "Create a Python REST API client class in `api_client.py` that can make GET, POST, PUT, DELETE requests to any endpoint. Include proper headers handling, JSON serialization, and timeout configuration.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 120,
     "assertions": [
@@ -16,7 +16,7 @@
       {"type": "file_contains", "path": "api_client.py", "pattern": "def put"},
       {"type": "file_contains", "path": "api_client.py", "pattern": "def delete"},
       {"type": "file_contains", "path": "api_client.py", "pattern": "timeout"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "completeness": "All HTTP methods should be implemented",
@@ -30,7 +30,7 @@
     "category": "api_integration",
     "difficulty": "medium",
     "prompt": "Enhance the API client in `api_client.py` to include retry logic with exponential backoff. Retry on 5xx errors and connection timeouts, up to 3 attempts with delays of 1s, 2s, 4s.",
-    "expected_tools": ["read_file", "edit_file"],
+    "expected_tools": ["read", "write"],
     "expected_steps": 2,
     "timeout": 180,
     "assertions": [
@@ -38,7 +38,7 @@
       {"type": "file_contains", "path": "api_client.py", "pattern": "exponential|backoff"},
       {"type": "file_contains", "path": "api_client.py", "pattern": "sleep|time"},
       {"type": "file_contains", "path": "api_client.py", "pattern": "500|5xx|status_code >= 500"},
-      {"type": "tool_used", "tool": "edit_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "retry_logic": "Should implement proper exponential backoff",
@@ -52,7 +52,7 @@
     "category": "api_integration",
     "difficulty": "hard",
     "prompt": "Create an OAuth2 authentication module in `oauth2_client.py` that supports the authorization code flow. Include methods for: generating auth URL, exchanging code for tokens, refreshing tokens, and making authenticated requests.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 240,
     "assertions": [
@@ -62,7 +62,7 @@
       {"type": "file_contains", "path": "oauth2_client.py", "pattern": "refresh"},
       {"type": "file_contains", "path": "oauth2_client.py", "pattern": "client_id"},
       {"type": "file_contains", "path": "oauth2_client.py", "pattern": "client_secret"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "oauth_flow": "Should implement complete authorization code flow",
@@ -76,7 +76,7 @@
     "category": "api_integration",
     "difficulty": "medium",
     "prompt": "Create a JWT validation module in `jwt_validator.py` that can decode and validate JWT tokens. Include signature verification, expiration checking, and claims extraction.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 150,
     "assertions": [
@@ -85,7 +85,7 @@
       {"type": "file_contains", "path": "jwt_validator.py", "pattern": "exp|expiration"},
       {"type": "file_contains", "path": "jwt_validator.py", "pattern": "signature"},
       {"type": "file_contains", "path": "jwt_validator.py", "pattern": "claims"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "validation": "Should properly validate JWT structure and signature",
@@ -99,7 +99,7 @@
     "category": "api_integration",
     "difficulty": "medium",
     "prompt": "Create an API error handling module in `api_errors.py` with custom exception classes for different HTTP error codes (400, 401, 403, 404, 500). Include a decorator that catches requests exceptions and converts them to appropriate custom exceptions.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 150,
     "assertions": [
@@ -109,7 +109,7 @@
       {"type": "file_contains", "path": "api_errors.py", "pattern": "401|Unauthorized"},
       {"type": "file_contains", "path": "api_errors.py", "pattern": "404|NotFound"},
       {"type": "file_contains", "path": "api_errors.py", "pattern": "decorator|@"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "exception_hierarchy": "Should have proper exception class hierarchy",
@@ -123,7 +123,7 @@
     "category": "api_integration",
     "difficulty": "hard",
     "prompt": "Create a rate limiting module in `rate_limiter.py` that implements token bucket algorithm. Support configurable rate limits, burst capacity, and provide both sync and async interfaces.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 180,
     "assertions": [
@@ -132,7 +132,7 @@
       {"type": "file_contains", "path": "rate_limiter.py", "pattern": "tokens|bucket"},
       {"type": "file_contains", "path": "rate_limiter.py", "pattern": "acquire|consume"},
       {"type": "file_contains", "path": "rate_limiter.py", "pattern": "async|await"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "algorithm": "Should implement token bucket correctly",
@@ -146,7 +146,7 @@
     "category": "api_integration",
     "difficulty": "hard",
     "prompt": "Create a webhook handling module in `webhook_handler.py` with signature verification (HMAC-SHA256), payload parsing, and event routing. Include a FastAPI router for receiving webhooks.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 200,
     "assertions": [
@@ -155,7 +155,7 @@
       {"type": "file_contains", "path": "webhook_handler.py", "pattern": "sha256|SHA256"},
       {"type": "file_contains", "path": "webhook_handler.py", "pattern": "verify|signature"},
       {"type": "file_contains", "path": "webhook_handler.py", "pattern": "FastAPI|APIRouter"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "security": "Should verify webhook signatures properly",
@@ -169,7 +169,7 @@
     "category": "api_integration",
     "difficulty": "hard",
     "prompt": "Create a GraphQL client in `graphql_client.py` that supports queries, mutations, and subscriptions. Include variable substitution, error handling, and response parsing.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 200,
     "assertions": [
@@ -178,7 +178,7 @@
       {"type": "file_contains", "path": "graphql_client.py", "pattern": "mutation|Mutation"},
       {"type": "file_contains", "path": "graphql_client.py", "pattern": "variables"},
       {"type": "file_contains", "path": "graphql_client.py", "pattern": "errors"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "operations": "Should support queries and mutations",

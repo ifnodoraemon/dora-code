@@ -5,12 +5,12 @@
     "difficulty": 1,
     "name": "创建简单文件",
     "prompt": "Create a file called 'hello.txt' with the content 'Hello, World!'",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "success_criteria": [
       "文件 hello.txt 存在",
       "内容为 'Hello, World!'",
-      "使用了 write_file 工具"
+      "使用了 write 工具"
     ],
     "evaluation_focus": ["tool_selection", "task_completion"]
   },
@@ -20,10 +20,10 @@
     "difficulty": 1,
     "name": "读取文件内容",
     "prompt": "Read the README.md file and tell me what this project is about",
-    "expected_tools": ["read_file"],
+    "expected_tools": ["read"],
     "expected_steps": 1,
     "success_criteria": [
-      "使用了 read_file 工具",
+      "使用了 read 工具",
       "正确读取了 README.md",
       "提供了项目描述"
     ],
@@ -35,7 +35,7 @@
     "difficulty": 2,
     "name": "生成简单函数",
     "prompt": "Write a Python function called 'add' that takes two numbers and returns their sum. Save it to math_utils.py",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "success_criteria": [
       "文件 math_utils.py 存在",
@@ -51,7 +51,7 @@
     "difficulty": 2,
     "name": "生成类定义",
     "prompt": "Create a Python class 'Calculator' with methods add, subtract, multiply, divide. Save to calculator.py",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "success_criteria": [
       "文件 calculator.py 存在",
@@ -82,7 +82,7 @@
     "difficulty": 5,
     "name": "修复代码错误",
     "prompt": "The calculator.py file has a bug in the divide method - it doesn't handle division by zero. Fix it.",
-    "expected_tools": ["read_file", "edit_file"],
+    "expected_tools": ["read", "write"],
     "expected_steps": 2,
     "success_criteria": [
       "读取了 calculator.py",
@@ -98,7 +98,7 @@
     "difficulty": 6,
     "name": "诊断和修复 bug",
     "prompt": "The fibonacci.py function returns wrong results for n=0. Find and fix the bug.",
-    "expected_tools": ["read_file", "edit_file"],
+    "expected_tools": ["read", "write"],
     "expected_steps": 2,
     "success_criteria": [
       "读取并分析代码",
@@ -114,7 +114,7 @@
     "difficulty": 5,
     "name": "代码重构",
     "prompt": "Refactor the calculator.py to use a more object-oriented design with proper error handling",
-    "expected_tools": ["read_file", "edit_file"],
+    "expected_tools": ["read", "write"],
     "expected_steps": 2,
     "success_criteria": [
       "改进了代码结构",
@@ -130,7 +130,7 @@
     "difficulty": 6,
     "name": "多文件项目",
     "prompt": "Create a simple Python package with __init__.py, math_utils.py (with add, subtract), and string_utils.py (with uppercase, lowercase)",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 3,
     "success_criteria": [
       "创建了所有三个文件",
@@ -146,7 +146,7 @@
     "difficulty": 5,
     "name": "上下文理解",
     "prompt": "First create a file data.txt with 'line1'. Then add 'line2' to it. Then show me the contents.",
-    "expected_tools": ["write_file", "edit_file", "read_file"],
+    "expected_tools": ["write", "write", "read"],
     "expected_steps": 3,
     "success_criteria": [
       "创建了 data.txt",

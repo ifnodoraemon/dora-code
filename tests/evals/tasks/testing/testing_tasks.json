@@ -5,7 +5,7 @@
     "category": "test_writing",
     "difficulty": "easy",
     "prompt": "Write comprehensive unit tests in `tests/test_calculator.py` for a Calculator class with add, subtract, multiply, divide methods. Include tests for normal cases, edge cases (zero, negative numbers), and error cases (division by zero).",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 150,
     "assertions": [
@@ -16,7 +16,7 @@
       {"type": "file_contains", "path": "tests/test_calculator.py", "pattern": "def test_multiply"},
       {"type": "file_contains", "path": "tests/test_calculator.py", "pattern": "def test_divide"},
       {"type": "file_contains", "path": "tests/test_calculator.py", "pattern": "ZeroDivisionError|raises"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "coverage": "Should test all methods",
@@ -30,7 +30,7 @@
     "category": "test_writing",
     "difficulty": "medium",
     "prompt": "Write parametrized tests in `tests/test_validator.py` for an email validator function. Use pytest.mark.parametrize to test multiple valid and invalid email formats. Include at least 10 test cases.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 150,
     "assertions": [
@@ -39,7 +39,7 @@
       {"type": "file_contains", "path": "tests/test_validator.py", "pattern": "valid"},
       {"type": "file_contains", "path": "tests/test_validator.py", "pattern": "invalid"},
       {"type": "file_contains", "path": "tests/test_validator.py", "pattern": "@"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "parametrization": "Should use pytest parametrize correctly",
@@ -53,7 +53,7 @@
     "category": "test_writing",
     "difficulty": "medium",
     "prompt": "Write tests in `tests/test_user_service.py` for a UserService class. Create pytest fixtures for database connection, test user data, and service instance. Include setup and teardown logic.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 180,
     "assertions": [
@@ -62,7 +62,7 @@
       {"type": "file_contains", "path": "tests/test_user_service.py", "pattern": "def db|def database|def connection"},
       {"type": "file_contains", "path": "tests/test_user_service.py", "pattern": "def test_"},
       {"type": "file_contains", "path": "tests/test_user_service.py", "pattern": "yield|return"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "fixtures": "Should use pytest fixtures correctly",
@@ -76,7 +76,7 @@
     "category": "test_writing",
     "difficulty": "medium",
     "prompt": "Write tests in `tests/test_api_client.py` for an API client that makes HTTP requests. Use unittest.mock to mock the requests library. Test success responses, error responses, and timeout handling.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 180,
     "assertions": [
@@ -86,7 +86,7 @@
       {"type": "file_contains", "path": "tests/test_api_client.py", "pattern": "return_value"},
       {"type": "file_contains", "path": "tests/test_api_client.py", "pattern": "side_effect"},
       {"type": "file_contains", "path": "tests/test_api_client.py", "pattern": "assert"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "mocking": "Should use mocks correctly",
@@ -100,7 +100,7 @@
     "category": "test_writing",
     "difficulty": "hard",
     "prompt": "Write tests in `tests/test_repository.py` for a UserRepository class. Mock the database connection and cursor. Test CRUD operations and verify SQL queries are called correctly.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 200,
     "assertions": [
@@ -109,7 +109,7 @@
       {"type": "file_contains", "path": "tests/test_repository.py", "pattern": "cursor|connection"},
       {"type": "file_contains", "path": "tests/test_repository.py", "pattern": "execute|call"},
       {"type": "file_contains", "path": "tests/test_repository.py", "pattern": "assert_called|call_args"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "database_mocking": "Should mock database correctly",
@@ -123,7 +123,7 @@
     "category": "test_writing",
     "difficulty": "hard",
     "prompt": "Write integration tests in `tests/integration/test_auth_api.py` for authentication endpoints. Use FastAPI TestClient. Test register, login, token refresh, and logout flows. Include proper test isolation.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 240,
     "assertions": [
@@ -133,7 +133,7 @@
       {"type": "file_contains", "path": "tests/integration/test_auth_api.py", "pattern": "status_code"},
       {"type": "file_contains", "path": "tests/integration/test_auth_api.py", "pattern": "json()"},
       {"type": "file_contains", "path": "tests/integration/test_auth_api.py", "pattern": "fixture"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "integration": "Should test full API flows",
@@ -147,7 +147,7 @@
     "category": "test_writing",
     "difficulty": "hard",
     "prompt": "Write database integration tests in `tests/integration/test_db_operations.py`. Use a test database with proper setup/teardown. Test transactions, rollbacks, and concurrent access.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 240,
     "assertions": [
@@ -156,7 +156,7 @@
       {"type": "file_contains", "path": "tests/integration/test_db_operations.py", "pattern": "transaction|commit|rollback"},
       {"type": "file_contains", "path": "tests/integration/test_db_operations.py", "pattern": "setup|teardown|yield"},
       {"type": "file_contains", "path": "tests/integration/test_db_operations.py", "pattern": "def test_"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "database_testing": "Should test real database operations",
@@ -170,7 +170,7 @@
     "category": "test_writing",
     "difficulty": "hard",
     "prompt": "Write async tests in `tests/test_async_service.py` for an async service class. Use pytest-asyncio. Test concurrent operations, timeouts, and cancellation handling.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 1,
     "timeout": 200,
     "assertions": [
@@ -179,7 +179,7 @@
       {"type": "file_contains", "path": "tests/test_async_service.py", "pattern": "async def test_"},
       {"type": "file_contains", "path": "tests/test_async_service.py", "pattern": "await"},
       {"type": "file_contains", "path": "tests/test_async_service.py", "pattern": "asyncio"},
-      {"type": "tool_used", "tool": "write_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "async_testing": "Should use pytest-asyncio correctly",

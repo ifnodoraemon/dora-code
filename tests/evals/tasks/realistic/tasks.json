@@ -12,8 +12,8 @@
       {"type": "file_contains", "path": "src/core/user_processor.py", "pattern": "def transform_user_data"},
       {"type": "function_line_count", "path": "src/core/user_processor.py", "function": "process_user_data", "max_lines": 20},
       {"type": "tests_pass", "suite": "tests/test_user_processor.py"},
-      {"type": "tool_used", "tool": "read_file"},
-      {"type": "tool_used", "tool": "edit_file"}
+      {"type": "tool_used", "tool": "read"},
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "code_quality": "Methods should be well-named and have single responsibility",
@@ -34,7 +34,7 @@
       {"type": "max_nesting_depth", "path": "src/pricing/discount.py", "function": "calculate_discount", "max_depth": 2},
       {"type": "file_contains", "path": "src/pricing/discount.py", "pattern": "return"},
       {"type": "tests_pass", "suite": "tests/test_discount.py"},
-      {"type": "tool_used", "tool": "edit_file"}
+      {"type": "tool_used", "tool": "write"}
     ],
     "rubric": {
       "readability": "Code should be easier to read with clear flow",

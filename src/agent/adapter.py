@@ -41,6 +41,29 @@ logger = logging.getLogger(__name__)
 console = Console()
 
 
+def _collect_modified_paths(tool_calls: list[Any]) -> list[str]:
+    """Collect modified paths from unified write tool calls."""
+    modified_paths: list[str] = []
+
+    for tc in tool_calls:
+        if tc.name != "write":
+            continue
+
+        arguments = tc.arguments or {}
+        operation = arguments.get("operation", "create")
+
+        path = arguments.get("path")
+        if path:
+            modified_paths.append(path)
+
+        if operation in {"move", "copy"}:
+            destination = arguments.get("destination")
+            if destination:
+                modified_paths.append(destination)
+
+    return modified_paths
+
+
 @dataclass
 class AgentTurnResult:
     """Result from running an agent turn, compatible with chat_loop."""
@@ -171,12 +194,6 @@ async def run_agent_turn(
     try:
         result = await agent.run(user_input)
 
-        files_modified = []
-        for tc in result.tool_calls:
-            if tc.name in {"write", "edit", "write_file", "edit_file"}:
-                if tc.arguments.get("path"):
-                    files_modified.append(tc.arguments["path"])
-
         return AgentTurnResult(
             response=result.response or "",
             tool_calls=[tc.to_dict() for tc in result.tool_calls],
@@ -184,7 +201,7 @@ async def run_agent_turn(
             duration=time.time() - start_time,
             success=result.success,
             error=result.error,
-            files_modified=files_modified,
+            files_modified=_collect_modified_paths(result.tool_calls),
         )
 
     except asyncio.TimeoutError:
@@ -313,12 +330,6 @@ class AgentSession:
         try:
             result = await self._agent.run(user_input)
 
-            files_modified = []
-            for tc in result.tool_calls:
-                if tc.name in {"write", "edit", "write_file", "edit_file"}:
-                    if tc.arguments.get("path"):
-                        files_modified.append(tc.arguments["path"])
-
             return AgentTurnResult(
                 response=result.response or "",
                 tool_calls=[tc.to_dict() for tc in result.tool_calls],
@@ -326,7 +337,7 @@ class AgentSession:
                 duration=time.time() - start_time,
                 success=result.success,
                 error=result.error,
-                files_modified=files_modified,
+                files_modified=_collect_modified_paths(result.tool_calls),
             )
         except Exception as e:
             logger.error(f"Agent turn failed: {e}")

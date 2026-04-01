@@ -4,8 +4,10 @@ LLM-as-Judge 评估器
 使用 LLM 作为评判者来评估 Agent 的响应质量
 """
 
+import asyncio
 import json
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -19,7 +21,36 @@ class LLMJudgeEvaluator:
 
     def __init__(self, model: str = "gemini-2.0-flash-exp"):
         self.model = model
-        self.client = ModelClient.create()
+
+    @staticmethod
+    def _run_async(coro):
+        """Run async code safely from sync or async contexts."""
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+
+        result: dict[str, object] = {}
+        error: dict[str, BaseException] = {}
+
+        def _runner() -> None:
+            try:
+                result["value"] = asyncio.run(coro)
+            except BaseException as exc:  # pragma: no cover - propagated below
+                error["value"] = exc
+
+        thread = threading.Thread(target=_runner, daemon=True)
+        thread.start()
+        thread.join()
+
+        if "value" in error:
+            raise error["value"]
+        return result.get("value")
+
+    async def _evaluate_async(self, judge_prompt: str):
+        """Create a model client and evaluate the prompt within one event loop."""
+        client = await ModelClient.create()
+        return await client.chat([Message(role="user", content=judge_prompt)])
 
     def evaluate_response(self, task: dict, agent_response: str, agent_actions: list[str]) -> dict:
         """评估 Agent 的响应"""
@@ -27,8 +58,7 @@ class LLMJudgeEvaluator:
         judge_prompt = self._create_judge_prompt(task, agent_response, agent_actions)
 
         # 调用 LLM 进行评估
-        messages = [Message(role="user", content=judge_prompt)]
-        response = self.client.chat(messages)
+        response = self._run_async(self._evaluate_async(judge_prompt))
 
         # 解析评分
         scores = self._parse_scores(response.content)

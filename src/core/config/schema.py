@@ -100,11 +100,9 @@ class AgentConfig(BaseModel):
     persona: PersonaConfig | None = Field(default=None, description="Agent persona configuration")
     sensitive_tools: list[str] = Field(
         default_factory=lambda: [
-            "execute_python",
-            "write_file",
+            "write",
+            "run",
             "memory_put",
-            "move_file",
-            "delete_file",
         ],
         description="List of tools that require user approval",
     )
@@ -177,10 +175,8 @@ def get_default_config() -> dict:
         "persona": {"name": "Agent", "role": "Generalist AI Assistant & Coder"},
         "mcp_extensions": [],
         "sensitive_tools": [
-            "execute_python",
-            "write_file",
+            "write",
+            "run",
             "memory_put",
-            "move_file",
-            "delete_file",
         ],
     }

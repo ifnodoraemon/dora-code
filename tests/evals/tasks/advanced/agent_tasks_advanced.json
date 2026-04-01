@@ -5,7 +5,7 @@
     "difficulty": 8,
     "name": "创建完整项目结构",
     "prompt": "Create a Python project structure with src/, tests/, docs/, and setup.py. Include a sample module and test.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 5,
     "success_criteria": [
       "创建了完整的项目结构",
@@ -22,7 +22,7 @@
     "difficulty": 8,
     "name": "创建 REST API",
     "prompt": "Create a simple REST API using FastAPI with endpoints for user CRUD operations. Include error handling.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 3,
     "success_criteria": [
       "使用 FastAPI 框架",
@@ -39,7 +39,7 @@
     "difficulty": 7,
     "name": "编写测试套件",
     "prompt": "Write comprehensive tests for the Calculator class using pytest. Include unit tests and edge cases.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 2,
     "success_criteria": [
       "使用 pytest 框架",
@@ -56,7 +56,7 @@
     "difficulty": 6,
     "name": "生成项目文档",
     "prompt": "Create comprehensive documentation for the Calculator class including README.md, API docs, and usage examples.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 3,
     "success_criteria": [
       "创建了 README.md",
@@ -73,7 +73,7 @@
     "difficulty": 9,
     "name": "性能优化",
     "prompt": "Optimize the fibonacci function to use memoization. Compare performance before and after.",
-    "expected_tools": ["read_file", "edit_file"],
+    "expected_tools": ["read", "write"],
     "expected_steps": 3,
     "success_criteria": [
       "实现了记忆化",
@@ -90,7 +90,7 @@
     "difficulty": 8,
     "name": "安全审计",
     "prompt": "Review the user authentication code for security vulnerabilities. Identify and fix any issues.",
-    "expected_tools": ["read_file", "edit_file"],
+    "expected_tools": ["read", "write"],
     "expected_steps": 3,
     "success_criteria": [
       "识别了安全问题",
@@ -107,7 +107,7 @@
     "difficulty": 9,
     "name": "架构设计",
     "prompt": "Design a microservices architecture for an e-commerce system. Include service boundaries and communication patterns.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 2,
     "success_criteria": [
       "定义了服务边界",
@@ -124,7 +124,7 @@
     "difficulty": 7,
     "name": "数据库设计",
     "prompt": "Design a database schema for a blog system with users, posts, comments, and tags. Include relationships.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 2,
     "success_criteria": [
       "定义了所有表",
@@ -141,7 +141,7 @@
     "difficulty": 8,
     "name": "错误恢复",
     "prompt": "The API server keeps crashing. Debug the issue, identify the root cause, and implement a fix with proper error handling.",
-    "expected_tools": ["read_file", "edit_file"],
+    "expected_tools": ["read", "write"],
     "expected_steps": 4,
     "success_criteria": [
       "识别了崩溃原因",
@@ -158,7 +158,7 @@
     "difficulty": 8,
     "name": "第三方集成",
     "prompt": "Integrate with the Stripe payment API. Create a payment processing module with error handling and webhooks.",
-    "expected_tools": ["write_file"],
+    "expected_tools": ["write"],
     "expected_steps": 3,
     "success_criteria": [
       "实现了支付处理",

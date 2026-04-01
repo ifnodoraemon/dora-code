@@ -74,6 +74,7 @@ temp/
 # Documentation build
 docs/_build/
 site/
+eval_results/
 eval_results/test_history.db
 # Frontend dependencies
 webui/node_modules/
