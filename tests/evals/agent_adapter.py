@@ -505,8 +505,8 @@ class MockAgentAdapter(AgentAdapter):
             "search": ["search"],
             "file": ["read", "write"],
             "code": ["read", "write", "search"],
-            "git": ["shell_execute"],
-            "test": ["shell_execute", "read"],
+            "git": ["run"],
+            "test": ["run", "read"],
             "debug": ["read", "search"],
             "refactor": ["read", "write", "search"],
         }
