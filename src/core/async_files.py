@@ -9,9 +9,9 @@ the event loop, improving performance for I/O-heavy operations.
 import asyncio
 import fnmatch
 import os
-from collections.abc import AsyncIterator
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from src.core.security.security import validate_path
 
@@ -264,8 +264,8 @@ async def async_grep_search(
     Returns:
         List of {file, line_number, line_content} dicts
     """
-    import re
     import glob as glob_module
+    import re
 
     valid_path = validate_path(path)
 

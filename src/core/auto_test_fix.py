@@ -395,7 +395,6 @@ class AutoTestFix:
 
         # Identify error type
         error_output = test.error_output or ""
-        message = test.message or ""
 
         # Python traceback analysis
         if "AssertionError" in error_output:
@@ -441,7 +440,6 @@ class AutoTestFix:
         self, callback: Any, fix_attempt: FixAttempt, result: TestRunResult
     ) -> None:
         """Call a callback function."""
-        import asyncio
         import inspect
 
         if inspect.iscoroutinefunction(callback):

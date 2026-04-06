@@ -65,21 +65,17 @@ class AgentState:
             self.messages = self.messages[-self.max_messages :]
 
     def _compress_messages(self, old_messages: list[Message]) -> None:
-        """Compress old messages into summary."""
+        """Mark messages for compression.
+        The actual semantic summarization is handled by the Agent's LLM to preserve technical details.
+        """
         if not old_messages:
             return
 
-        summary_parts = []
-        for msg in old_messages:
-            if msg.content:
-                role = msg.role
-                content_preview = msg.content[:200]
-                summary_parts.append(f"[{role}]: {content_preview}")
-
-        if summary_parts:
-            self._compressed_summary += f"\n[Earlier conversation]\n" + "\n".join(
-                summary_parts[-5:]
-            )
+        # Instead of truncating strings, we store a reference that these messages
+        # should be summarized by the agent during its next reasoning cycle.
+        self._compressed_summary += (
+            f"\n[Context: {len(old_messages)} messages archived for semantic summarization]"
+        )
 
     def get_compressed_summary(self) -> str:
         """Get summary of compressed messages."""

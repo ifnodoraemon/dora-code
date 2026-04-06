@@ -11,7 +11,6 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -268,9 +267,8 @@ class CodebaseMapper:
         """Analyze a Python file."""
         try:
             with open(file_path, encoding="utf-8", errors="replace") as f:
-                content = f.read()
-
-            tree = ast.parse(content)
+                source = f.read()
+            tree = ast.parse(source, filename=file_path)
         except Exception:
             return None
 
@@ -442,8 +440,7 @@ class CodebaseMapper:
         """Generic file analysis."""
         try:
             with open(file_path, encoding="utf-8", errors="replace") as f:
-                content = f.read()
-            lines = content.count("\n") + 1
+                f.read()
         except Exception:
             return None
 

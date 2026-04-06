@@ -31,6 +31,8 @@ Usage:
     print(result.response)
 """
 
+from src.core.home import Trace
+
 from .adapter import AgentSession, AgentTurnResult, run_agent_turn
 from .base import (
     AgentError,
@@ -43,8 +45,8 @@ from .base import (
 from .doraemon import (
     DoraemonAgent,
     create_doraemon_agent,
-    create_doraemon_agent_with_tools,
     create_doraemon_agent_with_mcp,
+    create_doraemon_agent_with_tools,
 )
 from .react import ReActAgent
 from .state import AgentState
@@ -59,8 +61,6 @@ from .types import (
     ToolCall,
     ToolDefinition,
 )
-
-from src.core.home import Trace
 
 __all__ = [
     "BaseAgent",

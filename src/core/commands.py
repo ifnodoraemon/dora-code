@@ -31,10 +31,8 @@ Usage:
 """
 
 import asyncio
-import json
 import logging
 import re
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -446,7 +444,7 @@ class CommandExecutor:
         command = self._substitute(step["command"], args)
 
         try:
-            proc = await asyncio.create_subprocess_shell(
+            await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,

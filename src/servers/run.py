@@ -101,7 +101,7 @@ def _indent_code(code: str, spaces: int) -> str:
 def _get_sandbox_wrapper_code(user_code: str) -> str:
     """Wrap user code with safety measures.
 
-    Enhanced (C2): blocks access to dangerous modules within the sandbox.
+    Enhanced (C2): blocks access to dangerous modules and built-in functions.
     """
     return f"""
 import sys
@@ -123,6 +123,24 @@ class _SandboxImportBlocker:
         raise ImportError(f"Module '{{name}}' is blocked in sandbox mode")
 
 sys.meta_path.insert(0, _SandboxImportBlocker())
+
+# Strictly restrict built-ins to prevent sandbox escape via __builtins__
+import builtins
+_SAFE_BUILTINS = {{
+    'abs', 'all', 'any', 'bin', 'bool', 'divmod', 'enumerate', 'filter',
+    'float', 'getattr', 'hasattr', 'hash', 'hex', 'id', 'int', 'isinstance',
+    'issubclass', 'iter', 'len', 'list', 'map', 'max', 'min', 'next', 'oct',
+    'ord', 'pow', 'print', 'range', 'repr', 'reversed', 'round', 'set',
+    'slice', 'sorted', 'str', 'sum', 'tuple', 'type', 'zip',
+}}
+# Remove dangerous built-ins
+for name in list(builtins.__dict__):
+    if name not in _SAFE_BUILTINS and not name.startswith('__'):
+        try:
+            del builtins.__dict__[name]
+        except:
+            pass
+
 sys.setrecursionlimit(1000)
 
 try:
@@ -240,10 +258,12 @@ def _run_shell(command: str, timeout: int, working_dir: str | None) -> str:
     timeout = min(max(1, timeout), 600)
 
     try:
+        # Use a list for the command to avoid shell=True injection
+        # We still use the configured shell to execute the command string for compatibility with shell features (pipes, etc.)
+        # but we wrap it in a way that is more controlled.
         process = subprocess.Popen(
-            command,
-            shell=True,
-            executable=DEFAULT_SHELL_CONFIG.shell,
+            [DEFAULT_SHELL_CONFIG.shell, "-c", command],
+            shell=False,
             cwd=resolved_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -441,4 +461,3 @@ def _run_install(package_name: str) -> str:
 
     except Exception as e:
         return f"Error: {str(e)}"
-

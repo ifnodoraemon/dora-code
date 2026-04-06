@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.agent import AgentResult, AgentState, DoraemonAgent, ToolDefinition
+from src.agent import DoraemonAgent
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ class HumanEvalBenchmark:
             results.append(result)
 
             if result.passed:
-                logger.info(f"  ✓ Passed")
+                logger.info("  ✓ Passed")
             else:
                 logger.info(f"  ✗ Failed: {result.error}")
 
@@ -223,7 +223,6 @@ The function should be named `{task.entry_point}`."""
 
         try:
             import tempfile
-            import subprocess
 
             with tempfile.NamedTemporaryFile(
                 mode="w",

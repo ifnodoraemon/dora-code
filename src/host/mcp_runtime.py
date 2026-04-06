@@ -8,7 +8,6 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -225,7 +224,8 @@ class StreamableHttpMCPClient:
                     RemoteMCPTool(
                         name=item["name"],
                         description=item.get("description", ""),
-                        input_schema=item.get("inputSchema") or {
+                        input_schema=item.get("inputSchema")
+                        or {
                             "type": "object",
                             "properties": {},
                             "required": [],
@@ -268,7 +268,7 @@ class StreamableHttpMCPClient:
                 text_parts.append(item.get("text", ""))
             else:
                 text_parts.append(json.dumps(item, ensure_ascii=False))
-            return "\n".join(part for part in text_parts if part).strip()
+        return "\n".join(part for part in text_parts if part).strip()
 
     async def close(self) -> None:
         """Close the underlying HTTP client, if initialized."""
@@ -301,7 +301,19 @@ class StdioMCPClient:
         if self._process and self._process.returncode is None:
             return self._process
 
-        env = os.environ.copy()
+        safe_env_keys = {
+            "PATH",
+            "HOME",
+            "USER",
+            "LANG",
+            "LC_ALL",
+            "TERM",
+            "SHELL",
+            "TMPDIR",
+            "TEMP",
+            "TMP",
+        }
+        env = {k: v for k, v in os.environ.items() if k in safe_env_keys}
         env.update(self.server.env)
         self._process = await asyncio.create_subprocess_exec(
             self.server.command,
@@ -328,7 +340,9 @@ class StdioMCPClient:
             if payload.get("id") == expected_id:
                 return payload
 
-    async def _send(self, payload: dict[str, Any], *, expect_response: bool) -> dict[str, Any] | None:
+    async def _send(
+        self, payload: dict[str, Any], *, expect_response: bool
+    ) -> dict[str, Any] | None:
         process = await self._ensure_process()
         assert process.stdin is not None
 
@@ -389,7 +403,8 @@ class StdioMCPClient:
             RemoteMCPTool(
                 name=item["name"],
                 description=item.get("description", ""),
-                input_schema=item.get("inputSchema") or {
+                input_schema=item.get("inputSchema")
+                or {
                     "type": "object",
                     "properties": {},
                     "required": [],

@@ -174,7 +174,7 @@ class HookManager:
         self.permission_mode = permission_mode
         self._hooks: dict[HookEvent, list[HookDefinition]] = {event: [] for event in HookEvent}
         self._env: dict[str, str] = {
-            "CLAUDE_PROJECT_DIR": self.project_dir,
+            "DORAEMON_PROJECT_DIR": self.project_dir,
         }
 
     def register(

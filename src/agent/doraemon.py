@@ -13,27 +13,55 @@ Integrates the standard ReActAgent with Doraemon's existing infrastructure:
 import logging
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from src.agent.base import BaseAgent
 from src.agent.react import ReActAgent
 from src.agent.state import AgentState
 from src.agent.types import (
     Action,
-    ActionType,
     AgentResult,
-    Message,
     Observation,
     Thought,
-    ToolCall,
     ToolDefinition,
 )
-from src.core.hooks import HookEvent, HookManager
 from src.core.home import Trace, set_project_dir
+from src.core.hooks import HookEvent, HookManager
 from src.core.tool_selector import get_capability_groups_for_mode
+from src.core.hooks import HookEvent, HookManager
 
-logger = logging.getLogger(__name__)
+
+class PermissionMatrix:
+    """Hard enforcement of tool permissions based on agent mode."""
+
+    # Mode -> Set of allowed tools
+    # "plan" mode is strictly read-only
+    MODE_PERMISSIONS = {
+        "plan": {
+            "read",
+            "search",
+            "ask_user",
+            "ls",
+            "grep",
+            "find",
+            "cat",
+            "get_codebase_map",
+            "get_file_outline",
+        },
+        "build": {
+            # build mode allows all tools (including write, run, etc.)
+            # We use None to signify "allow all" or a comprehensive list
+            "all"
+        },
+    }
+
+    @classmethod
+    def check(cls, mode: str, tool_name: str) -> bool:
+        allowed = cls.MODE_PERMISSIONS.get(mode, set())
+        if "all" in allowed:
+            return True
+        return tool_name in allowed
 
 
 class DoraemonAgent(ReActAgent):
@@ -112,7 +140,6 @@ class DoraemonAgent(ReActAgent):
     @staticmethod
     def _generate_session_id() -> str:
         """Generate a unique session ID."""
-        import uuid
         from datetime import datetime
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -138,10 +165,11 @@ class DoraemonAgent(ReActAgent):
     ) -> list[ToolDefinition]:
         """Convert registry tool definitions into agent ToolDefinitions."""
         from src.core.tool_selector import get_tools_for_mode
-        from src.host.tools import LazyToolFunction
         from src.host.mcp_registry import resolve_extension_tools
+        from src.host.tools import LazyToolFunction
 
         tools = []
+        tool_name_set: set[str] = set()
         allowed_tool_names = set(get_tools_for_mode(mode))
         allowed_tool_names.update(resolve_extension_tools(active_mcp_extensions or []))
 
@@ -157,6 +185,7 @@ class DoraemonAgent(ReActAgent):
                         else False,
                     )
                 )
+                tool_name_set.add(name)
 
         if hasattr(registry, "_tools"):
             for name in registry.get_tool_names():
@@ -164,13 +193,14 @@ class DoraemonAgent(ReActAgent):
                 if not tool_def:
                     continue
 
-                is_remote_mcp_tool = (
-                    getattr(tool_def, "source", "built_in") == "mcp_remote"
-                    and tool_def.metadata.get("mcp_server") in (active_mcp_extensions or [])
+                is_remote_mcp_tool = getattr(
+                    tool_def, "source", "built_in"
+                ) == "mcp_remote" and tool_def.metadata.get("mcp_server") in (
+                    active_mcp_extensions or []
                 )
                 if name not in allowed_tool_names and not is_remote_mcp_tool:
                     continue
-                if name not in [t.name for t in tools]:
+                if name not in tool_name_set:
                     func = getattr(tool_def, "function", None)
                     if isinstance(func, LazyToolFunction) and getattr(func, "_load_error", None):
                         logger.warning(
@@ -187,6 +217,7 @@ class DoraemonAgent(ReActAgent):
                             sensitive=tool_def.sensitive,
                         )
                     )
+                    tool_name_set.add(name)
 
         return tools
 
@@ -196,8 +227,19 @@ class DoraemonAgent(ReActAgent):
         arguments: dict[str, Any],
     ) -> tuple[str, str | None]:
         """
-        Execute a tool from the registry with hooks and trace recording.
+        Execute a tool from the registry with hooks, trace recording,
+        and hard permission enforcement.
         """
+        # 1. Hard Permission Check (Anti-Prompt-Injection)
+        if not PermissionMatrix.check(self.state.mode, name):
+            logger.warning(
+                f"Permission denied: Tool '{name}' is not allowed in '{self.state.mode}' mode"
+            )
+            return (
+                "",
+                f"Permission Error: Tool '{name}' is not available in {self.state.mode} mode.",
+            )
+
         start_time = time.time()
 
         if self.hooks:
@@ -226,7 +268,9 @@ class DoraemonAgent(ReActAgent):
             tool_definition = None
             if hasattr(self.tool_registry, "_tools"):
                 tool_definition = self.tool_registry._tools.get(name)
-            source = getattr(tool_definition, "source", "built_in") if tool_definition else "built_in"
+            source = (
+                getattr(tool_definition, "source", "built_in") if tool_definition else "built_in"
+            )
             metadata = getattr(tool_definition, "metadata", {}) if tool_definition else {}
             self._trace.tool_call(
                 name,

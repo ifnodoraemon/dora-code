@@ -22,17 +22,9 @@ from rich.prompt import Prompt
 
 from src.agent import (
     AgentSession,
-    AgentState,
-    AgentTurnResult,
-    create_doraemon_agent_with_mcp,
 )
 from src.core.config.config import load_config
 from src.core.home import (
-    get_agent_dir,
-    get_project_config_path,
-    get_user_settings_path,
-    load_user_settings,
-    save_user_settings,
     set_project_dir,
 )
 from src.core.logger import configure_root_logger
@@ -60,12 +52,10 @@ async def run_chat_loop(
     project_dir = Path.cwd()
     set_project_dir(project_dir)
 
-    config_path = get_project_config_path()
-
-    from src.core.llm.model_client import ModelClient
     from src.core.checkpoint import CheckpointManager
-    from src.core.skills import SkillManager
     from src.core.hooks import HookManager
+    from src.core.llm.model_client import ModelClient
+    from src.core.skills import SkillManager
 
     model_client = await ModelClient.create()
     checkpoints = CheckpointManager(project=project)
@@ -255,7 +245,7 @@ def start(
 @app.command()
 def version():
     """Show version."""
-    console.print("[bold cyan]Doraemon Code[/bold cyan] v0.1.0")
+    console.print("[bold cyan]Doraemon Code[/bold cyan] v0.8.0")
 
 
 def entry_point():

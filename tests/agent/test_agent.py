@@ -4,9 +4,8 @@ Agent Module Tests
 Tests for the standard agent abstraction.
 """
 
-import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -15,10 +14,7 @@ from src.agent import (
     ActionType,
     AgentResult,
     AgentState,
-    BaseAgent,
     DoraemonAgent,
-    MaxTurnsExceededError,
-    Message,
     Observation,
     ReActAgent,
     Thought,

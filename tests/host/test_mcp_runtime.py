@@ -5,11 +5,11 @@ import httpx
 import pytest
 
 from src.host.mcp_runtime import (
+    _MCP_SERVER_FAILURE_CACHE,
     MCP_PROTOCOL_VERSION,
     RemoteMCPServerConfig,
     StdioMCPClient,
     StreamableHttpMCPClient,
-    _MCP_SERVER_FAILURE_CACHE,
     build_remote_mcp_registry,
 )
 

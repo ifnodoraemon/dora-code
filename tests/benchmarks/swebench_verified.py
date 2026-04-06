@@ -7,14 +7,18 @@ that test an agent's ability to resolve real-world software engineering tasks.
 Dataset: https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified
 """
 
+from __future__ import annotations
+
 import asyncio
-import json
 import logging
 import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from src.agent.doraemon import DoraemonAgent
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +37,7 @@ class SWEBenchTask:
     version: str
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SWEBenchTask":
+    def from_dict(cls, data: dict) -> SWEBenchTask:
         return cls(
             instance_id=data["instance_id"],
             repo=data["repo"],
@@ -156,7 +160,7 @@ class SWEBenchRunner:
             results.append(result)
 
             if result.resolved:
-                logger.info(f"  ✓ Resolved")
+                logger.info("  ✓ Resolved")
             else:
                 logger.info(f"  ✗ Failed: {result.error}")
 
@@ -181,6 +185,8 @@ class SWEBenchRunner:
         """Run a single task."""
         start_time = time.time()
 
+        hints_section = f"## Hints\n{task.hints_text}" if task.hints_text else ""
+
         prompt = f"""You are working on the repository: {task.repo}
 
 ## Issue
@@ -191,7 +197,7 @@ class SWEBenchRunner:
 2. Make the necessary changes to fix the issue
 3. Ensure your changes don't break existing tests
 
-{"## Hints\\n" + task.hints_text if task.hints_text else ""}
+{hints_section}
 """
 
         work_dir = None

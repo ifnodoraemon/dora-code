@@ -9,7 +9,8 @@ Defines the standard interface for all agents, following agentic principles:
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 from .state import AgentState
 from .types import Action, AgentResult, Observation, Thought, ToolDefinition

@@ -24,7 +24,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
 # Use new Google GenAI SDK (consistent with main CLI)
 from google import genai
 from google.genai import types
-
 from src.core.config.config import load_config
 from src.core.logger import TraceLogger
 from src.evals.model_grader import ModelGrader

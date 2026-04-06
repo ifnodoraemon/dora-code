@@ -20,7 +20,6 @@ from src.core.llm.model_utils import (
     Provider,
     StreamChunk,
     ToolDefinition,
-    get_content_text,
     normalize_anthropic_base_url,
 )
 from src.core.llm.provider_adapters import (
@@ -297,12 +296,8 @@ class DirectModelClient(BaseModelClient):
         client = self._providers[Provider.OPENAI]
         response_tools = self._build_openai_responses_tools(tools)
 
-        use_responses = (
-            self._openai_protocol == "responses"
-            or (
-                self._openai_protocol is None
-                and self._should_use_openai_responses_api(msg_list)
-            )
+        use_responses = self._openai_protocol == "responses" or (
+            self._openai_protocol is None and self._should_use_openai_responses_api(msg_list)
         )
 
         if use_responses:
@@ -317,7 +312,9 @@ class DirectModelClient(BaseModelClient):
                     )
                 )
                 if isinstance(response, str):
-                    raise RuntimeError("Provider returned non-OpenAI responses payload (string body)")
+                    raise RuntimeError(
+                        "Provider returned non-OpenAI responses payload (string body)"
+                    )
                 response_error = getattr(response, "error", None)
                 response_status = getattr(response, "status", None)
                 response_code = getattr(response, "code", None)
@@ -341,9 +338,13 @@ class DirectModelClient(BaseModelClient):
             except Exception as e:
                 if not self._should_fallback_to_chat_completions(e):
                     raise
-                logger.warning("OpenAI Responses API unavailable, falling back to chat.completions: %s", e)
+                logger.warning(
+                    "OpenAI Responses API unavailable, falling back to chat.completions: %s", e
+                )
 
-        params = OpenAIAdapter.build_params(model, msg_list, tools, temperature, self.config.max_tokens)
+        params = OpenAIAdapter.build_params(
+            model, msg_list, tools, temperature, self.config.max_tokens
+        )
         response = await client.chat.completions.create(**params)
         self._openai_protocol = "chat_completions"
         _OPENAI_PROTOCOL_CACHE[self._get_openai_protocol_cache_key()] = "chat_completions"
@@ -432,7 +433,9 @@ class DirectModelClient(BaseModelClient):
             content = msg.get("content")
             tool_calls = msg.get("tool_calls") or []
 
-            def _build_content_parts(content_value: Any, *, assistant: bool = False) -> list[dict[str, Any]]:
+            def _build_content_parts(
+                content_value: Any, *, assistant: bool = False
+            ) -> list[dict[str, Any]]:
                 text_type = "output_text" if assistant else "input_text"
                 if isinstance(content_value, str):
                     return [{"type": text_type, "text": content_value}]
@@ -520,7 +523,8 @@ class DirectModelClient(BaseModelClient):
     def _should_use_openai_responses_api(self, msg_list: Sequence[dict[str, Any]]) -> bool:
         """Use Responses API only for official OpenAI-style first turns we can encode correctly."""
         base_url = (self.config.openai_api_base or "").lower().rstrip("/")
-        if base_url and "api.openai.com" not in base_url and "packyapi.com" not in base_url:
+        allowed_domains = {"api.openai.com", "openai.azure.com"}
+        if base_url and not any(domain in base_url for domain in allowed_domains):
             return False
 
         return True
@@ -559,7 +563,9 @@ class DirectModelClient(BaseModelClient):
                         "type": "function",
                         "function": {
                             "name": getattr(item, "name", ""),
-                            "arguments": arguments if isinstance(arguments, str) else json.dumps(arguments or {}),
+                            "arguments": arguments
+                            if isinstance(arguments, str)
+                            else json.dumps(arguments or {}),
                         },
                     }
                 )

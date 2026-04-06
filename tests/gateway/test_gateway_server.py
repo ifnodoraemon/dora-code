@@ -169,8 +169,13 @@ class TestGatewayServerConversions:
 
     def test_openai_tool_call_arguments_are_parsed(self):
         """OpenAI tool call arguments should be parsed from the arguments field."""
-        from src.gateway.server import ChatCompletionMessage, ChatCompletionRequest, ToolCallInfo
-        from src.gateway.server import ToolCallFunction, _build_chat_request_from_openai
+        from src.gateway.server import (
+            ChatCompletionMessage,
+            ChatCompletionRequest,
+            ToolCallFunction,
+            ToolCallInfo,
+            _build_chat_request_from_openai,
+        )
 
         request = ChatCompletionRequest(
             model="gpt-4",

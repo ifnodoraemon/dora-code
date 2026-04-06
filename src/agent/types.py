@@ -130,10 +130,6 @@ class Action:
     def finish(cls, response: str | None = None) -> "Action":
         return cls(type=ActionType.FINISH, response=response)
 
-    @classmethod
-    def error(cls, error: str) -> "Action":
-        return cls(type=ActionType.ERROR, error=error)
-
     def to_dict(self) -> dict[str, Any]:
         """Convert action to dictionary."""
         result = {"type": self.type.value}

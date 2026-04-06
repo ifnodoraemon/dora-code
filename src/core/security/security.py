@@ -7,7 +7,6 @@ Provides path validation, sanitization, and security checks.
 import os
 from pathlib import Path
 
-
 SENSITIVE_PATHS = {
     "/etc/passwd",
     "/etc/shadow",

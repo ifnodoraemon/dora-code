@@ -373,12 +373,12 @@ class TestDirectModelClient:
         assert response.content == "pong"
 
     @pytest.mark.asyncio
-    async def test_chat_openai_allows_responses_for_packy_base_url(self):
-        """PackyAPI should use Responses API because its chat endpoint is unavailable."""
+    async def test_chat_openai_allows_responses_for_official_openai_url(self):
+        """Official OpenAI URL should use Responses API."""
         config = ClientConfig(
             mode=ClientMode.DIRECT,
             openai_api_key="test-key",
-            openai_api_base="https://www.packyapi.com/v1",
+            openai_api_base="https://api.openai.com/v1",
             model="gpt-5.4",
         )
         client = DirectModelClient(config)
@@ -404,7 +404,7 @@ class TestDirectModelClient:
         config = ClientConfig(
             mode=ClientMode.DIRECT,
             openai_api_key="test-key",
-            openai_api_base="https://www.packyapi.com/v1",
+            openai_api_base="https://api.openai.com/v1",
             model="gpt-5.4",
         )
         client = DirectModelClient(config)
@@ -432,7 +432,13 @@ class TestDirectModelClient:
                 Message(
                     role="assistant",
                     content="calling tool",
-                    tool_calls=[{"id": "call_1", "type": "function", "function": {"name": "read", "arguments": "{}"}}],
+                    tool_calls=[
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {"name": "read", "arguments": "{}"},
+                        }
+                    ],
                 ),
                 Message(role="tool", content="result", tool_call_id="call_1", name="read"),
             ]
@@ -489,7 +495,7 @@ class TestDirectModelClient:
 
     def test_openai_protocol_cache_seeds_new_client(self):
         """A successful probe should seed later client sessions for the same upstream."""
-        key = ("https://www.packyapi.com/v1", "gpt-5.4")
+        key = ("https://api.openai.com/v1", "gpt-5.4")
         _OPENAI_PROTOCOL_CACHE[key] = "responses"
 
         try:
@@ -497,7 +503,7 @@ class TestDirectModelClient:
                 ClientConfig(
                     mode=ClientMode.DIRECT,
                     openai_api_key="test-key",
-                    openai_api_base="https://www.packyapi.com/v1",
+                    openai_api_base="https://api.openai.com/v1",
                     model="gpt-5.4",
                 )
             )
@@ -508,14 +514,14 @@ class TestDirectModelClient:
     @pytest.mark.asyncio
     async def test_close_keeps_global_protocol_cache(self):
         """Closing a client should not erase the shared provider capability cache."""
-        key = ("https://www.packyapi.com/v1", "gpt-5.4")
+        key = ("https://api.openai.com/v1", "gpt-5.4")
         _OPENAI_PROTOCOL_CACHE.pop(key, None)
 
         client = DirectModelClient(
             ClientConfig(
                 mode=ClientMode.DIRECT,
                 openai_api_key="test-key",
-                openai_api_base="https://www.packyapi.com/v1",
+                openai_api_base="https://api.openai.com/v1",
                 model="gpt-5.4",
             )
         )
@@ -552,7 +558,13 @@ class TestDirectModelClient:
                 Message(
                     role="assistant",
                     content="calling tool",
-                    tool_calls=[{"id": "call_1", "type": "function", "function": {"name": "read", "arguments": "{}"}}],
+                    tool_calls=[
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {"name": "read", "arguments": "{}"},
+                        }
+                    ],
                 ),
                 Message(role="tool", content="result", tool_call_id="call_1", name="read"),
             ]
@@ -599,12 +611,17 @@ class TestDirectModelClient:
         mock_provider.chat.completions.create.return_value = types.SimpleNamespace(
             choices=[
                 types.SimpleNamespace(
-                    message=types.SimpleNamespace(content=None, tool_calls=[
-                        types.SimpleNamespace(
-                            id="call_1",
-                            function=types.SimpleNamespace(name="write", arguments='{"path":"a.txt","content":"hello"}'),
-                        )
-                    ]),
+                    message=types.SimpleNamespace(
+                        content=None,
+                        tool_calls=[
+                            types.SimpleNamespace(
+                                id="call_1",
+                                function=types.SimpleNamespace(
+                                    name="write", arguments='{"path":"a.txt","content":"hello"}'
+                                ),
+                            )
+                        ],
+                    ),
                     finish_reason="tool_calls",
                 )
             ],
@@ -634,7 +651,7 @@ class TestDirectModelClient:
         config = ClientConfig(
             mode=ClientMode.DIRECT,
             openai_api_key="test-key",
-            openai_api_base="https://www.packyapi.com/v1",
+            openai_api_base="https://api.openai.com/v1",
             model="gpt-5.4",
         )
         client = DirectModelClient(config)

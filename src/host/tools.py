@@ -35,7 +35,6 @@ from dataclasses import dataclass, field
 from typing import Any, Union, get_args, get_origin
 
 from google.genai import types
-
 from src.core.config.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -69,7 +68,7 @@ class LazyToolFunction:
             return self._loaded_func
         except (ImportError, AttributeError) as e:
             self._load_error = f"Failed to load {self._module}.{self._func_name}: {e}"
-            raise ImportError(self._load_error)
+            raise ImportError(self._load_error) from e
 
     def __call__(self, *args, **kwargs):
         """Forward call to the actual function."""

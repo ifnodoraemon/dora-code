@@ -285,8 +285,8 @@ class TestHookManagerInitialization:
     def test_hook_manager_env_setup(self):
         """Test HookManager environment setup."""
         manager = HookManager(project_dir="/tmp/project")
-        assert "CLAUDE_PROJECT_DIR" in manager._env
-        assert "/tmp/project" in manager._env["CLAUDE_PROJECT_DIR"]
+        assert "DORAEMON_PROJECT_DIR" in manager._env
+        assert "/tmp/project" in manager._env["DORAEMON_PROJECT_DIR"]
 
     def test_hook_manager_hooks_initialized_empty(self):
         """Test HookManager initializes all hook events as empty lists."""
@@ -962,7 +962,7 @@ class TestHookCommandExecution:
             manager = HookManager(project_dir=tmpdir)
             manager.register(
                 HookEvent.SESSION_START,
-                command="echo $CLAUDE_PROJECT_DIR",
+                command="echo $DORAEMON_PROJECT_DIR",
             )
             result = await manager.trigger(HookEvent.SESSION_START)
             assert result.success is True

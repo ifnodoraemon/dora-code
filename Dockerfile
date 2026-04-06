@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS builder
 
 LABEL org.opencontainers.image.source=https://github.com/doraemon-code/doraemon
 LABEL org.opencontainers.image.description="Doraemon Code - AI Assistant powered by MCP"
@@ -6,29 +6,28 @@ LABEL org.opencontainers.image.licenses=MIT
 
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files
-COPY pyproject.toml ./
-COPY README.md ./
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:/root/.cargo/bin:${PATH}"
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
+COPY pyproject.toml uv.lock ./
+RUN uv pip install --system --no-cache-dir .
 
-# Copy application code
 COPY src/ ./src/
 
-# Create directory for agent data
 RUN mkdir -p /app/.agent
 
-# Set environment variables
+RUN groupadd -r doraemon && useradd -r -g doraemon -m doraemon
+RUN chown -R doraemon:doraemon /app
+
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# Entry point
+USER doraemon
+
 ENTRYPOINT ["dora"]
 CMD ["start"]

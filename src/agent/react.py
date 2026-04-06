@@ -13,14 +13,12 @@ import asyncio
 import json
 import time
 import uuid
-from typing import Any, AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable
+from typing import Any
 
 from .base import (
     BaseAgent,
-    ContextOverflowError,
     MaxTurnsExceededError,
-    ToolExecutionError,
-    ToolNotFoundError,
 )
 from .state import AgentState
 from .types import (
@@ -107,16 +105,43 @@ class ReActAgent(BaseAgent):
         """
         Observe the current environment state.
 
-        Pull-based: Agent gets what it needs, not everything.
+        Enhanced: Dynamic context retrieval based on the current goal.
         """
         tool_results = []
         errors = []
 
-        for tc in self.state.tool_history[-5:]:
+        # 1. Always include the most recent 3 results for immediate continuity
+        recent_limit = 3
+        history_len = len(self.state.tool_history)
+        recent_start = max(0, history_len - recent_limit)
+
+        for tc in self.state.tool_history[recent_start:]:
             if tc.result or tc.error:
                 tool_results.append(tc)
             if tc.error:
                 errors.append(tc.error)
+
+        # 2. Contextual Retrieval: Include results related to the current goal or recent thought
+        # This prevents "memory loss" in long chains
+        goal = (self.state.goal or "").lower()
+        if goal:
+            # Look further back for results that contain keywords from the goal
+            # We check the remaining history that wasn't included in 'recent'
+            for tc in reversed(self.state.tool_history[:recent_start]):
+                # If tool result contains words from the goal, or it was a critical 'write'/'run' tool
+                result_text = (tc.result or "").lower()
+                if any(word in result_text for word in goal.split() if len(word) > 3):
+                    if tc not in tool_results:
+                        tool_results.insert(0, tc)
+
+                # Always keep critical state-changing tools in observation
+                if tc.name in {"write", "run"}:
+                    if tc not in tool_results:
+                        tool_results.insert(0, tc)
+
+                # Cap the contextual results to avoid context window overflow
+                if len(tool_results) > 15:
+                    break
 
         return Observation(
             user_input=self.state.user_input,
@@ -165,7 +190,7 @@ class ReActAgent(BaseAgent):
                         "message_count": len(messages),
                     },
                 )
-            raise TimeoutError(f"LLM call timed out after {llm_timeout:.0f}s")
+            raise TimeoutError(f"LLM call timed out after {llm_timeout:.0f}s") from None
         except Exception as e:
             raise RuntimeError(f"Error in thinking: {e}") from e
 
@@ -267,7 +292,7 @@ class ReActAgent(BaseAgent):
                         thought=thought.reasoning,
                     )
                     results = await self._execute_tools_parallel(thought.tool_calls)
-                    for tc_data, (result, error) in zip(thought.tool_calls, results):
+                    for tc_data, (result, error) in zip(thought.tool_calls, results, strict=False):
                         call_id = tc_data.get("id") or str(uuid.uuid4())
                         name = tc_data.get("name") or tc_data.get("function", {}).get("name", "")
                         args = tc_data.get("arguments") or tc_data.get("function", {}).get(
@@ -279,15 +304,14 @@ class ReActAgent(BaseAgent):
                             except (json.JSONDecodeError, TypeError):
                                 args = {}
 
-                        self.state.add_tool_call(
-                            ToolCall(
-                                id=call_id,
-                                name=name,
-                                arguments=args,
-                                result=result,
-                                error=error,
-                            )
+                        tool_call = ToolCall(
+                            id=call_id,
+                            name=name,
+                            arguments=args,
+                            result=result,
+                            error=error,
                         )
+                        self.state.add_tool_call(tool_call)
                         self.state.add_tool_result(call_id, name, result or f"Error: {error}")
                 else:
                     action = await self.act(thought)
@@ -336,7 +360,35 @@ class ReActAgent(BaseAgent):
         self,
         tool_calls: list[dict],
     ) -> list[tuple[str, str | None]]:
-        """Execute multiple tool calls in parallel."""
+        """Execute multiple tool calls in parallel, with safety sequencing.
+
+        Safety logic:
+        If any tool is a 'write' tool, we switch to sequential execution to avoid
+        race conditions and state inconsistency.
+        """
+        # Identify if any tool in the batch is a modifying tool
+        has_modifier = any(
+            (tc.get("name") or tc.get("function", {}).get("name", "")) == "write"
+            for tc in tool_calls
+        )
+
+        if has_modifier:
+            logger.info("Modifying tool detected. Switching to sequential execution for safety.")
+            results = []
+            for tc in tool_calls:
+                name = tc.get("name") or tc.get("function", {}).get("name", "")
+                args = tc.get("arguments") or tc.get("function", {}).get("arguments", {})
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except (json.JSONDecodeError, TypeError):
+                        args = {}
+
+                result, error = await self._execute_tool_with_permission(name, args)
+                results.append((result, error))
+            return results
+
+        # Purely read-only tools can run in parallel
         tasks = []
         for tc in tool_calls:
             name = tc.get("name") or tc.get("function", {}).get("name", "")
@@ -606,7 +658,9 @@ class ReActAgent(BaseAgent):
                 if role in {"user", "tool"}:
                     break
                 start_idx += 1
-            recent_messages = recent_messages[start_idx:] if start_idx < len(recent_messages) else []
+            recent_messages = (
+                recent_messages[start_idx:] if start_idx < len(recent_messages) else []
+            )
 
         for msg in recent_messages:
             messages.append(msg.to_api_format())
@@ -638,33 +692,44 @@ When the task is complete, provide a summary of what was done."""
         return await self.execute_tool(name, args)
 
     async def _compress_context(self) -> None:
-        """Compress context when approaching limits."""
-        recent = self.state.get_recent_messages(12)
+        """Perform semantic compression of the conversation history using the LLM."""
+        # Determine messages to compress: all but the most recent 12
+        messages_to_keep = 12
+        if len(self.state.messages) <= messages_to_keep:
+            return
 
-        older = self.state.messages[:-12]
-        if older:
-            summary = await self._summarize_messages(older)
-            self.state.messages = [
-                Message(role="system", content=f"[Previous context summary]\n{summary}"),
-                *recent,
-            ]
-            self.state._update_token_estimate()
+        older_messages = self.state.messages[:-messages_to_keep]
+        recent_messages = self.state.messages[-messages_to_keep:]
 
-    async def _summarize_messages(self, messages: list[Message]) -> str:
-        """Summarize older messages."""
-        content = "\n".join(f"{m.role}: {m.content[:200]}" for m in messages if m.content)
+        # Build a prompt for semantic summarization
+        history_text = "\n".join(f"{m.role}: {m.content}" for m in older_messages if m.content)
 
-        if len(content) < 500:
-            return content
+        summary_prompt = (
+            "You are a context compressor. Summarize the following conversation history. "
+            "CRITICAL: Preserve all technical details, including file paths, function names, "
+            "variable names, and specific error codes. Do not be generic. "
+            "Format as a concise list of key facts and current state.\n\n"
+            f"History:\n{history_text}"
+        )
 
         try:
-            response = await self._call_llm(
-                [{"role": "user", "content": f"Summarize this conversation:\n{content}"}],
-                [],
-            )
-            return response.get("content", content[:500])
-        except Exception:
-            return content[:500]
+            # Use a simple LLM call for summarization
+            response = await self._call_llm([{"role": "user", "content": summary_prompt}], [])
+            summary = response.get("content", "Summary unavailable.")
+
+            # Update state: replace old messages with a single semantic summary message
+            self.state.messages = [
+                Message(role="system", content=f"## Semantic Context Summary\n{summary}"),
+                *recent_messages,
+            ]
+            self.state._update_token_estimate()
+        except Exception as e:
+            logger.error(f"Semantic compression failed: {e}")
+            # Fallback to keeping messages if summarization fails
+
+    async def _summarize_messages(self, messages: list[Message]) -> str:
+        """Deprecated: Integrated into _compress_context for better semantic control."""
+        return ""
 
     def _build_result(self, error: str | None = None) -> AgentResult:
         """Build the final result."""

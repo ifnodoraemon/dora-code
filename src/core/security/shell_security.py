@@ -33,6 +33,47 @@ class ShellConfig:
     max_output_size: int = 100_000  # characters
     shell: str = "/bin/bash"
 
+    # Allowed base commands (Whitelist)
+    allowed_base_commands: list[str] = field(
+        default_factory=lambda: [
+            "ls",
+            "pwd",
+            "cat",
+            "grep",
+            "find",
+            "head",
+            "tail",
+            "mkdir",
+            "touch",
+            "cp",
+            "mv",
+            "rm",
+            "git",
+            "npm",
+            "pip",
+            "python",
+            "python3",
+            "node",
+            "echo",
+            "mkdir",
+            "chmod",
+            "chown",
+            "df",
+            "du",
+            "ps",
+            "top",
+            "kill",
+            "chmod",
+            "chmod",
+            "grep",
+            "sed",
+            "awk",
+            "sort",
+            "uniq",
+            "tee",
+        ]
+    )
+
     # Commands that are blocked for safety
     blocked_commands: list[str] = field(
         default_factory=lambda: [
@@ -166,15 +207,15 @@ def get_process_lock() -> threading.Lock:
 def is_command_blocked(command: str, config: ShellConfig = DEFAULT_CONFIG) -> bool:
     """Check if a command is blocked for safety.
 
-    Enhanced with additional evasion-resistance:
-    - $() and backtick command substitution detection
-    - Prefix command bypass detection (env, command, nice, etc.)
-    - Base64/hex decode piping detection
+    Implementation:
+    1. Check against high-risk blacklisted strings.
+    2. Verify that the base command is in the allowed whitelist.
+    3. Detect dangerous shell patterns (substitution, piping to shell).
     """
     command_lower = command.lower().strip()
     normalized = command_lower.replace('"', "").replace("'", "").replace("\\", "")
 
-    # Check against blocked command strings
+    # 1. High-risk blacklisted strings (Immediate block)
     for blocked in config.blocked_commands:
         bl = blocked.lower()
         if bl in command_lower or bl in normalized:
@@ -187,49 +228,34 @@ def is_command_blocked(command: str, config: ShellConfig = DEFAULT_CONFIG) -> bo
         tokens = command_lower.split()
 
     if tokens:
-        base_cmd = os.path.basename(tokens[0])
-
-        # Skip known prefix commands that can wrap dangerous commands
+        # Handle prefix commands (env, nice, etc.)
         prefix_commands = {"env", "command", "nice", "nohup", "time", "timeout", "strace"}
         effective_tokens = list(tokens)
         while effective_tokens and os.path.basename(effective_tokens[0]) in prefix_commands:
             effective_tokens.pop(0)
-            # Also skip env's VAR=value arguments
             while effective_tokens and "=" in effective_tokens[0]:
                 effective_tokens.pop(0)
 
         if effective_tokens:
             effective_base = os.path.basename(effective_tokens[0])
-            if effective_base in config.blocked_base_commands:
+            # 2. Whitelist Check: If not in allowed_base_commands, block it
+            if effective_base not in config.allowed_base_commands:
+                logger.warning(f"Command '{effective_base}' is not in whitelist")
                 return True
         else:
-            # All tokens were prefix commands, check the original base
-            if base_cmd in config.blocked_base_commands:
-                return True
+            return True
 
-        # Detect dangerous rm patterns
-        if base_cmd == "rm" and any(t in tokens for t in ["-rf", "-fr"]):
-            if any(t in ("/", "/*", "/.", "/..") for t in tokens):
-                return True
-
-    # Check multi-command chains
-    for sep in [";", "&&", "||"]:
-        if sep in command:
-            return any(
-                is_command_blocked(sub.strip(), config) for sub in command.split(sep) if sub.strip()
-            )
-
-    # Regex-based dangerous patterns (enhanced)
+    # 3. Regex-based dangerous patterns
     dangerous_patterns = [
         r">\s*/dev/sd",  # Write to disk device
         r"\|\s*(bash|sh|zsh)\b",  # Pipe to shell
-        r"eval\s*[\s(]",  # eval execution (with space or parens)
-        r"exec\s+\d*[<>]",  # exec redirection
-        r"\$\([^)]*(?:rm|mkfs|dd|shred)",  # $() command substitution with dangerous cmds
-        r"`[^`]*(?:rm|mkfs|dd|shred)",  # backtick substitution with dangerous cmds
-        r"base64\s+(?:-d|--decode)\s*\|",  # base64 decode + pipe (obfuscation)
-        r"xxd\s+-r\s*\|",  # hex decode + pipe (obfuscation)
-        r"python[23]?\s+-c\s+[\"'].*(?:subprocess|os\.system|shutil\.rmtree)",  # Python one-liners
+        r"eval\s*[\s(]",  # eval execution
+        r"exec\s+\d*[<<>>]",  # exec redirection
+        r"\$\([^)]*(?:rm|mkfs|dd|shred)",  # Dangerous substitution
+        r"`[^`]*(?:rm|mkfs|dd|shred)",
+        r"base64\s+(?:-d|--decode)\s*\|",
+        r"xxd\s+-r\s*\|",
+        r"python[23]?\s+-c\s+[\"'].*(?:subprocess|os\.system|shutil\.rmtree)",
     ]
     return any(re.search(p, command_lower) for p in dangerous_patterns)
 

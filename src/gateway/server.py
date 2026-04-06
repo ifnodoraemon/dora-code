@@ -595,7 +595,9 @@ async def anthropic_messages(
     response = await router.chat(chat_request, preferred_provider="anthropic")
 
     if isinstance(response, ErrorResponse):
-        raise HTTPException(status_code=500, detail=response.to_dict())
+        raise HTTPException(
+            status_code=500, detail={"error": "Internal server error", "code": response.code}
+        )
 
     return _convert_chat_response_to_anthropic(response)
 

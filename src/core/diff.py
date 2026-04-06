@@ -9,7 +9,6 @@ import difflib
 import os
 from dataclasses import dataclass
 
-from rich.columns import Columns
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -155,7 +154,7 @@ def print_inline_diff(file_path: str, new_content: str, context_lines: int = 3):
     if result.is_new_file:
         console.print(f"[green]✨ New file: {file_path}[/green]")
         syntax = Syntax(new_content, _detect_language(file_path), theme="monokai")
-        console.print(Panel(syntax, title=f"[green]New File[/green]", expand=False))
+        console.print(Panel(syntax, title="[green]New File[/green]", expand=False))
         return
 
     if not result.hunks:
@@ -164,9 +163,6 @@ def print_inline_diff(file_path: str, new_content: str, context_lines: int = 3):
 
     stats_text = f"[green]+{result.stats['added']}[/green] [red]-{result.stats['removed']}[/red]"
     console.print(f"\n[bold cyan]📝 {file_path}[/bold cyan] {stats_text}")
-
-    old_lines = result.old_content.splitlines() if result.old_content else []
-    new_lines = new_content.splitlines()
 
     for hunk in result.hunks:
         console.print(
@@ -195,9 +191,6 @@ def print_side_by_side_diff(file_path: str, new_content: str):
     if not result.hunks:
         console.print(f"[dim]No changes in {file_path}[/dim]")
         return
-
-    old_lines = result.old_content.splitlines() if result.old_content else []
-    new_lines = new_content.splitlines()
 
     for hunk in result.hunks:
         table = Table(show_header=True, header_style="bold", expand=True)
