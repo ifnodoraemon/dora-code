@@ -333,74 +333,12 @@ class AgentSession:
 
     async def initialize(self) -> None:
         """Initialize the agent session through the shared runtime bootstrap."""
-        if self.persist_session:
-            self._session_manager = self._create_session_manager()
-            if self._session_id:
-                self._session_record = self._session_manager.resume_session(self._session_id)
-                if self._session_record is not None:
-                    self._session_id = self._session_record.metadata.id
-                    self.mode = self._session_record.metadata.mode or self.mode
-            if self._session_record is None:
-                self._session_record = self._session_manager.create_session(
-                    project=self.project,
-                    mode=self.mode,
-                )
-                self._session_id = self._session_record.metadata.id
-        else:
-            self._session_manager = None
-            self._session_record = None
-            _ = self.session_id
-
-        self._state = AgentState(mode=self.mode, max_turns=self.max_turns)
-        self._restore_session_state()
-
-        self._runtime = await bootstrap_runtime(
-            mode=self.mode,
-            project=self.project,
-            project_dir=self.project_dir,
-            config_path=self.config_path,
-            model_client=self.model_client,
-            model_name=self.model_name,
-            registry=self.registry,
-            hooks=self.hooks,
-            checkpoints=self.checkpoints,
-            skills=self.skills,
-            task_manager=self.task_manager,
-        )
-        self.model_client = self._runtime.model_client
-        self.registry = self._runtime.registry
-        self._tool_registry = self._runtime.registry
-        self.hooks = self._runtime.hooks
-        self.checkpoints = self._runtime.checkpoints
-        self.skills = self._runtime.skills
-        self.task_manager = self._runtime.task_manager
-        self.project_dir = self._runtime.context.project_dir
-        self._mcp_extensions = self._runtime.context.active_mcp_extensions.copy()
-
-        if self.enable_trace:
-            from src.core.home import set_project_dir
-
-            set_project_dir(self.project_dir)
-            self._trace = Trace(self.session_id, self.project_dir)
-
-        self._agent = create_doraemon_agent(
-            llm_client=self.model_client,
-            tool_registry=self.registry,
-            mode=self.mode,
-            hooks=self.hooks,
-            checkpoints=self.checkpoints,
-            skills=self.skills,
-            task_manager=self.task_manager,
-            max_turns=self.max_turns,
-            project_dir=self.project_dir,
-            enable_trace=self.enable_trace,
-            trace=self._trace,
-            session_id=self.session_id,
-            active_mcp_extensions=self._mcp_extensions,
-            worker_role=self.worker_role,
-            allowed_tool_names=self.allowed_tool_names,
-        )
-        self._agent.state = self._state
+        self._initialize_session_record()
+        self._initialize_state()
+        runtime = await self._bootstrap_runtime(registry=self.registry)
+        self._apply_runtime(runtime)
+        self._initialize_trace()
+        self._rebuild_agent()
 
     async def turn(
         self,
@@ -563,62 +501,124 @@ class AgentSession:
         if mode == self.mode:
             return
 
-        self.mode = mode
-        if self._state:
-            self._state.mode = mode
-        if self._session_record is not None:
-            self._session_record.metadata.mode = mode
-
-        if self._runtime is not None and self._runtime.owns_registry:
-            previous_runtime = self._runtime
-            previous_runtime.owns_model_client = False
-            self._runtime = await bootstrap_runtime(
-                mode=self.mode,
-                project=self.project,
-                project_dir=self.project_dir,
-                config_path=self.config_path,
-                model_client=self.model_client,
-                model_name=self.model_name,
-                registry=None,
-                hooks=self.hooks,
-                checkpoints=self.checkpoints,
-                skills=self.skills,
-                task_manager=self.task_manager,
-            )
-            self.model_client = self._runtime.model_client
-            self.registry = self._runtime.registry
-            self._tool_registry = self._runtime.registry
-            self.hooks = self._runtime.hooks
-            self.checkpoints = self._runtime.checkpoints
-            self.skills = self._runtime.skills
-            self.task_manager = self._runtime.task_manager
-            self.project_dir = self._runtime.context.project_dir
-            self._mcp_extensions = self._runtime.context.active_mcp_extensions.copy()
-            await previous_runtime.aclose()
-
-        if self._agent is not None and self.registry is not None:
-            self._agent = create_doraemon_agent(
-                llm_client=self.model_client,
-                tool_registry=self.registry,
-                mode=self.mode,
-                hooks=self.hooks,
-                checkpoints=self.checkpoints,
-                skills=self.skills,
-                task_manager=self.task_manager,
-                max_turns=self.max_turns,
-                project_dir=self.project_dir,
-                enable_trace=self.enable_trace,
-                trace=self._trace,
-                session_id=self.session_id,
-                active_mcp_extensions=self._mcp_extensions,
-                worker_role=self.worker_role,
-                allowed_tool_names=self.allowed_tool_names,
-            )
-            self._agent.state = self._state
+        self._update_mode(mode)
+        await self._rebootstrap_runtime_for_mode()
+        self._rebuild_agent()
         self._save_session_state()
 
     def _create_session_manager(self) -> SessionManager:
         return SessionManager(base_dir=self.project_dir / ".agent" / "sessions")
+
+    def _initialize_session_record(self) -> None:
+        if not self.persist_session:
+            self._session_manager = None
+            self._session_record = None
+            _ = self.session_id
+            return
+
+        self._session_manager = self._create_session_manager()
+        self._session_record = self._resume_existing_session()
+        if self._session_record is not None:
+            return
+
+        self._session_record = self._session_manager.create_session(
+            project=self.project,
+            mode=self.mode,
+        )
+        self._session_id = self._session_record.metadata.id
+
+    def _resume_existing_session(self) -> SessionData | None:
+        if self._session_manager is None or not self._session_id:
+            return None
+
+        session_record = self._session_manager.resume_session(self._session_id)
+        if session_record is None:
+            return None
+
+        self._session_id = session_record.metadata.id
+        self.mode = session_record.metadata.mode or self.mode
+        return session_record
+
+    def _initialize_state(self) -> None:
+        self._state = AgentState(mode=self.mode, max_turns=self.max_turns)
+        self._restore_session_state()
+
+    async def _bootstrap_runtime(self, *, registry: Any | None) -> RuntimeBootstrap:
+        return await bootstrap_runtime(
+            mode=self.mode,
+            project=self.project,
+            project_dir=self.project_dir,
+            config_path=self.config_path,
+            model_client=self.model_client,
+            model_name=self.model_name,
+            registry=registry,
+            hooks=self.hooks,
+            checkpoints=self.checkpoints,
+            skills=self.skills,
+            task_manager=self.task_manager,
+        )
+
+    def _apply_runtime(self, runtime: RuntimeBootstrap) -> None:
+        self._runtime = runtime
+        self.model_client = runtime.model_client
+        self.registry = runtime.registry
+        self._tool_registry = runtime.registry
+        self.hooks = runtime.hooks
+        self.checkpoints = runtime.checkpoints
+        self.skills = runtime.skills
+        self.task_manager = runtime.task_manager
+        self.project_dir = runtime.context.project_dir
+        self._mcp_extensions = runtime.context.active_mcp_extensions.copy()
+
+    def _initialize_trace(self) -> None:
+        if not self.enable_trace:
+            self._trace = None
+            return
+
+        from src.core.home import set_project_dir
+
+        set_project_dir(self.project_dir)
+        self._trace = Trace(self.session_id, self.project_dir)
+
+    def _rebuild_agent(self) -> None:
+        if self.registry is None or self._state is None:
+            return
+
+        self._agent = create_doraemon_agent(
+            llm_client=self.model_client,
+            tool_registry=self.registry,
+            mode=self.mode,
+            hooks=self.hooks,
+            checkpoints=self.checkpoints,
+            skills=self.skills,
+            task_manager=self.task_manager,
+            max_turns=self.max_turns,
+            project_dir=self.project_dir,
+            enable_trace=self.enable_trace,
+            trace=self._trace,
+            session_id=self.session_id,
+            active_mcp_extensions=self._mcp_extensions,
+            worker_role=self.worker_role,
+            allowed_tool_names=self.allowed_tool_names,
+        )
+        self._agent.state = self._state
+
+    def _update_mode(self, mode: str) -> None:
+        self.mode = mode
+        if self._state is not None:
+            self._state.mode = mode
+        if self._session_record is not None:
+            self._session_record.metadata.mode = mode
+
+    async def _rebootstrap_runtime_for_mode(self) -> None:
+        if self._runtime is None or not self._runtime.owns_registry:
+            return
+
+        previous_runtime = self._runtime
+        previous_runtime.owns_model_client = False
+        runtime = await self._bootstrap_runtime(registry=None)
+        self._apply_runtime(runtime)
+        await previous_runtime.aclose()
 
     def _restore_session_state(self) -> None:
         if self._state is None or self._session_record is None:
