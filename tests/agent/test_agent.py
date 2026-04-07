@@ -1009,3 +1009,24 @@ class TestAgentAdapter:
         assert [message.role for message in resumed._state.messages] == ["user", "assistant"]
         assert resumed._state.messages[0].content == "Hello"
         assert resumed._state.messages[1].content == "Response"
+
+    @pytest.mark.asyncio
+    async def test_spawn_worker_session_reuses_initialized_runtime(self, mock_llm, mock_registry, tmp_path):
+        """Should spawn worker sessions even after the parent session is initialized."""
+        from src.agent.adapter import AgentSession
+
+        session = AgentSession(
+            model_client=mock_llm,
+            registry=mock_registry,
+            mode="build",
+            project_dir=tmp_path,
+            enable_trace=False,
+        )
+        await session.initialize()
+
+        worker = await session.spawn_worker_session(enable_trace=False, worker_role="inspect")
+
+        assert worker is not None
+        assert worker.worker_role == "inspect"
+        assert worker._agent is not None
+        await worker.aclose()

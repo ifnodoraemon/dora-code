@@ -6,6 +6,7 @@ Handles chat interactions with SSE streaming.
 
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any, Literal
@@ -44,6 +45,8 @@ async def chat_endpoint(request: ChatRequest):
     """
     try:
         message = request.validated_message
+        if request.session_id and not re.match(r"^[a-zA-Z0-9_-]+$", request.session_id):
+            raise HTTPException(status_code=400, detail="Invalid session ID format")
         session = AgentSession(
             model_client=None,
             registry=None,
@@ -118,6 +121,8 @@ async def chat_endpoint(request: ChatRequest):
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Chat error: {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e

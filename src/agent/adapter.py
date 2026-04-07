@@ -496,23 +496,23 @@ class AgentSession:
         if not self._agent:
             await self.initialize()
 
-            worker = AgentSession(
-                model_client=self.model_client,
-                registry=self.registry,
-                mode=self.mode,
-                project=self.project,
+        worker = AgentSession(
+            model_client=self.model_client,
+            registry=self.registry,
+            mode=self.mode,
+            project=self.project,
             hooks=self.hooks,
             checkpoints=self.checkpoints,
             skills=self.skills,
-                task_manager=self.task_manager,
-                max_turns=self.max_turns,
-                config_path=self.config_path,
-                project_dir=self.project_dir,
-                enable_trace=self.enable_trace if enable_trace is None else enable_trace,
-                model_name=self.model_name,
-                worker_role=worker_role,
-                allowed_tool_names=allowed_tool_names,
-            )
+            task_manager=self.task_manager,
+            max_turns=self.max_turns,
+            config_path=self.config_path,
+            project_dir=self.project_dir,
+            enable_trace=self.enable_trace if enable_trace is None else enable_trace,
+            model_name=self.model_name,
+            worker_role=worker_role,
+            allowed_tool_names=allowed_tool_names,
+        )
         await worker.initialize()
         return worker
 

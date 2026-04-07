@@ -261,6 +261,11 @@ class TestSessionManager:
         assert path.name == "test_123.json"
         assert path.parent == session_manager.base_dir
 
+    def test_get_session_path_rejects_unsafe_identifier(self, session_manager):
+        """Unsafe identifiers should not be converted into filesystem paths."""
+        with pytest.raises(ValueError, match="Invalid session ID"):
+            session_manager._get_session_path("../escape")
+
     def test_create_session_basic(self, session_manager):
         """Test creating a basic session."""
         session = session_manager.create_session()
@@ -320,6 +325,11 @@ class TestSessionManager:
     def test_load_nonexistent_session(self, session_manager):
         """Test loading a nonexistent session."""
         loaded = session_manager.load_session("nonexistent_id")
+        assert loaded is None
+
+    def test_load_session_rejects_unsafe_identifier(self, session_manager):
+        """Unsafe identifiers should be rejected before any file access."""
+        loaded = session_manager.load_session("../escape")
         assert loaded is None
 
     def test_save_session(self, session_manager):

@@ -2,6 +2,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from src.webui.routes.chat import ChatRequest, chat_endpoint
 from src.webui.routes.tasks import list_tasks
@@ -89,6 +90,14 @@ async def test_list_tasks_returns_tree_and_ready_views(monkeypatch):
     assert listing["tasks"][0]["id"] == "root"
     assert listing["tree"][0]["id"] == "root"
     assert ready_listing["tasks"][0]["id"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_chat_endpoint_rejects_invalid_session_id():
+    with pytest.raises(HTTPException) as exc_info:
+        await chat_endpoint(ChatRequest(message="hi", session_id="../escape"))
+
+    assert exc_info.value.status_code == 400
 
 
 async def _noop_async():

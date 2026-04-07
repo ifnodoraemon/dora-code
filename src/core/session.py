@@ -11,6 +11,7 @@ Enhanced session management with support for:
 
 import json
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -19,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+_SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
 @dataclass
@@ -144,8 +146,14 @@ class SessionManager:
         """Generate a unique session ID."""
         return uuid.uuid4().hex[:12]
 
+    def _is_safe_session_id(self, session_id: str) -> bool:
+        """Return whether a session identifier is safe to use as a filename."""
+        return bool(_SESSION_ID_RE.fullmatch(session_id))
+
     def _get_session_path(self, session_id: str) -> Path:
         """Get path for session data file."""
+        if not self._is_safe_session_id(session_id):
+            raise ValueError(f"Invalid session ID: {session_id}")
         return self.base_dir / f"{session_id}.json"
 
     def _load_index(self):
@@ -221,6 +229,10 @@ class SessionManager:
 
     def load_session(self, session_id: str) -> SessionData | None:
         """Load a session by ID."""
+        if not self._is_safe_session_id(session_id):
+            logger.warning(f"Rejected unsafe session ID: {session_id}")
+            return None
+
         path = self._get_session_path(session_id)
         if not path.exists():
             return None
