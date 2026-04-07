@@ -9,15 +9,68 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.core.logger import configure_root_logger
-from src.webui.dashboard.api import router as dashboard_router
 from src.webui.routes import chat, sessions, tasks, tools
 
 # Setup logging
 configure_root_logger()
 logger = logging.getLogger(__name__)
+
+
+def _extract_asset_paths(index_html: str) -> list[str]:
+    asset_paths: list[str] = []
+    for marker in ('src="/assets/', 'href="/assets/'):
+        start = 0
+        while True:
+            offset = index_html.find(marker, start)
+            if offset == -1:
+                break
+            asset_start = offset + len(marker)
+            asset_end = index_html.find('"', asset_start)
+            asset_paths.append(index_html[asset_start:asset_end])
+            start = asset_end + 1
+    return asset_paths
+
+
+def resolve_static_bundle(webui_dir: Path) -> Path | None:
+    static_dir = webui_dir / "static"
+    index_path = static_dir / "index.html"
+    if not index_path.exists():
+        logger.warning(
+            "Web UI bundle missing: %s not found. Run `cd webui && npm ci && npm run build`.",
+            index_path,
+        )
+        return None
+
+    index_html = index_path.read_text(encoding="utf-8")
+    missing_assets = [
+        asset_path
+        for asset_path in _extract_asset_paths(index_html)
+        if not (static_dir / "assets" / asset_path).exists()
+    ]
+    if missing_assets:
+        logger.warning(
+            "Web UI bundle incomplete: missing assets %s. Run `cd webui && npm run build`.",
+            ", ".join(missing_assets),
+        )
+        return None
+
+    return static_dir
+
+
+def _load_dashboard_router():
+    try:
+        from src.webui.dashboard.api import router as dashboard_router
+    except ImportError as exc:
+        logger.warning(
+            "Dashboard router disabled: %s. Install optional template dependencies to enable /dashboard.",
+            exc,
+        )
+        return None
+    return dashboard_router
 
 app = FastAPI(
     title="Doraemon Code API",
@@ -58,7 +111,9 @@ app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(sessions.router, prefix="/api/sessions", tags=["sessions"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(tools.router, prefix="/api/tools", tags=["tools"])
-app.include_router(dashboard_router, prefix="/dashboard", tags=["dashboard"])
+dashboard_router = _load_dashboard_router()
+if dashboard_router is not None:
+    app.include_router(dashboard_router, prefix="/dashboard", tags=["dashboard"])
 
 # Mount dashboard static files
 dashboard_static_dir = Path(__file__).parent / "dashboard" / "static"
@@ -70,9 +125,17 @@ if dashboard_static_dir.exists():
     )
 
 # Mount static files (frontend)
-static_dir = Path(__file__).parent / "static"
-if static_dir.exists():
+static_dir = resolve_static_bundle(Path(__file__).parent)
+if static_dir is not None:
     app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+else:
+
+    @app.get("/", include_in_schema=False)
+    async def webui_bundle_missing():
+        return PlainTextResponse(
+            "Web UI bundle is missing or incomplete. Run `cd webui && npm ci && npm run build`.",
+            status_code=503,
+        )
 
 
 def start_server(host: str = "127.0.0.1", port: int = 8000, reload: bool = False):
