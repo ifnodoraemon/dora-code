@@ -1,4 +1,8 @@
-from src.host.cli.main import _format_task_tree, _parse_orchestrate_args
+from types import SimpleNamespace
+
+import pytest
+
+from src.host.cli.main import _format_task_tree, _parse_orchestrate_args, handle_command
 
 
 def test_parse_orchestrate_args_supports_worker_flag():
@@ -35,3 +39,21 @@ def test_format_task_tree_renders_nested_assignments():
 
     assert lines[0] == "- [in_progress] Root (root) ready"
     assert lines[1] == "  - [pending] Child (child) @worker-1"
+
+
+@pytest.mark.asyncio
+async def test_handle_command_mode_uses_session_state(monkeypatch):
+    printed: list[str] = []
+
+    async def set_mode(mode: str) -> None:
+        session.mode = mode
+
+    session = SimpleNamespace(mode="build", set_mode=set_mode)
+    monkeypatch.setattr("src.host.cli.main.console.print", lambda message: printed.append(message))
+
+    await handle_command("/mode plan", session)
+    await handle_command("/mode", session)
+
+    assert session.mode == "plan"
+    assert any("Switched to plan mode" in message for message in printed)
+    assert any("Current mode: plan" in message for message in printed)

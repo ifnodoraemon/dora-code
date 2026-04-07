@@ -293,6 +293,7 @@ class AgentSession:
         model_name: str | None = None,
         worker_role: str | None = None,
         allowed_tool_names: list[str] | None = None,
+        persist_session: bool = True,
     ):
         self.model_client = model_client
         self.registry = registry
@@ -308,6 +309,7 @@ class AgentSession:
         self.enable_trace = enable_trace
         self.model_name = model_name
         self.worker_role = worker_role
+        self.persist_session = persist_session
         self.allowed_tool_names = (
             allowed_tool_names.copy() if allowed_tool_names is not None else None
         )
@@ -331,18 +333,23 @@ class AgentSession:
 
     async def initialize(self) -> None:
         """Initialize the agent session through the shared runtime bootstrap."""
-        self._session_manager = self._create_session_manager()
-        if self._session_id:
-            self._session_record = self._session_manager.resume_session(self._session_id)
-            if self._session_record is not None:
+        if self.persist_session:
+            self._session_manager = self._create_session_manager()
+            if self._session_id:
+                self._session_record = self._session_manager.resume_session(self._session_id)
+                if self._session_record is not None:
+                    self._session_id = self._session_record.metadata.id
+                    self.mode = self._session_record.metadata.mode or self.mode
+            if self._session_record is None:
+                self._session_record = self._session_manager.create_session(
+                    project=self.project,
+                    mode=self.mode,
+                )
                 self._session_id = self._session_record.metadata.id
-                self.mode = self._session_record.metadata.mode or self.mode
-        if self._session_record is None:
-            self._session_record = self._session_manager.create_session(
-                project=self.project,
-                mode=self.mode,
-            )
-            self._session_id = self._session_record.metadata.id
+        else:
+            self._session_manager = None
+            self._session_record = None
+            _ = self.session_id
 
         self._state = AgentState(mode=self.mode, max_turns=self.max_turns)
         self._restore_session_state()
@@ -512,6 +519,7 @@ class AgentSession:
             model_name=self.model_name,
             worker_role=worker_role,
             allowed_tool_names=allowed_tool_names,
+            persist_session=False,
         )
         await worker.initialize()
         return worker

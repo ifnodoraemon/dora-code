@@ -1054,6 +1054,7 @@ class TestAgentAdapter:
     async def test_spawn_worker_session_reuses_initialized_runtime(self, mock_llm, mock_registry, tmp_path):
         """Should spawn worker sessions even after the parent session is initialized."""
         from src.agent.adapter import AgentSession
+        from src.core.session import SessionManager
 
         session = AgentSession(
             model_client=mock_llm,
@@ -1069,4 +1070,11 @@ class TestAgentAdapter:
         assert worker is not None
         assert worker.worker_role == "inspect"
         assert worker._agent is not None
+        assert worker._session_manager is None
+        assert worker._session_record is None
+
+        session_manager = SessionManager(tmp_path / ".agent" / "sessions")
+        listed = session_manager.list_sessions(project="default")
+        assert len(listed) == 1
+        assert listed[0].id == session.session_id
         await worker.aclose()

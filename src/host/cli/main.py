@@ -120,7 +120,10 @@ async def run_chat_loop(
             try:
                 user_input = await asyncio.to_thread(
                     Prompt.ask,
-                    f"[bold {('green' if mode == 'build' else 'blue')}]doraemon[/bold {('green' if mode == 'build' else 'blue')}]",
+                    (
+                        f"[bold {('green' if session.mode == 'build' else 'blue')}]"
+                        f"doraemon[/bold {('green' if session.mode == 'build' else 'blue')}]"
+                    ),
                 )
             except (KeyboardInterrupt, EOFError):
                 console.print("\n[yellow]Goodbye![/yellow]")
@@ -134,7 +137,7 @@ async def run_chat_loop(
                 break
 
             if user_input.startswith("/"):
-                result = await handle_command(user_input, session, mode)
+                result = await handle_command(user_input, session)
                 if result == "exit":
                     break
                 continue
@@ -165,7 +168,7 @@ async def run_chat_loop(
             console.print(f"[dim]Trace saved: {trace_path}[/dim]")
 
 
-async def handle_command(cmd: str, session: AgentSession, mode: str) -> str | None:
+async def handle_command(cmd: str, session: AgentSession) -> str | None:
     """Handle slash commands."""
     parts = cmd[1:].split()
     command = parts[0].lower() if parts else ""
@@ -193,10 +196,9 @@ async def handle_command(cmd: str, session: AgentSession, mode: str) -> str | No
         if args and args[0] in {"plan", "build"}:
             new_mode = args[0]
             await session.set_mode(new_mode)
-            mode = new_mode
             console.print(f"[green]Switched to {new_mode} mode[/green]")
         else:
-            console.print(f"[yellow]Current mode: {mode}[/yellow]")
+            console.print(f"[yellow]Current mode: {session.mode}[/yellow]")
             console.print("Usage: /mode plan | /mode build")
 
     elif command == "clear":
