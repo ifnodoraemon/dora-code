@@ -3,10 +3,27 @@
 from __future__ import annotations
 
 import json
+from contextvars import ContextVar
 
 from src.core.tasks import TaskClaimError, TaskManager, TaskStatus
 
 manager = TaskManager()
+_active_task_manager: ContextVar[TaskManager | None] = ContextVar("active_task_manager", default=None)
+
+
+def get_task_manager() -> TaskManager:
+    """Get the runtime task manager for the current execution context."""
+    return _active_task_manager.get() or manager
+
+
+def set_task_manager(task_manager: TaskManager):
+    """Set the runtime task manager for the current execution context."""
+    return _active_task_manager.set(task_manager)
+
+
+def reset_task_manager(token) -> None:
+    """Reset the runtime task manager context."""
+    _active_task_manager.reset(token)
 
 
 def _normalize_status(value: str | None) -> TaskStatus | None:
@@ -59,12 +76,13 @@ def task(
     """
     operation = operation.lower().strip()
     parsed_dependencies = _normalize_dependencies(dependencies)
+    active_manager = get_task_manager()
 
     if operation == "create":
         if not title:
             return _dump({"ok": False, "error": "title is required"})
         try:
-            created = manager.create_task(
+            created = active_manager.create_task(
                 title=title,
                 description=description or "",
                 parent_id=parent_id,
@@ -81,18 +99,19 @@ def task(
         if status is not None and parsed_status is None:
             return _dump({"ok": False, "error": f"invalid status: {status}"})
         tasks = [
-            task.to_dict() for task in manager.list_tasks(status=parsed_status, parent_id=parent_id)
+            task.to_dict()
+            for task in active_manager.list_tasks(status=parsed_status, parent_id=parent_id)
         ]
-        return _dump({"ok": True, "tasks": tasks, "tree": manager.get_task_tree()})
+        return _dump({"ok": True, "tasks": tasks, "tree": active_manager.get_task_tree()})
 
     if operation == "ready":
-        tasks = [task.to_dict() for task in manager.list_ready_tasks()]
+        tasks = [task.to_dict() for task in active_manager.list_ready_tasks()]
         return _dump({"ok": True, "tasks": tasks})
 
     if operation == "get":
         if not task_id:
             return _dump({"ok": False, "error": "task_id is required"})
-        found = manager.get_task(task_id)
+        found = active_manager.get_task(task_id)
         if found is None:
             return _dump({"ok": False, "error": f"task not found: {task_id}"})
         return _dump({"ok": True, "task": found.to_dict()})
@@ -112,7 +131,7 @@ def task(
         if agent_id is not None:
             update_kwargs["assigned_agent"] = agent_id
         try:
-            updated = manager.update_task(
+            updated = active_manager.update_task(
                 task_id,
                 **update_kwargs,
             )
@@ -128,7 +147,7 @@ def task(
         if not agent_id:
             return _dump({"ok": False, "error": "agent_id is required"})
         try:
-            claimed = manager.claim_task(task_id, agent_id)
+            claimed = active_manager.claim_task(task_id, agent_id)
         except TaskClaimError as exc:
             return _dump({"ok": False, "error": str(exc)})
         return _dump({"ok": True, "task": claimed.to_dict()})
@@ -137,7 +156,7 @@ def task(
         if not task_id:
             return _dump({"ok": False, "error": "task_id is required"})
         try:
-            released = manager.release_task(task_id, agent_id=agent_id)
+            released = active_manager.release_task(task_id, agent_id=agent_id)
         except TaskClaimError as exc:
             return _dump({"ok": False, "error": str(exc)})
         return _dump({"ok": True, "task": released.to_dict()})
@@ -145,14 +164,13 @@ def task(
     if operation == "delete":
         if not task_id:
             return _dump({"ok": False, "error": "task_id is required"})
-        deleted = manager.delete_task(task_id, delete_subtasks=delete_subtasks)
+        deleted = active_manager.delete_task(task_id, delete_subtasks=delete_subtasks)
         if not deleted:
             return _dump({"ok": False, "error": f"task not found: {task_id}"})
         return _dump({"ok": True, "deleted": task_id})
 
     if operation == "clear":
-        manager.clear_all_tasks()
+        active_manager.clear_all_tasks()
         return _dump({"ok": True, "cleared": True})
 
     return _dump({"ok": False, "error": f"unknown operation: {operation}"})
-

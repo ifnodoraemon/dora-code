@@ -253,6 +253,7 @@ class AgentSession:
         hooks: Any = None,
         checkpoints: Any = None,
         skills: Any = None,
+        task_manager: Any = None,
         max_turns: int = 100,
         config_path: Path | None = None,
         project_dir: Path | None = None,
@@ -265,6 +266,7 @@ class AgentSession:
         self.hooks = hooks
         self.checkpoints = checkpoints
         self.skills = skills
+        self.task_manager = task_manager
         self.max_turns = max_turns
         self.config_path = config_path
         self.project_dir = project_dir or Path.cwd()
@@ -299,6 +301,7 @@ class AgentSession:
             hooks=self.hooks,
             checkpoints=self.checkpoints,
             skills=self.skills,
+            task_manager=self.task_manager,
         )
         self.model_client = self._runtime.model_client
         self.registry = self._runtime.registry
@@ -306,6 +309,7 @@ class AgentSession:
         self.hooks = self._runtime.hooks
         self.checkpoints = self._runtime.checkpoints
         self.skills = self._runtime.skills
+        self.task_manager = self._runtime.task_manager
         self.project_dir = self._runtime.context.project_dir
         self._mcp_extensions = self._runtime.context.active_mcp_extensions.copy()
 
@@ -322,6 +326,7 @@ class AgentSession:
             hooks=self.hooks,
             checkpoints=self.checkpoints,
             skills=self.skills,
+            task_manager=self.task_manager,
             max_turns=self.max_turns,
             project_dir=self.project_dir,
             enable_trace=self.enable_trace,
@@ -393,6 +398,10 @@ class AgentSession:
     def get_trace(self) -> Trace | None:
         """Get current trace object."""
         return self._trace
+
+    def get_task_manager(self):
+        """Get the shared runtime task manager."""
+        return self.task_manager
 
     def save_trace(self) -> Path | None:
         """Save trace to file, returns path if saved."""

@@ -94,8 +94,14 @@ class Task:
 class TaskManager:
     """Persistent task storage with dependency and claiming support."""
 
-    def __init__(self, storage_path: Path | None = None):
-        self.storage_path = storage_path or tasks_path()
+    def __init__(
+        self,
+        storage_path: Path | None = None,
+        *,
+        project_dir: Path | None = None,
+    ):
+        self.project_dir = project_dir.resolve() if project_dir is not None else None
+        self.storage_path = storage_path or tasks_path(self.project_dir)
         self._tasks: dict[str, Task] = {}
         self._load()
 

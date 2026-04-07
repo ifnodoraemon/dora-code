@@ -23,6 +23,7 @@ from src.agent import (
     create_doraemon_agent,
 )
 from src.agent.adapter import _collect_modified_paths
+from src.core.tasks import TaskManager, TaskStatus
 from src.host.tools import LazyToolFunction
 
 
@@ -801,6 +802,40 @@ class TestDoraemonAgent:
         assert result == ""
         assert "not available in plan mode" in error
         registry.call_tool.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_doraemon_agent_creates_runtime_task(self, mock_llm, tmp_path):
+        """Agent turns should materialize a top-level runtime task."""
+        task_manager = TaskManager(storage_path=tmp_path / "tasks.json")
+        registry = MagicMock()
+        registry.get_tool_names = MagicMock(return_value=["read"])
+        registry._tools = {
+            "read": SimpleNamespace(
+                name="read",
+                description="Read file",
+                parameters={},
+                sensitive=False,
+                source="built_in",
+                metadata={"capability_group": "read"},
+            )
+        }
+        registry.call_tool = AsyncMock(return_value="content")
+
+        agent = create_doraemon_agent(
+            llm_client=mock_llm,
+            tool_registry=registry,
+            mode="build",
+            task_manager=task_manager,
+        )
+
+        result = await agent.run("Inspect README and summarize")
+
+        assert result.success is True
+        tasks = task_manager.list_tasks()
+        assert len(tasks) == 1
+        assert tasks[0].status == TaskStatus.COMPLETED
+        assert tasks[0].assigned_agent is None
+        assert tasks[0].description == "Inspect README and summarize"
 
 
 class TestAgentAdapter:

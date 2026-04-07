@@ -33,6 +33,11 @@ async def test_bootstrap_runtime_creates_missing_dependencies(monkeypatch, tmp_p
         def __init__(self, project_dir: Path):
             created["hooks_project_dir"] = project_dir
 
+    class DummyTaskManager:
+        def __init__(self, storage_path=None, *, project_dir: Path | None = None):
+            created["task_manager_project_dir"] = project_dir
+            self.project_dir = project_dir
+
     async def fake_model_create():
         created["model_client"] = object()
         return created["model_client"]
@@ -49,11 +54,13 @@ async def test_bootstrap_runtime_creates_missing_dependencies(monkeypatch, tmp_p
     import src.core.hooks as hooks_mod
     import src.core.llm.model_client as model_client_mod
     import src.core.skills as skills_mod
+    import src.core.tasks as tasks_mod
     import src.host.mcp_registry as mcp_registry_mod
 
     monkeypatch.setattr(checkpoint_mod, "CheckpointManager", DummyCheckpointManager)
     monkeypatch.setattr(skills_mod, "SkillManager", DummySkillManager)
     monkeypatch.setattr(hooks_mod, "HookManager", DummyHookManager)
+    monkeypatch.setattr(tasks_mod, "TaskManager", DummyTaskManager)
     monkeypatch.setattr(model_client_mod.ModelClient, "create", staticmethod(fake_model_create))
     monkeypatch.setattr(mcp_registry_mod, "create_tool_registry", fake_create_tool_registry)
 
@@ -80,6 +87,7 @@ async def test_bootstrap_runtime_creates_missing_dependencies(monkeypatch, tmp_p
     assert created["checkpoint_project"] == "demo"
     assert created["skills_project_dir"] == tmp_path.resolve()
     assert created["hooks_project_dir"] == tmp_path.resolve()
+    assert created["task_manager_project_dir"] == tmp_path.resolve()
     assert created["registry_args"]["mode"] == "plan"
     assert created["registry_args"]["extension_tools"] == ["browser"]
 
@@ -91,6 +99,7 @@ async def test_bootstrap_runtime_reuses_provided_dependencies(monkeypatch, tmp_p
     hooks = object()
     checkpoints = object()
     skills = object()
+    task_manager = object()
 
     async def fail_model_create():
         raise AssertionError("ModelClient.create should not be called")
@@ -108,6 +117,7 @@ async def test_bootstrap_runtime_reuses_provided_dependencies(monkeypatch, tmp_p
         hooks=hooks,
         checkpoints=checkpoints,
         skills=skills,
+        task_manager=task_manager,
     )
 
     assert runtime.model_client is model_client
@@ -115,6 +125,7 @@ async def test_bootstrap_runtime_reuses_provided_dependencies(monkeypatch, tmp_p
     assert runtime.hooks is hooks
     assert runtime.checkpoints is checkpoints
     assert runtime.skills is skills
+    assert runtime.task_manager is task_manager
     assert runtime.owns_model_client is False
 
 
@@ -136,6 +147,7 @@ async def test_bootstrap_runtime_can_skip_model_client_creation(monkeypatch, tmp
     )
 
     assert runtime.model_client is None
+    assert runtime.task_manager is not None
     assert runtime.owns_model_client is False
 
 
@@ -163,6 +175,7 @@ async def test_agent_session_initializes_from_shared_bootstrap(monkeypatch, tmp_
         hooks=None,
         checkpoints=None,
         skills=None,
+        task_manager=object(),
         owns_model_client=False,
     )
 
@@ -186,4 +199,5 @@ async def test_agent_session_initializes_from_shared_bootstrap(monkeypatch, tmp_
     assert session.model_client is runtime.model_client
     assert session._runtime is runtime
     assert session._mcp_extensions == ["docs"]
+    assert session.get_task_manager() is runtime.task_manager
     assert [tool.name for tool in session._agent.tools] == ["read"]

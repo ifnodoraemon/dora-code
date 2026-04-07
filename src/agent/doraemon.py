@@ -28,6 +28,7 @@ from src.agent.types import (
 )
 from src.core.home import Trace, set_project_dir
 from src.core.hooks import HookEvent, HookManager
+from src.core.tasks import TaskStatus
 from src.core.tool_selector import get_capability_groups_for_mode
 from src.host.tools import LazyToolFunction
 
@@ -56,6 +57,7 @@ class DoraemonAgent(ReActAgent):
         hooks: HookManager | None = None,
         checkpoints: Any = None,
         skills: Any = None,
+        task_manager: Any = None,
         permission_callback: Callable | None = None,
         display_callback: Callable | None = None,
         project_dir: Path | None = None,
@@ -83,6 +85,7 @@ class DoraemonAgent(ReActAgent):
         self.hooks = hooks
         self.checkpoints = checkpoints
         self.skills = skills
+        self.task_manager = task_manager
         self.display_callback = display_callback
         self.project_dir = project_dir
         self.enable_trace = enable_trace
@@ -120,6 +123,43 @@ class DoraemonAgent(ReActAgent):
         if self._trace:
             return self._trace.save()
         return None
+
+    def _begin_runtime_task(self, user_input: str) -> str | None:
+        """Create and claim a runtime task for the current top-level agent turn."""
+        if self.task_manager is None:
+            return None
+
+        title = " ".join(user_input.strip().split())
+        if not title:
+            title = "Agent task"
+        if len(title) > 80:
+            title = f"{title[:77]}..."
+
+        task = self.task_manager.create_task(
+            title=title,
+            description=user_input,
+        )
+        try:
+            self.task_manager.claim_task(task.id, self.session_id)
+        except Exception:
+            self.task_manager.update_task(
+                task.id,
+                status=TaskStatus.IN_PROGRESS,
+                assigned_agent=self.session_id,
+            )
+        return task.id
+
+    def _finish_runtime_task(self, task_id: str | None, *, success: bool, error: str | None = None) -> None:
+        """Finalize the current runtime task after an agent turn completes."""
+        if self.task_manager is None or task_id is None:
+            return
+
+        final_status = TaskStatus.COMPLETED if success else TaskStatus.BLOCKED
+        self.task_manager.update_task(
+            task_id,
+            status=final_status,
+            assigned_agent=None,
+        )
 
     def _get_runtime_tool_policy(self, tool_name: str) -> dict[str, Any] | None:
         """Safely fetch runtime tool policy from a registry that may be mocked."""
@@ -381,6 +421,14 @@ class DoraemonAgent(ReActAgent):
         **kwargs,
     ) -> AgentResult:
         """Run the agent with lifecycle hooks and trace recording."""
+        runtime_task_id = self._begin_runtime_task(input)
+
+        task_manager_token = None
+        if self.task_manager is not None:
+            from src.servers.task import set_task_manager
+
+            task_manager_token = set_task_manager(self.task_manager)
+
         if self.enable_trace and self._trace:
             self._trace.start_turn(
                 input,
@@ -390,6 +438,7 @@ class DoraemonAgent(ReActAgent):
                     "active_tools": [tool.name for tool in self.tools],
                     "active_skills": [],
                     "active_mcp_extensions": self.active_mcp_extensions.copy(),
+                    "runtime_task_id": runtime_task_id,
                 },
             )
 
@@ -404,6 +453,12 @@ class DoraemonAgent(ReActAgent):
 
             if self._trace and self.enable_trace:
                 self._trace.end_turn(success=result.success, error=result.error)
+
+            self._finish_runtime_task(
+                runtime_task_id,
+                success=result.success,
+                error=result.error,
+            )
 
             if self.hooks:
                 await self.hooks.trigger(
@@ -420,7 +475,13 @@ class DoraemonAgent(ReActAgent):
                     details={"exception_type": type(e).__name__},
                 )
                 self._trace.end_turn(success=False, error=str(e))
+            self._finish_runtime_task(runtime_task_id, success=False, error=str(e))
             raise
+        finally:
+            if task_manager_token is not None:
+                from src.servers.task import reset_task_manager
+
+                reset_task_manager(task_manager_token)
 
     async def observe(self) -> Observation:
         """Observe with skills context."""
@@ -516,6 +577,7 @@ def create_doraemon_agent(
     hooks: HookManager | None = None,
     checkpoints: Any = None,
     skills: Any = None,
+    task_manager: Any = None,
     permission_callback: Callable | None = None,
     display_callback: Callable | None = None,
     max_turns: int = 100,
@@ -535,6 +597,7 @@ def create_doraemon_agent(
         hooks=hooks,
         checkpoints=checkpoints,
         skills=skills,
+        task_manager=task_manager,
         permission_callback=permission_callback,
         display_callback=display_callback,
         max_turns=max_turns,
@@ -553,6 +616,7 @@ async def create_doraemon_agent_with_tools(
     hooks: HookManager | None = None,
     checkpoints: Any = None,
     skills: Any = None,
+    task_manager: Any = None,
     permission_callback: Callable | None = None,
     display_callback: Callable | None = None,
     max_turns: int = 100,
@@ -570,6 +634,7 @@ async def create_doraemon_agent_with_tools(
         hooks=hooks,
         checkpoints=checkpoints,
         skills=skills,
+        task_manager=task_manager,
         permission_callback=permission_callback,
         display_callback=display_callback,
         max_turns=max_turns,

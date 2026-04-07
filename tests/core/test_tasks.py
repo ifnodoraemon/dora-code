@@ -1,7 +1,7 @@
 import json
 
 from src.core.tasks import Task, TaskManager, TaskStatus
-from src.servers.task import task
+from src.servers.task import reset_task_manager, set_task_manager, task
 
 
 class TestTask:
@@ -239,3 +239,20 @@ class TestTaskTool:
         assert missing_title["ok"] is False
         assert invalid_status["ok"] is False
         assert unknown["ok"] is False
+
+    def test_task_tool_uses_runtime_task_manager_context(self, tmp_path, monkeypatch):
+        default_manager = TaskManager(storage_path=tmp_path / "default.json")
+        runtime_manager = TaskManager(storage_path=tmp_path / "runtime.json")
+
+        import src.servers.task as task_module
+
+        monkeypatch.setattr(task_module, "manager", default_manager)
+        token = set_task_manager(runtime_manager)
+        try:
+            created = json.loads(task(operation="create", title="Runtime task"))
+        finally:
+            reset_task_manager(token)
+
+        assert created["ok"] is True
+        assert runtime_manager.get_task(created["task"]["id"]) is not None
+        assert default_manager.get_task(created["task"]["id"]) is None

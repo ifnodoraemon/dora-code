@@ -33,6 +33,7 @@ class RuntimeBootstrap:
     hooks: Any
     checkpoints: Any
     skills: Any
+    task_manager: Any
     owns_model_client: bool = False
 
     async def aclose(self) -> None:
@@ -57,6 +58,7 @@ async def bootstrap_runtime(
     hooks: Any | None = None,
     checkpoints: Any | None = None,
     skills: Any | None = None,
+    task_manager: Any | None = None,
 ) -> RuntimeBootstrap:
     """Create the shared runtime objects used by all entry points."""
     project_dir = (project_dir or Path.cwd()).resolve()
@@ -84,6 +86,11 @@ async def bootstrap_runtime(
 
         hooks = HookManager(project_dir=project_dir)
 
+    if task_manager is None:
+        from src.core.tasks import TaskManager
+
+        task_manager = TaskManager(project_dir=project_dir)
+
     if registry is None:
         from src.host.mcp_registry import create_tool_registry
 
@@ -110,6 +117,7 @@ async def bootstrap_runtime(
         hooks=hooks,
         checkpoints=checkpoints,
         skills=skills,
+        task_manager=task_manager,
         owns_model_client=owns_model_client,
     )
 
