@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.host.tools import ToolRegistry
+from src.runtime.bootstrap import RuntimeBootstrap, bootstrap_runtime
 
 
 @dataclass
@@ -50,16 +51,16 @@ class InProcessToolClient:
         self.tracer = tracer
         self.registry: ToolRegistry | None = None
         self.sessions: dict[str, _InProcessSession] = {}
+        self._runtime: RuntimeBootstrap | None = None
 
     async def connect_to_config(self, _config: dict[str, Any] | None = None) -> None:
-        from src.host.mcp_registry import create_tool_registry
-
-        mode = (_config or {}).get("mode")
-        extension_tools = (_config or {}).get("mcp_extensions")
-        self.registry = await create_tool_registry(
-            mode=mode,
-            extension_tools=extension_tools,
+        self._runtime = await bootstrap_runtime(
+            mode=(_config or {}).get("mode", "build"),
+            project=(_config or {}).get("project", "default"),
+            extension_tools=(_config or {}).get("mcp_extensions"),
+            create_model_client=False,
         )
+        self.registry = self._runtime.registry
         self.sessions = {"default": _InProcessSession(self.registry)}
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
@@ -77,7 +78,6 @@ class InProcessToolClient:
         return result
 
     async def cleanup(self) -> None:
-        if self.registry is not None:
-            for client in getattr(self.registry, "_mcp_clients", []):
-                await client.close()
+        if self._runtime is not None:
+            await self._runtime.aclose()
         self.sessions.clear()

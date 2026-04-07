@@ -29,34 +29,9 @@ from src.agent.types import (
 from src.core.home import Trace, set_project_dir
 from src.core.hooks import HookEvent, HookManager
 from src.core.tool_selector import get_capability_groups_for_mode
+from src.host.tools import LazyToolFunction
 
 logger = logging.getLogger(__name__)
-
-
-class PermissionMatrix:
-    """Hard enforcement of tool permissions based on agent mode."""
-
-    MODE_PERMISSIONS = {
-        "plan": {
-            "read",
-            "search",
-            "ask_user",
-            "ls",
-            "grep",
-            "find",
-            "cat",
-            "get_codebase_map",
-            "get_file_outline",
-        },
-        "build": {"all"},
-    }
-
-    @classmethod
-    def check(cls, mode: str, tool_name: str) -> bool:
-        allowed = cls.MODE_PERMISSIONS.get(mode, set())
-        if "all" in allowed:
-            return True
-        return tool_name in allowed
 
 
 class DoraemonAgent(ReActAgent):
@@ -154,25 +129,32 @@ class DoraemonAgent(ReActAgent):
         active_mcp_extensions: list[str] | None = None,
     ) -> list[ToolDefinition]:
         """Convert registry tool definitions into agent ToolDefinitions."""
-        from src.core.tool_selector import get_tools_for_mode
-        from src.host.mcp_registry import resolve_extension_tools
-        from src.host.tools import LazyToolFunction
-
-        tools = []
+        tools: list[ToolDefinition] = []
         tool_name_set: set[str] = set()
-        allowed_tool_names = set(get_tools_for_mode(mode))
-        allowed_tool_names.update(resolve_extension_tools(active_mcp_extensions or []))
 
         if hasattr(registry, "_tool_schemas"):
             for name, schema in registry._tool_schemas.items():
+                if hasattr(registry, "get_tool_policy"):
+                    policy = registry.get_tool_policy(
+                        name,
+                        mode=mode,
+                        active_mcp_extensions=active_mcp_extensions,
+                    )
+                    if policy is not None and not policy["visible"]:
+                        continue
+                    sensitive = policy["requires_approval"] if policy is not None else (
+                        name in registry._sensitive_tools if hasattr(registry, "_sensitive_tools") else False
+                    )
+                else:
+                    sensitive = (
+                        name in registry._sensitive_tools if hasattr(registry, "_sensitive_tools") else False
+                    )
                 tools.append(
                     ToolDefinition(
                         name=schema["name"],
                         description=schema.get("description", ""),
                         parameters=schema.get("parameters", {}),
-                        sensitive=name in registry._sensitive_tools
-                        if hasattr(registry, "_sensitive_tools")
-                        else False,
+                        sensitive=sensitive,
                     )
                 )
                 tool_name_set.add(name)
@@ -183,12 +165,14 @@ class DoraemonAgent(ReActAgent):
                 if not tool_def:
                     continue
 
-                is_remote_mcp_tool = getattr(
-                    tool_def, "source", "built_in"
-                ) == "mcp_remote" and tool_def.metadata.get("mcp_server") in (
-                    active_mcp_extensions or []
-                )
-                if name not in allowed_tool_names and not is_remote_mcp_tool:
+                policy = None
+                if hasattr(registry, "get_tool_policy"):
+                    policy = registry.get_tool_policy(
+                        name,
+                        mode=mode,
+                        active_mcp_extensions=active_mcp_extensions,
+                    )
+                if policy is not None and not policy["visible"]:
                     continue
                 if name not in tool_name_set:
                     func = getattr(tool_def, "function", None)
@@ -204,7 +188,7 @@ class DoraemonAgent(ReActAgent):
                             name=tool_def.name,
                             description=tool_def.description,
                             parameters=tool_def.parameters,
-                            sensitive=tool_def.sensitive,
+                            sensitive=policy["requires_approval"] if policy is not None else tool_def.sensitive,
                         )
                     )
                     tool_name_set.add(name)
@@ -220,7 +204,15 @@ class DoraemonAgent(ReActAgent):
         Execute a tool from the registry with hooks, trace recording,
         and hard permission enforcement.
         """
-        if not PermissionMatrix.check(self.state.mode, name):
+        policy = None
+        if hasattr(self.tool_registry, "get_tool_policy"):
+            policy = self.tool_registry.get_tool_policy(
+                name,
+                mode=self.state.mode,
+                active_mcp_extensions=self.active_mcp_extensions,
+            )
+
+        if policy is not None and not policy["visible"]:
             logger.warning(
                 f"Permission denied: Tool '{name}' is not allowed in '{self.state.mode}' mode"
             )

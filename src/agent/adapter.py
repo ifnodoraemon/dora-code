@@ -25,7 +25,7 @@ Usage:
 import asyncio
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -37,6 +37,7 @@ from rich.panel import Panel
 from src.agent.doraemon import DoraemonAgent, create_doraemon_agent
 from src.agent.state import AgentState
 from src.core.home import Trace
+from src.runtime.bootstrap import RuntimeBootstrap, bootstrap_runtime
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -244,10 +245,11 @@ class AgentSession:
 
     def __init__(
         self,
-        model_client: Any,
+        model_client: Any | None,
         registry: Any | None = None,
         *,
         mode: str = "build",
+        project: str = "default",
         hooks: Any = None,
         checkpoints: Any = None,
         skills: Any = None,
@@ -259,6 +261,7 @@ class AgentSession:
         self.model_client = model_client
         self.registry = registry
         self.mode = mode
+        self.project = project
         self.hooks = hooks
         self.checkpoints = checkpoints
         self.skills = skills
@@ -273,6 +276,7 @@ class AgentSession:
         self._trace: Trace | None = None
         self._session_id: str | None = None
         self._mcp_extensions: list[str] = []
+        self._runtime: RuntimeBootstrap | None = None
 
     @property
     def session_id(self) -> str:
@@ -282,18 +286,28 @@ class AgentSession:
         return self._session_id
 
     async def initialize(self) -> None:
-        """Initialize the agent session with the built-in tool registry."""
+        """Initialize the agent session through the shared runtime bootstrap."""
         self._state = AgentState(mode=self.mode, max_turns=self.max_turns)
 
-        if self.registry is None:
-            from src.host.mcp_registry import create_tool_registry
-
-            self._tool_registry = await create_tool_registry(self.config_path, mode=self.mode)
-            self.registry = self._tool_registry
-            self._mcp_extensions = getattr(self._tool_registry, "_active_mcp_extensions", []).copy()
-        elif not self._mcp_extensions:
-            self._tool_registry = self.registry
-            self._mcp_extensions = getattr(self.registry, "_active_mcp_extensions", []).copy()
+        self._runtime = await bootstrap_runtime(
+            mode=self.mode,
+            project=self.project,
+            project_dir=self.project_dir,
+            config_path=self.config_path,
+            model_client=self.model_client,
+            registry=self.registry,
+            hooks=self.hooks,
+            checkpoints=self.checkpoints,
+            skills=self.skills,
+        )
+        self.model_client = self._runtime.model_client
+        self.registry = self._runtime.registry
+        self._tool_registry = self._runtime.registry
+        self.hooks = self._runtime.hooks
+        self.checkpoints = self._runtime.checkpoints
+        self.skills = self._runtime.skills
+        self.project_dir = self._runtime.context.project_dir
+        self._mcp_extensions = self._runtime.context.active_mcp_extensions.copy()
 
         if self.enable_trace:
             from src.core.home import set_project_dir
@@ -354,6 +368,24 @@ class AgentSession:
                 files_modified=[],
             )
 
+    async def turn_stream(
+        self,
+        user_input: str,
+        **kwargs,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Stream a single turn using the underlying agent event protocol."""
+        if not self._agent:
+            await self.initialize()
+
+        try:
+            async for event in self._agent.run_stream(user_input, **kwargs):
+                yield event
+        except Exception as e:
+            logger.error(f"Agent streaming turn failed: {e}")
+            if self._trace:
+                self._trace.error(str(e), {"exception_type": type(e).__name__})
+            yield {"type": "error", "error": str(e)}
+
     def get_state(self) -> AgentState | None:
         """Get current agent state."""
         return self._state
@@ -370,8 +402,11 @@ class AgentSession:
 
     async def aclose(self) -> Path | None:
         """Close session resources and save trace."""
-        for client in getattr(self.registry, "_mcp_clients", []):
-            await client.close()
+        if self._runtime:
+            await self._runtime.aclose()
+        elif self.registry is not None:
+            for client in getattr(self.registry, "_mcp_clients", []):
+                await client.close()
         return self.save_trace()
 
     def close(self) -> Path | None:

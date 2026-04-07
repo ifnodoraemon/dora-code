@@ -75,3 +75,26 @@ def get_capability_groups_for_mode(mode: str) -> list[str]:
     """Get capability groups enabled for a product mode."""
     selector = get_default_selector()
     return selector.mode_capability_groups.get(mode, selector.mode_capability_groups["build"]).copy()
+
+
+def get_capability_group_for_tool(tool_name: str) -> str | None:
+    """Return the capability group a tool belongs to."""
+    selector = get_default_selector()
+    for group_name, tools in selector.capability_groups.items():
+        if tool_name in tools:
+            return group_name
+    return None
+
+
+def get_visible_modes_for_tool(tool_name: str) -> list[str]:
+    """Return product modes that expose the given mainline tool."""
+    capability_group = get_capability_group_for_tool(tool_name)
+    if capability_group is None:
+        return []
+
+    visible_modes: list[str] = []
+    selector = get_default_selector()
+    for mode, groups in selector.mode_capability_groups.items():
+        if capability_group in groups and mode not in visible_modes:
+            visible_modes.append(mode)
+    return visible_modes

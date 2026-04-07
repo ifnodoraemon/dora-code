@@ -143,6 +143,15 @@ async def create_tool_registry(
             if tool_name in merged.get_tool_names():
                 continue
             definition = extension_registry._tools[tool_name]
+            extension_group = next(
+                (group for group, tools in EXTENSION_GROUPS.items() if tool_name in tools),
+                None,
+            )
+            if extension_group:
+                definition.metadata = {
+                    **definition.metadata,
+                    "extension_group": extension_group,
+                }
             merged._tools[tool_name] = definition
         for name in extension_tools if extension_tools is not None else enabled_extensions:
             if name not in active_mcp_extensions:

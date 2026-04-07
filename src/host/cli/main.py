@@ -47,31 +47,20 @@ async def run_chat_loop(
     max_turns: int,
     headless: bool,
     initial_prompt: str | None,
+    enable_trace: bool,
 ):
     """Main chat loop using Agent architecture."""
     project_dir = Path.cwd()
     set_project_dir(project_dir)
 
-    from src.core.checkpoint import CheckpointManager
-    from src.core.hooks import HookManager
-    from src.core.llm.model_client import ModelClient
-    from src.core.skills import SkillManager
-
-    model_client = await ModelClient.create()
-    checkpoints = CheckpointManager(project=project)
-    skills = SkillManager(project_dir=project_dir)
-    hooks = HookManager(project_dir=project_dir)
-
     session = AgentSession(
-        model_client=model_client,
+        model_client=None,
         registry=None,
+        project=project,
         mode=mode,
-        hooks=hooks,
-        checkpoints=checkpoints,
-        skills=skills,
         max_turns=max_turns,
         project_dir=project_dir,
-        enable_trace=True,
+        enable_trace=enable_trace,
     )
     await session.initialize()
 
@@ -236,6 +225,7 @@ def start(
                 max_turns=max_turns,
                 headless=headless,
                 initial_prompt=prompt,
+                enable_trace=not no_trace,
             )
         )
     except KeyboardInterrupt:

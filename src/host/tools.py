@@ -36,6 +36,8 @@ from typing import Any, Union, get_args, get_origin
 
 from google.genai import types
 from src.core.config.config import load_config
+from src.core.tool_selector import get_capability_group_for_tool
+from src.core.tool_policy import get_default_tool_policy_engine
 
 logger = logging.getLogger(__name__)
 
@@ -361,6 +363,46 @@ class ToolRegistry:
         tool = self._tools.get(tool_name)
         return tool.sensitive if tool else False
 
+    def get_tool_policy(
+        self,
+        tool_name: str,
+        *,
+        mode: str | None = None,
+        active_mcp_extensions: list[str] | None = None,
+    ) -> dict[str, Any] | None:
+        """Get product-facing governance metadata for a tool."""
+        tool = self._tools.get(tool_name)
+        if tool is None:
+            return None
+
+        policy = get_default_tool_policy_engine().describe_tool(
+            tool_name=tool.name,
+            mode=mode,
+            source=tool.source,
+            sensitive=tool.sensitive,
+            metadata=tool.metadata,
+            active_mcp_extensions=active_mcp_extensions,
+        )
+        return policy.to_dict()
+
+    def get_tool_policies(
+        self,
+        *,
+        mode: str | None = None,
+        active_mcp_extensions: list[str] | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """Get governance metadata for every tool in the registry."""
+        return {
+            tool_name: policy
+            for tool_name in self.get_tool_names()
+            if (policy := self.get_tool_policy(
+                tool_name,
+                mode=mode,
+                active_mcp_extensions=active_mcp_extensions,
+            ))
+            is not None
+        }
+
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
         """
         Call a tool by name.
@@ -614,6 +656,9 @@ def _create_registry(
             sensitive=spec.sensitive,
             timeout=timeout,
             source=source,
+            metadata={
+                "capability_group": get_capability_group_for_tool(tool_name),
+            },
         )
 
     logger.info(

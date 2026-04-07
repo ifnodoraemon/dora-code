@@ -753,6 +753,55 @@ class TestDoraemonAgent:
         assert len(result.tool_calls) == 1
         mock_registry.call_tool.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_doraemon_agent_policy_blocks_write_in_plan_mode(self, mock_llm):
+        """Plan mode should reject write execution through shared tool policy."""
+        registry = MagicMock()
+        registry.get_tool_names = MagicMock(return_value=["read", "write"])
+        registry._tools = {
+            "read": SimpleNamespace(
+                name="read",
+                description="Read file",
+                parameters={},
+                sensitive=False,
+                source="built_in",
+                metadata={"capability_group": "read"},
+            ),
+            "write": SimpleNamespace(
+                name="write",
+                description="Write file",
+                parameters={},
+                sensitive=True,
+                source="built_in",
+                metadata={"capability_group": "edit"},
+            ),
+        }
+        registry.get_tool_policy.side_effect = lambda name, mode=None, active_mcp_extensions=None: {
+            "read": {
+                "tool_name": "read",
+                "visible": True,
+                "requires_approval": False,
+            },
+            "write": {
+                "tool_name": "write",
+                "visible": mode != "plan",
+                "requires_approval": True,
+            },
+        }[name]
+        registry.call_tool = AsyncMock(return_value="written")
+
+        agent = create_doraemon_agent(
+            llm_client=mock_llm,
+            tool_registry=registry,
+            mode="plan",
+        )
+
+        result, error = await agent.execute_tool("write", {"path": "a.py", "content": "x"})
+
+        assert result == ""
+        assert "not available in plan mode" in error
+        registry.call_tool.assert_not_called()
+
 
 class TestAgentAdapter:
     """Tests for agent adapter functions."""

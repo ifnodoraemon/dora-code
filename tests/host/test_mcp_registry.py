@@ -81,6 +81,11 @@ async def test_create_tool_registry_uses_configured_extensions(tmp_path):
     assert "db_read_query" in tools
     assert "db_list_tables" in tools
     assert "browser_click" not in tools
+    assert registry.get_tool_policy(
+        "db_read_query",
+        mode="build",
+        active_mcp_extensions=["database"],
+    )["visible"] is True
 
 
 @pytest.mark.asyncio

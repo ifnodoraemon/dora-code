@@ -65,6 +65,23 @@ class TestToolRegistry:
         assert tools[0].name == "test_tool"
         assert "A test tool with description" in tools[0].description
 
+    def test_get_tool_policy(self):
+        """Registered tools should expose governance metadata."""
+        registry = ToolRegistry()
+
+        def dangerous_tool(cmd: str) -> str:
+            return cmd
+
+        registry.register(dangerous_tool, sensitive=True)
+
+        policy = registry.get_tool_policy("dangerous_tool", mode="build")
+
+        assert policy is not None
+        assert policy["visible"] is False
+        assert policy["requires_approval"] is True
+        assert policy["sandbox"] == "workspace_read"
+        assert policy["audit_level"] == "full"
+
 
 class TestTypeExtraction:
     """Test parameter type extraction."""
@@ -264,6 +281,38 @@ class TestDefaultRegistry:
         assert "web_fetch" in registry.get_tool_names()
         assert "task" in registry.get_tool_names()
         assert "update_user_persona" not in registry.get_tool_names()
+
+    def test_plan_mode_policy_blocks_write_tool(self):
+        """Policy should report write tools as hidden in plan mode."""
+        registry = get_default_registry()
+
+        write_policy = registry.get_tool_policy("write", mode="plan")
+        read_policy = registry.get_tool_policy("read", mode="plan")
+
+        assert write_policy is not None
+        assert write_policy["visible"] is False
+        assert write_policy["requires_approval"] is True
+        assert write_policy["background_safe"] is False
+        assert read_policy is not None
+        assert read_policy["visible"] is True
+        assert read_policy["requires_approval"] is False
+
+    def test_extension_policy_marks_extension_tools(self):
+        """Extension tools should expose extension-specific policy metadata."""
+        registry = get_extension_registry(["db_write_query"])
+
+        visible = registry.get_tool_policy("db_write_query", mode="build")
+        with_extension = registry.get_tool_policy(
+            "db_write_query",
+            mode="build",
+            active_mcp_extensions=["database"],
+        )
+
+        assert visible is not None
+        assert visible["visible"] is True
+        assert visible["sandbox"] == "extension"
+        assert visible["requires_approval"] is True
+        assert with_extension == visible
 
     def test_extension_registry_only_loads_extension_tools(self):
         """Extension registry should keep browser/db tools outside the mainline."""
