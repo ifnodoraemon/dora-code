@@ -48,6 +48,7 @@ class BackgroundTask:
     error: str | None = None
     progress: int = 0  # 0-100
     token_usage: int = 0
+    tool_names: list[str] = field(default_factory=list)
     _task: asyncio.Task | None = field(default=None, repr=False)
     _output_buffer: list[str] = field(default_factory=list, repr=False)
 
@@ -63,6 +64,7 @@ class BackgroundTask:
             "completed_at": self.completed_at,
             "progress": self.progress,
             "token_usage": self.token_usage,
+            "tool_names": list(self.tool_names),
             "duration": self._get_duration(),
             "output_preview": self.output[:500] if self.output else None,
             "error": self.error,
@@ -126,6 +128,7 @@ class BackgroundTaskManager:
         description: str,
         coroutine: Coroutine,
         on_complete: Callable[[BackgroundTask], None] | None = None,
+        tool_names: list[str] | None = None,
     ) -> str:
         """
         Start a new background task.
@@ -135,6 +138,7 @@ class BackgroundTaskManager:
             description: Task description
             coroutine: Async coroutine to run
             on_complete: Optional callback when task completes
+            tool_names: Optional tools this task will use
 
         Returns:
             Task ID
@@ -153,6 +157,7 @@ class BackgroundTaskManager:
             id=task_id,
             name=name,
             description=description,
+            tool_names=list(tool_names or []),
         )
 
         self._tasks[task_id] = task
@@ -204,6 +209,42 @@ class BackgroundTaskManager:
         logger.info(f"Started background task {task_id}: {name}")
 
         return task_id
+
+    async def start_tool_task(
+        self,
+        name: str,
+        description: str,
+        coroutine: Coroutine,
+        *,
+        tool_names: list[str],
+        tool_registry: Any,
+        mode: str = "build",
+        active_mcp_extensions: list[str] | None = None,
+        on_complete: Callable[[BackgroundTask], None] | None = None,
+    ) -> str:
+        """Start a background task after enforcing tool background-safety policy."""
+        for tool_name in tool_names:
+            if not hasattr(tool_registry, "check_tool_execution"):
+                continue
+            allowed, reason, _policy = tool_registry.check_tool_execution(
+                tool_name,
+                mode=mode,
+                active_mcp_extensions=active_mcp_extensions,
+                background=True,
+            )
+            if not allowed:
+                close_coro = getattr(coroutine, "close", None)
+                if callable(close_coro):
+                    close_coro()
+                raise RuntimeError(reason or f"Tool '{tool_name}' cannot run in background")
+
+        return await self.start_task(
+            name=name,
+            description=description,
+            coroutine=coroutine,
+            on_complete=on_complete,
+            tool_names=tool_names,
+        )
 
     def background_current(
         self,

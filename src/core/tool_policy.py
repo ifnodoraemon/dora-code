@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from src.core.tool_selector import (
+    get_capability_groups_for_mode,
     get_capability_group_for_tool,
     get_tools_for_mode,
     get_visible_modes_for_tool,
@@ -62,6 +63,7 @@ class ToolPolicyEngine:
             tool_name,
             mode=mode,
             source=source,
+            capability_group=capability_group,
             metadata=metadata,
             active_mcp_extensions=active_mcp_extensions,
         )
@@ -88,6 +90,7 @@ class ToolPolicyEngine:
         *,
         mode: str | None,
         source: str,
+        capability_group: str | None,
         metadata: dict[str, Any],
         active_mcp_extensions: list[str] | None,
     ) -> bool:
@@ -95,6 +98,9 @@ class ToolPolicyEngine:
             return True
 
         if tool_name in get_tools_for_mode(mode):
+            return True
+
+        if capability_group is not None and capability_group in get_capability_groups_for_mode(mode):
             return True
 
         active_extensions = active_mcp_extensions or []
@@ -120,7 +126,14 @@ class ToolPolicyEngine:
             return ["plan", "build"]
         if capability_group is None:
             return []
-        return get_visible_modes_for_tool(tool_name)
+        visible_modes = get_visible_modes_for_tool(tool_name)
+        if visible_modes:
+            return visible_modes
+        return [
+            mode
+            for mode in ("plan", "build")
+            if capability_group in get_capability_groups_for_mode(mode)
+        ]
 
     def _sandbox_class(
         self,

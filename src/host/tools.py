@@ -29,6 +29,7 @@ import importlib
 import inspect
 import logging
 import threading
+import time
 import types as py_types
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -114,6 +115,38 @@ class ToolDefinition:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class ToolAuditEntry:
+    """Audit record for tool governance and execution decisions."""
+
+    timestamp: float
+    tool_name: str
+    action: str
+    allowed: bool
+    mode: str | None
+    source: str
+    background: bool = False
+    requires_approval: bool = False
+    sandbox: str | None = None
+    audit_level: str | None = None
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "timestamp": self.timestamp,
+            "tool_name": self.tool_name,
+            "action": self.action,
+            "allowed": self.allowed,
+            "mode": self.mode,
+            "source": self.source,
+            "background": self.background,
+            "requires_approval": self.requires_approval,
+            "sandbox": self.sandbox,
+            "audit_level": self.audit_level,
+            "error": self.error,
+        }
+
+
 class ToolRegistry:
     """
     Simple tool registry with direct function calls.
@@ -130,6 +163,8 @@ class ToolRegistry:
 
     def __init__(self):
         self._tools: dict[str, ToolDefinition] = {}
+        self._audit_log: list[ToolAuditEntry] = []
+        self._max_audit_entries = 1000
 
     def register(
         self,
@@ -402,6 +437,115 @@ class ToolRegistry:
             ))
             is not None
         }
+
+    def check_tool_execution(
+        self,
+        tool_name: str,
+        *,
+        mode: str | None = None,
+        active_mcp_extensions: list[str] | None = None,
+        background: bool = False,
+    ) -> tuple[bool, str | None, dict[str, Any] | None]:
+        """Check whether a tool can run in the current runtime context."""
+        policy = self.get_tool_policy(
+            tool_name,
+            mode=mode,
+            active_mcp_extensions=active_mcp_extensions,
+        )
+        if policy is None:
+            reason = f"Tool '{tool_name}' not found."
+            self._record_audit(
+                ToolAuditEntry(
+                    timestamp=time.time(),
+                    tool_name=tool_name,
+                    action="policy_check",
+                    allowed=False,
+                    mode=mode,
+                    source="unknown",
+                    background=background,
+                    error=reason,
+                )
+            )
+            return False, reason, None
+
+        reason = None
+        allowed = True
+        if not policy["visible"]:
+            allowed = False
+            if mode:
+                reason = f"Tool '{tool_name}' is not available in {mode} mode."
+            else:
+                reason = f"Tool '{tool_name}' is not available in this runtime."
+        elif background and not policy["background_safe"]:
+            allowed = False
+            reason = f"Tool '{tool_name}' cannot run as a background task."
+
+        self._record_audit(
+            ToolAuditEntry(
+                timestamp=time.time(),
+                tool_name=tool_name,
+                action="policy_check",
+                allowed=allowed,
+                mode=mode,
+                source=policy["source"],
+                background=background,
+                requires_approval=policy["requires_approval"],
+                sandbox=policy["sandbox"],
+                audit_level=policy["audit_level"],
+                error=None if allowed else reason,
+            )
+        )
+        return allowed, reason, policy
+
+    def record_tool_execution(
+        self,
+        tool_name: str,
+        *,
+        action: str,
+        mode: str | None = None,
+        active_mcp_extensions: list[str] | None = None,
+        background: bool = False,
+        allowed: bool = True,
+        error: str | None = None,
+    ) -> None:
+        """Record a tool execution lifecycle event."""
+        policy = self.get_tool_policy(
+            tool_name,
+            mode=mode,
+            active_mcp_extensions=active_mcp_extensions,
+        )
+        source = policy["source"] if policy is not None else "unknown"
+        requires_approval = policy["requires_approval"] if policy is not None else False
+        sandbox = policy["sandbox"] if policy is not None else None
+        audit_level = policy["audit_level"] if policy is not None else None
+        self._record_audit(
+            ToolAuditEntry(
+                timestamp=time.time(),
+                tool_name=tool_name,
+                action=action,
+                allowed=allowed,
+                mode=mode,
+                source=source,
+                background=background,
+                requires_approval=requires_approval,
+                sandbox=sandbox,
+                audit_level=audit_level,
+                error=error,
+            )
+        )
+
+    def get_audit_log(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Return recent tool audit entries."""
+        return [entry.to_dict() for entry in self._audit_log[-limit:]]
+
+    def clear_audit_log(self) -> None:
+        """Clear runtime tool audit entries."""
+        self._audit_log.clear()
+
+    def _record_audit(self, entry: ToolAuditEntry) -> None:
+        self._audit_log.append(entry)
+        if len(self._audit_log) > self._max_audit_entries:
+            self._audit_log = self._audit_log[-self._max_audit_entries // 2 :]
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
         """

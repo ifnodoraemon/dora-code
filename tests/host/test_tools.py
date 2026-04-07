@@ -72,15 +72,65 @@ class TestToolRegistry:
         def dangerous_tool(cmd: str) -> str:
             return cmd
 
-        registry.register(dangerous_tool, sensitive=True)
+        registry.register(
+            dangerous_tool,
+            sensitive=True,
+            metadata={"capability_group": "edit"},
+        )
 
         policy = registry.get_tool_policy("dangerous_tool", mode="build")
 
         assert policy is not None
-        assert policy["visible"] is False
+        assert policy["visible"] is True
         assert policy["requires_approval"] is True
-        assert policy["sandbox"] == "workspace_read"
+        assert policy["sandbox"] == "workspace_write"
         assert policy["audit_level"] == "full"
+
+    def test_check_tool_execution_records_audit_entries(self):
+        """Execution checks and execution results should be audited."""
+        registry = ToolRegistry()
+
+        def read_tool(path: str) -> str:
+            return path
+
+        registry.register(read_tool, name="read_tool", metadata={"capability_group": "read"})
+
+        allowed, reason, policy = registry.check_tool_execution("read_tool", mode="build")
+        registry.record_tool_execution(
+            "read_tool",
+            action="executed",
+            mode="build",
+            allowed=True,
+        )
+
+        audit = registry.get_audit_log(2)
+        assert allowed is True
+        assert reason is None
+        assert policy is not None
+        assert audit[0]["action"] == "policy_check"
+        assert audit[0]["allowed"] is True
+        assert audit[1]["action"] == "executed"
+        assert audit[1]["tool_name"] == "read_tool"
+
+    def test_check_tool_execution_blocks_background_unsafe_tools(self):
+        """Background execution should reject background-unsafe tools."""
+        registry = ToolRegistry()
+
+        def ask_user(question: str) -> str:
+            return question
+
+        registry.register(ask_user, name="ask_user", metadata={"capability_group": "read"})
+
+        allowed, reason, policy = registry.check_tool_execution(
+            "ask_user",
+            mode="build",
+            background=True,
+        )
+
+        assert allowed is False
+        assert "background task" in reason
+        assert policy is not None
+        assert policy["background_safe"] is False
 
 
 class TestTypeExtraction:

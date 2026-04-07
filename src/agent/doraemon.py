@@ -121,6 +121,19 @@ class DoraemonAgent(ReActAgent):
             return self._trace.save()
         return None
 
+    def _get_runtime_tool_policy(self, tool_name: str) -> dict[str, Any] | None:
+        """Safely fetch runtime tool policy from a registry that may be mocked."""
+        get_tool_policy = getattr(self.tool_registry, "get_tool_policy", None)
+        if not callable(get_tool_policy):
+            return None
+
+        policy = get_tool_policy(
+            tool_name,
+            mode=self.state.mode,
+            active_mcp_extensions=self.active_mcp_extensions,
+        )
+        return policy if isinstance(policy, dict) else None
+
     def _convert_registry_to_tools(
         self,
         registry: Any,
@@ -140,6 +153,8 @@ class DoraemonAgent(ReActAgent):
                         mode=mode,
                         active_mcp_extensions=active_mcp_extensions,
                     )
+                    if not isinstance(policy, dict):
+                        policy = None
                     if policy is not None and not policy["visible"]:
                         continue
                     sensitive = policy["requires_approval"] if policy is not None else (
@@ -172,6 +187,8 @@ class DoraemonAgent(ReActAgent):
                         mode=mode,
                         active_mcp_extensions=active_mcp_extensions,
                     )
+                    if not isinstance(policy, dict):
+                        policy = None
                 if policy is not None and not policy["visible"]:
                     continue
                 if name not in tool_name_set:
@@ -205,21 +222,27 @@ class DoraemonAgent(ReActAgent):
         and hard permission enforcement.
         """
         policy = None
-        if hasattr(self.tool_registry, "get_tool_policy"):
-            policy = self.tool_registry.get_tool_policy(
+        check_tool_execution = getattr(self.tool_registry, "check_tool_execution", None)
+        if callable(check_tool_execution):
+            decision = check_tool_execution(
                 name,
                 mode=self.state.mode,
                 active_mcp_extensions=self.active_mcp_extensions,
             )
-
-        if policy is not None and not policy["visible"]:
-            logger.warning(
-                f"Permission denied: Tool '{name}' is not allowed in '{self.state.mode}' mode"
-            )
-            return (
-                "",
-                f"Permission Error: Tool '{name}' is not available in {self.state.mode} mode.",
-            )
+            if isinstance(decision, tuple) and len(decision) == 3:
+                allowed, reason, policy = decision
+            else:
+                policy = self._get_runtime_tool_policy(name)
+                if policy is not None and not policy["visible"]:
+                    allowed = False
+                    reason = f"Tool '{name}' is not available in {self.state.mode} mode."
+                else:
+                    allowed, reason = True, None
+            if not allowed:
+                logger.warning(
+                    f"Permission denied: Tool '{name}' is not allowed in '{self.state.mode}' mode"
+                )
+                return "", f"Permission Error: {reason}"
 
         start_time = time.time()
 
@@ -263,6 +286,16 @@ class DoraemonAgent(ReActAgent):
                 metadata=metadata,
             )
 
+        if hasattr(self.tool_registry, "record_tool_execution"):
+            self.tool_registry.record_tool_execution(
+                name,
+                action="executed" if error is None else "failed",
+                mode=self.state.mode,
+                active_mcp_extensions=self.active_mcp_extensions,
+                allowed=error is None,
+                error=error,
+            )
+
         if self.hooks:
             await self.hooks.trigger(
                 HookEvent.POST_TOOL_USE,
@@ -275,6 +308,33 @@ class DoraemonAgent(ReActAgent):
             await self._create_checkpoint(name, arguments)
 
         return result, error
+
+    async def _execute_tool_with_permission(
+        self,
+        name: str,
+        args: dict[str, Any],
+    ) -> tuple[str, str | None]:
+        """Execute tool with policy-backed approval tracking."""
+        policy = self._get_runtime_tool_policy(name)
+
+        needs_approval = (policy["requires_approval"] if policy is not None else False) or (
+            self.is_sensitive_tool(name)
+        )
+        if needs_approval:
+            allowed = await self.check_permission(name, args)
+            if hasattr(self.tool_registry, "record_tool_execution"):
+                self.tool_registry.record_tool_execution(
+                    name,
+                    action="approval_granted" if allowed else "approval_denied",
+                    mode=self.state.mode,
+                    active_mcp_extensions=self.active_mcp_extensions,
+                    allowed=allowed,
+                    error=None if allowed else "Permission denied by user",
+                )
+            if not allowed:
+                return "", "Permission denied by user"
+
+        return await self.execute_tool(name, args)
 
     def _is_modifying_tool(self, name: str) -> bool:
         """Check if a tool modifies files."""
