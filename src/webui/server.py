@@ -64,7 +64,7 @@ def resolve_static_bundle(webui_dir: Path) -> Path | None:
 def _load_dashboard_router():
     try:
         from src.webui.dashboard.api import router as dashboard_router
-    except ImportError as exc:
+    except (ImportError, AssertionError) as exc:
         logger.warning(
             "Dashboard router disabled: %s. Install optional template dependencies to enable /dashboard.",
             exc,

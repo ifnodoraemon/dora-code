@@ -333,10 +333,12 @@ class AgentSession:
 
     async def initialize(self) -> None:
         """Initialize the agent session through the shared runtime bootstrap."""
+        if self._agent is not None:
+            return
+
         self._initialize_session_record()
         self._initialize_state()
-        runtime = await self._bootstrap_runtime(registry=self.registry)
-        self._apply_runtime(runtime)
+        await self._ensure_runtime()
         self._initialize_trace()
         self._rebuild_agent()
 
@@ -476,12 +478,19 @@ class AgentSession:
         elif self.registry is not None:
             for client in getattr(self.registry, "_mcp_clients", []):
                 await client.close()
+        self._runtime = None
+        self._agent = None
+        self._tool_registry = None
         return self.save_trace()
 
     def close(self) -> Path | None:
-        """Close session and save trace."""
-        self._save_session_state()
-        return self.save_trace()
+        """Close session resources from synchronous callers."""
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self.aclose())
+
+        raise RuntimeError("close() cannot run inside an active event loop; use await aclose().")
 
     def reset(self) -> None:
         """Reset the session (preserves trace)."""
@@ -558,6 +567,14 @@ class AgentSession:
             task_manager=self.task_manager,
         )
 
+    async def _ensure_runtime(self) -> None:
+        if self._runtime is not None:
+            self._apply_runtime(self._runtime)
+            return
+
+        runtime = await self._bootstrap_runtime(registry=self.registry)
+        self._apply_runtime(runtime)
+
     def _apply_runtime(self, runtime: RuntimeBootstrap) -> None:
         self._runtime = runtime
         self.model_client = runtime.model_client
@@ -615,8 +632,10 @@ class AgentSession:
             return
 
         previous_runtime = self._runtime
+        transfer_model_ownership = previous_runtime.owns_model_client
         previous_runtime.owns_model_client = False
         runtime = await self._bootstrap_runtime(registry=None)
+        runtime.owns_model_client = runtime.owns_model_client or transfer_model_ownership
         self._apply_runtime(runtime)
         await previous_runtime.aclose()
 

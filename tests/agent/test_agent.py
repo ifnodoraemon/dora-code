@@ -1078,3 +1078,145 @@ class TestAgentAdapter:
         assert len(listed) == 1
         assert listed[0].id == session.session_id
         await worker.aclose()
+
+    @pytest.mark.asyncio
+    async def test_agent_session_mode_change_transfers_model_ownership(self, tmp_path):
+        """Mode changes should preserve model ownership so shutdown still closes the client."""
+        from src.agent.adapter import AgentSession
+        from src.runtime.bootstrap import ProjectContext, RuntimeBootstrap
+
+        class DummyModel:
+            def __init__(self):
+                self.closed = 0
+
+            async def close(self):
+                self.closed += 1
+
+        class DummyRegistry:
+            def __init__(self):
+                self._mcp_clients = []
+
+            def get_tool_names(self):
+                return ["read"]
+
+        session = AgentSession(
+            model_client=None,
+            registry=None,
+            mode="build",
+            project_dir=tmp_path,
+            enable_trace=False,
+            persist_session=False,
+        )
+        model = DummyModel()
+        first_runtime = RuntimeBootstrap(
+            context=ProjectContext("default", "build", tmp_path, None, [], ["read"], []),
+            model_client=model,
+            registry=DummyRegistry(),
+            hooks=object(),
+            checkpoints=object(),
+            skills=object(),
+            task_manager=object(),
+            owns_model_client=True,
+            owns_registry=True,
+        )
+        second_runtime = RuntimeBootstrap(
+            context=ProjectContext("default", "plan", tmp_path, None, [], ["read"], []),
+            model_client=model,
+            registry=DummyRegistry(),
+            hooks=object(),
+            checkpoints=object(),
+            skills=object(),
+            task_manager=object(),
+            owns_model_client=False,
+            owns_registry=True,
+        )
+
+        async def fake_bootstrap_runtime(*, registry=None):
+            assert registry is None
+            return second_runtime
+
+        session._runtime = first_runtime
+        session._apply_runtime(first_runtime)
+        session._state = MagicMock()
+        session._agent = object()
+        session._bootstrap_runtime = fake_bootstrap_runtime
+        session._rebuild_agent = MagicMock()
+
+        await session.set_mode("plan")
+        await session.aclose()
+
+        assert second_runtime.owns_model_client is True
+        assert model.closed == 1
+
+    @pytest.mark.asyncio
+    async def test_agent_session_reinitialize_after_reset_reuses_existing_runtime(self, tmp_path):
+        """Reset sessions should reuse the current runtime instead of bootstrapping a replacement."""
+        from src.agent.adapter import AgentSession
+        from src.runtime.bootstrap import ProjectContext, RuntimeBootstrap
+
+        session = AgentSession(
+            model_client=None,
+            registry=None,
+            mode="build",
+            project_dir=tmp_path,
+            enable_trace=False,
+            persist_session=False,
+        )
+        runtime = RuntimeBootstrap(
+            context=ProjectContext("default", "build", tmp_path, None, [], ["read"], []),
+            model_client=object(),
+            registry=MagicMock(),
+            hooks=object(),
+            checkpoints=object(),
+            skills=object(),
+            task_manager=object(),
+            owns_model_client=True,
+            owns_registry=True,
+        )
+
+        def read(path: str) -> str:
+            return path
+
+        runtime.registry.get_tool_names.return_value = ["read"]
+        runtime.registry._tool_schemas = {
+            "read": {"name": "read", "description": "Read", "parameters": {}}
+        }
+        runtime.registry._tools = {}
+
+        session._runtime = runtime
+        session._apply_runtime(runtime)
+        session._trace = None
+
+        async def fail_bootstrap_runtime(*, registry=None):
+            raise AssertionError("bootstrap_runtime should not be called after reset")
+
+        session._bootstrap_runtime = fail_bootstrap_runtime
+
+        session.reset()
+        await session.initialize()
+
+        assert session._runtime is runtime
+        assert session._agent is not None
+
+    def test_agent_session_close_uses_aclose_for_sync_callers(self, tmp_path):
+        """Synchronous close should delegate to aclose so resources are released."""
+        from src.agent.adapter import AgentSession
+
+        session = AgentSession(
+            model_client=None,
+            registry=None,
+            mode="build",
+            project_dir=tmp_path,
+            enable_trace=False,
+            persist_session=False,
+        )
+        called = {"aclose": 0}
+
+        async def fake_aclose():
+            called["aclose"] += 1
+            return None
+
+        session.aclose = fake_aclose
+        session.close()
+
+        assert called["aclose"] == 1
