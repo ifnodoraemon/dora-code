@@ -415,6 +415,13 @@ class ReActAgent(BaseAgent):
                     yield {"type": "error", "error": "Max turns exceeded"}
                     break
 
+                if time.time() - self._start_time > self.timeout:
+                    yield {"type": "error", "error": f"Agent timeout ({self.timeout}s)"}
+                    break
+
+                if self.state.needs_compression():
+                    await self._compress_context()
+
                 observation = await self.observe()
                 thought = await self.think(observation)
 
@@ -468,6 +475,7 @@ class ReActAgent(BaseAgent):
             yield {"type": "done", "result": self._build_result().to_dict()}
 
         except Exception as e:
+            self.state.mark_error(str(e))
             yield {"type": "error", "error": str(e)}
 
     async def ask_user(

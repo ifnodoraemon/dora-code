@@ -336,9 +336,10 @@ class AgentSession:
         if self._agent is not None:
             return
 
-        self._initialize_session_record()
+        self._prepare_session_record()
         self._initialize_state()
         await self._ensure_runtime()
+        self._ensure_session_record()
         self._initialize_trace()
         self._rebuild_agent()
 
@@ -525,7 +526,7 @@ class AgentSession:
     def _create_session_manager(self) -> SessionManager:
         return SessionManager(base_dir=self.project_dir / ".agent" / "sessions")
 
-    def _initialize_session_record(self) -> None:
+    def _prepare_session_record(self) -> None:
         if not self.persist_session:
             self._session_manager = None
             self._session_record = None
@@ -534,7 +535,9 @@ class AgentSession:
 
         self._session_manager = self._create_session_manager()
         self._session_record = self._resume_existing_session()
-        if self._session_record is not None:
+
+    def _ensure_session_record(self) -> None:
+        if not self.persist_session or self._session_record is not None or self._session_manager is None:
             return
 
         self._session_record = self._session_manager.create_session(

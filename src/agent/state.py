@@ -150,6 +150,12 @@ class AgentState:
         self.tool_history.clear()
         self.estimated_tokens = 0
         self.turn_count = 0
+        self.goal = None
+        self.is_finished = False
+        self.status = "idle"
+        self.user_input = None
+        self.last_response = None
+        self.last_error = None
 
     def set_goal(self, goal: str) -> None:
         """Set the agent's goal."""

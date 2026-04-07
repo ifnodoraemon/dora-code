@@ -136,6 +136,31 @@ class TestAgentState:
         assert new_state.mode == "plan"
         assert new_state.goal == "test"
 
+    def test_clear_history_resets_runtime_fields(self):
+        """Clearing history should also reset runtime-facing state."""
+        state = AgentState(mode="build")
+        state.add_user_message("Hello")
+        state.add_assistant_message("World")
+        state.add_tool_call(ToolCall(id="1", name="read", arguments={}, result="ok"))
+        state.turn_count = 3
+        state.goal = "Implement feature"
+        state.is_finished = True
+        state.status = "finished"
+        state.last_error = "boom"
+
+        state.clear_history()
+
+        assert state.messages == []
+        assert state.tool_history == []
+        assert state.turn_count == 0
+        assert state.estimated_tokens == 0
+        assert state.goal is None
+        assert state.is_finished is False
+        assert state.status == "idle"
+        assert state.user_input is None
+        assert state.last_response is None
+        assert state.last_error is None
+
 
 class TestToolDefinition:
     """Tests for ToolDefinition."""
@@ -417,6 +442,32 @@ class TestReActAgent:
         assert any(e["type"] == "done" for e in events)
         assert agent.state.messages[-1].role == "assistant"
         assert agent.state.messages[-1].content == "Done!"
+
+    @pytest.mark.asyncio
+    async def test_stream_run_triggers_context_compression(self, agent, mock_llm):
+        """Streaming runs should apply the same compression path as non-streaming runs."""
+        mock_llm.chat.return_value = MagicMock(content="Done!", tool_calls=None)
+        agent.state.needs_compression = MagicMock(return_value=True)
+        agent._compress_context = AsyncMock()
+
+        async for _event in agent.run_stream("Test"):
+            pass
+
+        agent._compress_context.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_stream_run_emits_timeout_error(self, agent, monkeypatch):
+        """Streaming runs should honor the configured timeout."""
+        timestamps = iter([0.0, 1.0])
+        monkeypatch.setattr("src.agent.react.time.time", lambda: next(timestamps))
+        agent.timeout = 0.5
+
+        events = []
+        async for event in agent.run_stream("Test"):
+            events.append(event)
+
+        assert any(event["type"] == "error" and "timeout" in event["error"] for event in events)
+        assert events[-1]["type"] == "done"
 
     def test_reset(self, agent):
         """Should reset agent state."""
@@ -1290,3 +1341,30 @@ class TestAgentAdapter:
         assert bootstrap_calls[1] == (None, None)
         assert first_runtime.model_client.closed == 1
         assert session._runtime is second_runtime
+
+    @pytest.mark.asyncio
+    async def test_agent_session_initialize_failure_does_not_persist_empty_session(
+        self, mock_llm, tmp_path
+    ):
+        """Failed runtime initialization should not create an empty persisted session."""
+        from src.agent.adapter import AgentSession
+        from src.core.session import SessionManager
+
+        session = AgentSession(
+            model_client=mock_llm,
+            registry=None,
+            mode="build",
+            project_dir=tmp_path,
+            enable_trace=False,
+        )
+
+        async def fail_bootstrap_runtime(*, registry=None):
+            raise RuntimeError("bootstrap failed")
+
+        session._bootstrap_runtime = fail_bootstrap_runtime
+
+        with pytest.raises(RuntimeError, match="bootstrap failed"):
+            await session.initialize()
+
+        session_manager = SessionManager(tmp_path / ".agent" / "sessions")
+        assert session_manager.list_sessions(project="default") == []

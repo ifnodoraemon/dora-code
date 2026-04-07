@@ -57,3 +57,21 @@ async def test_handle_command_mode_uses_session_state(monkeypatch):
     assert session.mode == "plan"
     assert any("Switched to plan mode" in message for message in printed)
     assert any("Current mode: plan" in message for message in printed)
+
+
+@pytest.mark.asyncio
+async def test_handle_command_clear_uses_state_clear_history(monkeypatch):
+    printed: list[str] = []
+    cleared = {"count": 0}
+
+    class State:
+        def clear_history(self):
+            cleared["count"] += 1
+
+    session = SimpleNamespace(_state=State())
+    monkeypatch.setattr("src.host.cli.main.console.print", lambda message: printed.append(message))
+
+    await handle_command("/clear", session)
+
+    assert cleared["count"] == 1
+    assert any("Conversation cleared" in message for message in printed)

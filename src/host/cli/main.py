@@ -202,7 +202,8 @@ async def handle_command(cmd: str, session: AgentSession) -> str | None:
             console.print("Usage: /mode plan | /mode build")
 
     elif command == "clear":
-        session._state.messages.clear() if session._state else None
+        if session._state:
+            session._state.clear_history()
         console.print("[green]Conversation cleared[/green]")
 
     elif command == "orchestrate":
