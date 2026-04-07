@@ -5,6 +5,7 @@ Manages chat sessions.
 """
 
 import re
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -25,7 +26,7 @@ class SessionResponse(BaseModel):
 async def list_sessions(project: str = "default", limit: int = 50):
     """List recent sessions."""
     limit = min(max(1, limit), 100)
-    mgr = SessionManager()
+    mgr = SessionManager(base_dir=Path.cwd() / ".agent" / "sessions")
     sessions = mgr.list_sessions(project=project, limit=limit)
 
     return [
@@ -43,7 +44,7 @@ async def get_session(session_id: str):
     if not re.match(r"^[a-zA-Z0-9_-]+$", session_id):
         raise HTTPException(status_code=400, detail="Invalid session ID format")
 
-    mgr = SessionManager()
+    mgr = SessionManager(base_dir=Path.cwd() / ".agent" / "sessions")
     session = mgr.resume_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")

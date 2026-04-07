@@ -56,6 +56,7 @@ async def bootstrap_runtime(
     extension_tools: list[str] | None = None,
     create_model_client: bool = True,
     model_client: Any | None = None,
+    model_name: str | None = None,
     registry: Any | None = None,
     hooks: Any | None = None,
     checkpoints: Any | None = None,
@@ -69,8 +70,16 @@ async def bootstrap_runtime(
     owns_model_client = False
     if model_client is None and create_model_client:
         from src.core.llm.model_client import ModelClient
+        from src.core.llm.model_utils import ClientConfig
 
-        model_client = await ModelClient.create()
+        config = None
+        if model_name:
+            config = ClientConfig.from_env()
+            config.model = model_name
+        if config is None:
+            model_client = await ModelClient.create()
+        else:
+            model_client = await ModelClient.create(config=config)
         owns_model_client = True
 
     if checkpoints is None:

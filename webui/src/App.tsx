@@ -32,6 +32,16 @@ interface Session {
     updated_at: number
 }
 
+interface SessionDetail {
+    id: string
+    name: string | null
+    messages: Array<{
+        role: 'user' | 'assistant' | 'system' | 'tool'
+        content?: string
+        tool_calls?: Array<{ name?: string; arguments?: Record<string, unknown> }>
+    }>
+}
+
 interface TaskNode {
     id: string
     title: string
@@ -88,6 +98,13 @@ function App() {
         void Promise.all([fetchSessions(), fetchTasks(), fetchTools()])
     }, [])
 
+    useEffect(() => {
+        if (!currentSessionId || isStreaming) {
+            return
+        }
+        void fetchSessionDetail(currentSessionId)
+    }, [currentSessionId, isStreaming])
+
     const fetchSessions = async () => {
         try {
             const res = await fetch('/api/sessions')
@@ -126,6 +143,34 @@ function App() {
             setTools(data.tools || [])
         } catch (err) {
             console.error('Failed to fetch tools', err)
+        }
+    }
+
+    const mapSessionMessage = (
+        message: SessionDetail['messages'][number],
+        index: number,
+    ): Message => ({
+        id: `${index}-${message.role}-${generateId()}`,
+        role:
+            message.role === 'tool'
+                ? 'system'
+                : message.role === 'system'
+                  ? 'system'
+                  : message.role,
+        content: message.content,
+        tool_calls: message.tool_calls,
+        timestamp: Date.now() + index,
+        meta: message.role === 'tool' ? 'tool result' : undefined,
+    })
+
+    const fetchSessionDetail = async (sessionId: string) => {
+        try {
+            const res = await fetch(`/api/sessions/${sessionId}`)
+            if (!res.ok) return
+            const data: SessionDetail = await res.json()
+            setMessages((data.messages || []).map(mapSessionMessage))
+        } catch (err) {
+            console.error('Failed to fetch session detail', err)
         }
     }
 
@@ -196,6 +241,9 @@ function App() {
 
                     try {
                         const data = JSON.parse(payload)
+                        if (data.session_id) {
+                            setCurrentSessionId(data.session_id)
+                        }
                         if (data.type === 'orchestration') {
                             const result = data.result as OrchestrationResult
                             setMessages((prev) => {

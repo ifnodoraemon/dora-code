@@ -20,9 +20,13 @@ class StubTaskManager:
 
 @pytest.mark.asyncio
 async def test_chat_endpoint_streams_orchestration_result(monkeypatch):
+    captured = {}
+
     class StubSession:
         def __init__(self, *args, **kwargs):
+            captured["kwargs"] = kwargs
             self._task_manager = StubTaskManager()
+            self.session_id = kwargs.get("session_id") or "generated-session"
 
         async def orchestrate(self, message: str, *, context=None, max_workers=None):
             return SimpleNamespace(
@@ -47,6 +51,8 @@ async def test_chat_endpoint_streams_orchestration_result(monkeypatch):
             message="Implement authentication",
             execution_mode="orchestrate",
             max_workers=3,
+            session_id="resume-me",
+            model="test-model",
         )
     )
 
@@ -57,9 +63,12 @@ async def test_chat_endpoint_streams_orchestration_result(monkeypatch):
     assert payloads[-1] == "data: [DONE]\n\n"
     first_payload = json.loads(payloads[0].removeprefix("data: ").strip())
     assert first_payload["type"] == "orchestration"
+    assert first_payload["session_id"] == "resume-me"
     assert first_payload["content"] == "planned: Implement authentication"
     assert first_payload["result"]["max_workers"] == 3
     assert first_payload["task_graph"][0]["id"] == "root"
+    assert captured["kwargs"]["session_id"] == "resume-me"
+    assert captured["kwargs"]["model_name"] == "test-model"
 
 
 @pytest.mark.asyncio

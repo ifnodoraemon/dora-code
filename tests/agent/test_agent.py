@@ -415,6 +415,8 @@ class TestReActAgent:
 
         assert any(e["type"] == "start" for e in events)
         assert any(e["type"] == "done" for e in events)
+        assert agent.state.messages[-1].role == "assistant"
+        assert agent.state.messages[-1].content == "Done!"
 
     def test_reset(self, agent):
         """Should reset agent state."""
@@ -909,7 +911,7 @@ class TestAgentAdapter:
         assert result.response == "Response"
 
     @pytest.mark.asyncio
-    async def test_agent_session(self, mock_llm, mock_registry):
+    async def test_agent_session(self, mock_llm, mock_registry, tmp_path):
         """Should manage agent session."""
         from src.agent.adapter import AgentSession
 
@@ -917,6 +919,8 @@ class TestAgentAdapter:
             model_client=mock_llm,
             registry=mock_registry,
             mode="build",
+            project_dir=tmp_path,
+            enable_trace=False,
         )
 
         await session.initialize()
@@ -933,19 +937,75 @@ class TestAgentAdapter:
         assert session._state is None
 
     @pytest.mark.asyncio
-    async def test_agent_session_mode_change(self, mock_llm, mock_registry):
-        """Should change mode during session."""
+    async def test_agent_session_mode_change_rebuilds_visible_tools(self, mock_llm, tmp_path):
+        """Should rebuild visible tools when mode changes."""
+        from src.agent.adapter import AgentSession
+
+        registry = MagicMock()
+        registry.get_tool_names = MagicMock(return_value=["read", "write"])
+        registry._tool_schemas = {
+            "read": {"name": "read", "description": "Read", "parameters": {}},
+            "write": {"name": "write", "description": "Write", "parameters": {}},
+        }
+        registry._tools = {}
+        registry._sensitive_tools = set()
+        registry.get_tool_policy = MagicMock(
+            side_effect=lambda name, mode="build", active_mcp_extensions=None: {
+                "visible": not (name == "write" and mode == "plan"),
+                "requires_approval": False,
+                "sandbox": "workspace-write",
+                "audit_level": "full",
+                "background_safe": False,
+            }
+        )
+
+        session = AgentSession(
+            model_client=mock_llm,
+            registry=registry,
+            mode="build",
+            project_dir=tmp_path,
+        )
+
+        await session.initialize()
+
+        assert {tool.name for tool in session._agent.tools} == {"read", "write"}
+
+        await session.set_mode("plan")
+
+        assert session.mode == "plan"
+        assert session._state.mode == "plan"
+        assert {tool.name for tool in session._agent.tools} == {"read"}
+
+    @pytest.mark.asyncio
+    async def test_agent_session_persists_and_restores_messages(self, mock_llm, mock_registry, tmp_path):
+        """Should persist session messages and restore them by session ID."""
         from src.agent.adapter import AgentSession
 
         session = AgentSession(
             model_client=mock_llm,
             registry=mock_registry,
             mode="build",
+            project_dir=tmp_path,
+            enable_trace=False,
         )
 
         await session.initialize()
+        session_id = session.session_id
+        result = await session.turn("Hello")
+        assert result.success is True
+        await session.aclose()
 
-        session.set_mode("plan")
+        resumed = AgentSession(
+            model_client=mock_llm,
+            registry=mock_registry,
+            mode="build",
+            project_dir=tmp_path,
+            session_id=session_id,
+            enable_trace=False,
+        )
+        await resumed.initialize()
 
-        assert session.mode == "plan"
-        assert session._state.mode == "plan"
+        assert resumed.session_id == session_id
+        assert [message.role for message in resumed._state.messages] == ["user", "assistant"]
+        assert resumed._state.messages[0].content == "Hello"
+        assert resumed._state.messages[1].content == "Response"

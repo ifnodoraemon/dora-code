@@ -36,7 +36,9 @@ from rich.panel import Panel
 
 from src.agent.doraemon import DoraemonAgent, create_doraemon_agent
 from src.agent.state import AgentState
+from src.agent.types import Message
 from src.core.home import Trace
+from src.core.session import SessionData, SessionManager
 from src.runtime import LeadExecutionResult, LeadAgentRuntime
 from src.runtime.bootstrap import RuntimeBootstrap, bootstrap_runtime
 
@@ -65,6 +67,34 @@ def _collect_modified_paths(tool_calls: list[Any]) -> list[str]:
                 modified_paths.append(destination)
 
     return modified_paths
+
+
+def _message_from_session_data(payload: dict[str, Any]) -> Message:
+    """Convert persisted session payloads into agent messages."""
+    return Message(
+        role=payload.get("role", "assistant"),
+        content=payload.get("content"),
+        tool_calls=payload.get("tool_calls"),
+        tool_call_id=payload.get("tool_call_id"),
+        name=payload.get("name"),
+        thought=payload.get("thought"),
+    )
+
+
+def _message_to_session_data(message: Message) -> dict[str, Any]:
+    """Convert agent messages into persisted session payloads."""
+    payload: dict[str, Any] = {"role": message.role}
+    if message.content is not None:
+        payload["content"] = message.content
+    if message.tool_calls:
+        payload["tool_calls"] = message.tool_calls
+    if message.tool_call_id:
+        payload["tool_call_id"] = message.tool_call_id
+    if message.name:
+        payload["name"] = message.name
+    if message.thought:
+        payload["thought"] = message.thought
+    return payload
 
 
 @dataclass
@@ -259,6 +289,8 @@ class AgentSession:
         config_path: Path | None = None,
         project_dir: Path | None = None,
         enable_trace: bool = True,
+        session_id: str | None = None,
+        model_name: str | None = None,
         worker_role: str | None = None,
         allowed_tool_names: list[str] | None = None,
     ):
@@ -274,6 +306,7 @@ class AgentSession:
         self.config_path = config_path
         self.project_dir = project_dir or Path.cwd()
         self.enable_trace = enable_trace
+        self.model_name = model_name
         self.worker_role = worker_role
         self.allowed_tool_names = (
             allowed_tool_names.copy() if allowed_tool_names is not None else None
@@ -283,9 +316,11 @@ class AgentSession:
         self._state: AgentState | None = None
         self._tool_registry: Any = None
         self._trace: Trace | None = None
-        self._session_id: str | None = None
+        self._session_id: str | None = session_id
         self._mcp_extensions: list[str] = []
         self._runtime: RuntimeBootstrap | None = None
+        self._session_manager: SessionManager | None = None
+        self._session_record: SessionData | None = None
 
     @property
     def session_id(self) -> str:
@@ -296,7 +331,21 @@ class AgentSession:
 
     async def initialize(self) -> None:
         """Initialize the agent session through the shared runtime bootstrap."""
+        self._session_manager = self._create_session_manager()
+        if self._session_id:
+            self._session_record = self._session_manager.resume_session(self._session_id)
+            if self._session_record is not None:
+                self._session_id = self._session_record.metadata.id
+                self.mode = self._session_record.metadata.mode or self.mode
+        if self._session_record is None:
+            self._session_record = self._session_manager.create_session(
+                project=self.project,
+                mode=self.mode,
+            )
+            self._session_id = self._session_record.metadata.id
+
         self._state = AgentState(mode=self.mode, max_turns=self.max_turns)
+        self._restore_session_state()
 
         self._runtime = await bootstrap_runtime(
             mode=self.mode,
@@ -304,6 +353,7 @@ class AgentSession:
             project_dir=self.project_dir,
             config_path=self.config_path,
             model_client=self.model_client,
+            model_name=self.model_name,
             registry=self.registry,
             hooks=self.hooks,
             checkpoints=self.checkpoints,
@@ -358,6 +408,7 @@ class AgentSession:
 
         try:
             result = await self._agent.run(user_input, **kwargs)
+            self._save_session_state()
 
             return AgentTurnResult(
                 response=result.response or "",
@@ -372,6 +423,7 @@ class AgentSession:
             logger.error(f"Agent turn failed: {e}")
             if self._trace:
                 self._trace.error(str(e), {"exception_type": type(e).__name__})
+            self._save_session_state()
             return AgentTurnResult(
                 response="",
                 tool_calls=[],
@@ -394,7 +446,12 @@ class AgentSession:
             await self.initialize()
 
         runtime = LeadAgentRuntime(self, max_workers=max_workers or 2)
-        return await runtime.execute(user_input, context=context)
+        result = await runtime.execute(user_input, context=context)
+        if self._state is not None:
+            self._state.add_user_message(user_input)
+            self._state.add_assistant_message(result.summary)
+        self._save_session_state()
+        return result
 
     async def turn_stream(
         self,
@@ -413,6 +470,8 @@ class AgentSession:
             if self._trace:
                 self._trace.error(str(e), {"exception_type": type(e).__name__})
             yield {"type": "error", "error": str(e)}
+        finally:
+            self._save_session_state()
 
     def get_state(self) -> AgentState | None:
         """Get current agent state."""
@@ -437,22 +496,23 @@ class AgentSession:
         if not self._agent:
             await self.initialize()
 
-        worker = AgentSession(
-            model_client=self.model_client,
-            registry=self.registry,
-            mode=self.mode,
-            project=self.project,
+            worker = AgentSession(
+                model_client=self.model_client,
+                registry=self.registry,
+                mode=self.mode,
+                project=self.project,
             hooks=self.hooks,
             checkpoints=self.checkpoints,
             skills=self.skills,
-            task_manager=self.task_manager,
-            max_turns=self.max_turns,
-            config_path=self.config_path,
-            project_dir=self.project_dir,
-            enable_trace=self.enable_trace if enable_trace is None else enable_trace,
-            worker_role=worker_role,
-            allowed_tool_names=allowed_tool_names,
-        )
+                task_manager=self.task_manager,
+                max_turns=self.max_turns,
+                config_path=self.config_path,
+                project_dir=self.project_dir,
+                enable_trace=self.enable_trace if enable_trace is None else enable_trace,
+                model_name=self.model_name,
+                worker_role=worker_role,
+                allowed_tool_names=allowed_tool_names,
+            )
         await worker.initialize()
         return worker
 
@@ -464,6 +524,7 @@ class AgentSession:
 
     async def aclose(self) -> Path | None:
         """Close session resources and save trace."""
+        self._save_session_state()
         if self._runtime:
             await self._runtime.aclose()
         elif self.registry is not None:
@@ -473,16 +534,95 @@ class AgentSession:
 
     def close(self) -> Path | None:
         """Close session and save trace."""
+        self._save_session_state()
         return self.save_trace()
 
     def reset(self) -> None:
         """Reset the session (preserves trace)."""
         if self._agent:
             self._agent.reset()
+        if self._session_record is not None:
+            self._session_record.messages = []
+            self._session_record.metadata.message_count = 0
+            self._session_record.metadata.total_tokens = 0
+            if self._session_manager is not None:
+                self._session_manager.save_session(self._session_record)
+        self._agent = None
         self._state = None
 
-    def set_mode(self, mode: str) -> None:
-        """Change agent mode."""
+    async def set_mode(self, mode: str) -> None:
+        """Change agent mode and rebuild the agent-visible tool surface."""
+        if mode == self.mode:
+            return
+
         self.mode = mode
         if self._state:
             self._state.mode = mode
+        if self._session_record is not None:
+            self._session_record.metadata.mode = mode
+
+        if self._agent is not None and self.registry is not None:
+            self._agent = create_doraemon_agent(
+                llm_client=self.model_client,
+                tool_registry=self.registry,
+                mode=self.mode,
+                hooks=self.hooks,
+                checkpoints=self.checkpoints,
+                skills=self.skills,
+                task_manager=self.task_manager,
+                max_turns=self.max_turns,
+                project_dir=self.project_dir,
+                enable_trace=self.enable_trace,
+                trace=self._trace,
+                session_id=self.session_id,
+                active_mcp_extensions=self._mcp_extensions,
+                worker_role=self.worker_role,
+                allowed_tool_names=self.allowed_tool_names,
+            )
+            self._agent.state = self._state
+        self._save_session_state()
+
+    def _create_session_manager(self) -> SessionManager:
+        return SessionManager(base_dir=self.project_dir / ".agent" / "sessions")
+
+    def _restore_session_state(self) -> None:
+        if self._state is None or self._session_record is None:
+            return
+
+        self._state.mode = self.mode
+        for payload in self._session_record.messages:
+            self._state.add_message(_message_from_session_data(payload))
+
+        for message in reversed(self._state.messages):
+            if self._state.last_response is None and message.role == "assistant" and message.content:
+                self._state.last_response = message.content
+            if self._state.user_input is None and message.role == "user" and message.content:
+                self._state.user_input = message.content
+            if self._state.last_response is not None and self._state.user_input is not None:
+                break
+
+    def _save_session_state(self) -> None:
+        if self._session_manager is None or self._session_record is None or self._state is None:
+            return
+
+        self._session_record.metadata.project = self.project
+        self._session_record.metadata.mode = self.mode
+        self._session_record.metadata.message_count = len(self._state.messages)
+        self._session_record.metadata.total_tokens = self._state.estimated_tokens
+        if not self._session_record.metadata.name:
+            self._session_record.metadata.name = self._derive_session_name()
+        self._session_record.messages = [
+            _message_to_session_data(message) for message in self._state.messages
+        ]
+        self._session_manager.save_session(self._session_record)
+
+    def _derive_session_name(self) -> str | None:
+        if self._state is None:
+            return None
+        for message in self._state.messages:
+            if message.role == "user" and message.content:
+                compact = " ".join(message.content.strip().split())
+                if not compact:
+                    continue
+                return compact[:60] + ("..." if len(compact) > 60 else "")
+        return None

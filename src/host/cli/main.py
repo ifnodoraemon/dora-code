@@ -192,7 +192,7 @@ async def handle_command(cmd: str, session: AgentSession, mode: str) -> str | No
     elif command == "mode":
         if args and args[0] in {"plan", "build"}:
             new_mode = args[0]
-            session.set_mode(new_mode)
+            await session.set_mode(new_mode)
             mode = new_mode
             console.print(f"[green]Switched to {new_mode} mode[/green]")
         else:

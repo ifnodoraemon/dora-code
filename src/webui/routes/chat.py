@@ -51,6 +51,8 @@ async def chat_endpoint(request: ChatRequest):
             mode="build",
             project_dir=Path.cwd(),
             enable_trace=False,
+            session_id=request.session_id,
+            model_name=request.model,
         )
 
         async def event_generator() -> AsyncGenerator[str, None]:
@@ -63,11 +65,11 @@ async def chat_endpoint(request: ChatRequest):
                     )
                     task_manager = session.get_task_manager()
                     task_tree = task_manager.get_task_tree() if task_manager is not None else []
-                    yield f"data: {json.dumps({'type': 'orchestration', 'content': result.summary, 'result': result.to_dict(), 'task_graph': task_tree})}\n\n"
+                    yield f"data: {json.dumps({'type': 'orchestration', 'session_id': session.session_id, 'content': result.summary, 'result': result.to_dict(), 'task_graph': task_tree})}\n\n"
                 else:
                     async for event in session.turn_stream(message):
                         event_type = event.get("type", "event")
-                        data = {"type": event_type}
+                        data = {"type": event_type, "session_id": session.session_id}
 
                         if event_type == "response":
                             data.update(
@@ -109,7 +111,7 @@ async def chat_endpoint(request: ChatRequest):
 
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
-                err_data = {"error": str(e)}
+                err_data = {"error": str(e), "session_id": session.session_id}
                 yield f"data: {json.dumps(err_data)}\n\n"
             finally:
                 await session.aclose()

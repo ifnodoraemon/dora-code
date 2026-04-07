@@ -422,9 +422,16 @@ class ReActAgent(BaseAgent):
                     yield {"type": "thinking", "content": thought.reasoning}
 
                 if not thought.tool_calls:
+                    self.state.add_assistant_message(thought.response)
                     self.state.mark_finished()
                     yield {"type": "response", "content": thought.response}
                     break
+
+                self.state.add_assistant_message(
+                    content=thought.response,
+                    tool_calls=thought.tool_calls,
+                    thought=thought.reasoning,
+                )
 
                 for tool_call_data in thought.tool_calls:
                     name = tool_call_data.get("name") or tool_call_data.get("function", {}).get(
