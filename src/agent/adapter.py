@@ -19,7 +19,7 @@ Usage:
     await session.initialize()
     result = await session.turn("First message")
     result = await session.turn("Second message")
-    session.close()
+    await session.aclose()
 """
 
 import asyncio
@@ -271,7 +271,7 @@ class AgentSession:
         await session.initialize()
         result1 = await session.turn("First message")
         result2 = await session.turn("Second message")
-        session.close()  # Saves trace
+        await session.aclose()  # Saves trace
     """
 
     def __init__(
@@ -473,14 +473,21 @@ class AgentSession:
     async def aclose(self) -> Path | None:
         """Close session resources and save trace."""
         self._save_session_state()
+        owns_model_client = self._runtime.owns_model_client if self._runtime else False
+        owns_registry = self._runtime.owns_registry if self._runtime else False
         if self._runtime:
             await self._runtime.aclose()
         elif self.registry is not None:
             for client in getattr(self.registry, "_mcp_clients", []):
                 await client.close()
+        if owns_model_client:
+            self.model_client = None
+        if owns_registry:
+            self.registry = None
         self._runtime = None
         self._agent = None
         self._tool_registry = None
+        self._mcp_extensions = []
         return self.save_trace()
 
     def close(self) -> Path | None:

@@ -1220,3 +1220,73 @@ class TestAgentAdapter:
         session.close()
 
         assert called["aclose"] == 1
+
+    @pytest.mark.asyncio
+    async def test_agent_session_reinitialize_after_close_drops_owned_resources(self, tmp_path):
+        """Closed sessions should not reuse owned model/registry instances on reinitialize."""
+        from src.agent.adapter import AgentSession
+        from src.runtime.bootstrap import ProjectContext, RuntimeBootstrap
+
+        class DummyModel:
+            def __init__(self):
+                self.closed = 0
+
+            async def close(self):
+                self.closed += 1
+
+        class DummyRegistry:
+            def __init__(self):
+                self._mcp_clients = []
+
+            def get_tool_names(self):
+                return ["read"]
+
+        session = AgentSession(
+            model_client=None,
+            registry=None,
+            mode="build",
+            project_dir=tmp_path,
+            enable_trace=False,
+            persist_session=False,
+        )
+        first_runtime = RuntimeBootstrap(
+            context=ProjectContext("default", "build", tmp_path, None, [], ["read"], []),
+            model_client=DummyModel(),
+            registry=DummyRegistry(),
+            hooks=object(),
+            checkpoints=object(),
+            skills=object(),
+            task_manager=object(),
+            owns_model_client=True,
+            owns_registry=True,
+        )
+        second_runtime = RuntimeBootstrap(
+            context=ProjectContext("default", "build", tmp_path, None, [], ["read"], []),
+            model_client=DummyModel(),
+            registry=DummyRegistry(),
+            hooks=object(),
+            checkpoints=object(),
+            skills=object(),
+            task_manager=object(),
+            owns_model_client=True,
+            owns_registry=True,
+        )
+
+        bootstrap_calls: list[tuple[object | None, object | None]] = []
+
+        async def fake_bootstrap_runtime(*, registry=None):
+            bootstrap_calls.append((registry, session.model_client))
+            return first_runtime if len(bootstrap_calls) == 1 else second_runtime
+
+        session._bootstrap_runtime = fake_bootstrap_runtime
+        session._initialize_trace = MagicMock()
+        session._rebuild_agent = lambda: setattr(session, "_agent", object())
+
+        await session.initialize()
+        await session.aclose()
+        await session.initialize()
+
+        assert bootstrap_calls[0] == (None, None)
+        assert bootstrap_calls[1] == (None, None)
+        assert first_runtime.model_client.closed == 1
+        assert session._runtime is second_runtime
