@@ -173,6 +173,8 @@ function App() {
     const [input, setInput] = useState('')
     const [messages, setMessages] = useState<Message[]>([])
     const [isStreaming, setIsStreaming] = useState(false)
+    const [currentProject, setCurrentProject] = useState('default')
+    const [projectInput, setProjectInput] = useState('default')
     const [sessions, setSessions] = useState<Session[]>([])
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
     const [executionMode, setExecutionMode] = useState<ExecutionMode>('turn')
@@ -228,8 +230,12 @@ function App() {
     }, [messageOffset])
 
     useEffect(() => {
-        void Promise.all([fetchSessions(), fetchTools()])
+        void fetchTools()
     }, [])
+
+    useEffect(() => {
+        void fetchSessions(currentProject)
+    }, [currentProject])
 
     useEffect(() => {
         if (runViewMode !== 'run') {
@@ -247,9 +253,10 @@ function App() {
         setWorkerAssignments(selectedRun?.worker_assignments || {})
     }, [orchestrationRuns, selectedRunId, runViewMode])
 
-    const fetchSessions = async () => {
+    const fetchSessions = async (project: string = currentProject) => {
         try {
-            const res = await fetch('/api/sessions')
+            const params = new URLSearchParams({ project })
+            const res = await fetch(`/api/sessions?${params.toString()}`)
             if (!res.ok) return
             const data = await res.json()
             setSessions(data)
@@ -452,6 +459,16 @@ function App() {
         setWorkerAssignments({})
     }
 
+    const applyProjectSelection = () => {
+        const nextProject = projectInput.trim()
+        if (!nextProject || nextProject === currentProject) {
+            setProjectInput(nextProject || currentProject)
+            return
+        }
+        resetConversation()
+        setCurrentProject(nextProject)
+    }
+
     const startStreamingRequest = async (
         body: Record<string, unknown>,
         userMessage: Message,
@@ -624,7 +641,7 @@ function App() {
                 }
             }
 
-            await fetchSessions()
+            await fetchSessions(currentProject)
         } catch (error) {
             if (
                 abortController.signal.aborted ||
@@ -748,7 +765,7 @@ function App() {
             {
                 message: prompt,
                 session_id: currentSessionId,
-                project: 'default',
+                project: currentProject,
                 execution_mode: executionMode,
                 max_workers: executionMode === 'orchestrate' ? maxWorkers : 1,
             },
@@ -765,7 +782,7 @@ function App() {
                 message: '',
                 session_id: currentSessionId,
                 resume_run_id: run.run_id,
-                project: 'default',
+                project: currentProject,
                 execution_mode: 'orchestrate',
                 max_workers: maxWorkers,
             },
@@ -896,6 +913,27 @@ function App() {
                                 <p className="mt-2 max-w-2xl text-sm text-slate-400">
                                     Single-turn chat and orchestration now share the same runtime. Task graph state, worker assignments, and tool surface are visible while you work.
                                 </p>
+                                <div className="mt-4 flex max-w-xl flex-col gap-2 sm:flex-row">
+                                    <input
+                                        type="text"
+                                        value={projectInput}
+                                        onChange={(event) => setProjectInput(event.target.value)}
+                                        className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-cyan-400/40"
+                                        placeholder="Project name"
+                                        disabled={isStreaming}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={applyProjectSelection}
+                                        disabled={isStreaming || !projectInput.trim()}
+                                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200 transition hover:bg-white/10 disabled:opacity-50"
+                                    >
+                                        Switch Project
+                                    </button>
+                                </div>
+                                <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+                                    Current project: {currentProject}
+                                </div>
                             </div>
 
                             <div className="grid gap-3 sm:grid-cols-3">
@@ -1082,7 +1120,7 @@ function App() {
                                     <div className="rounded-[28px] border border-white/10 bg-black/20 p-3">
                                         <div className="mb-3 flex flex-wrap gap-2">
                                             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-400">
-                                                project: default
+                                                project: {currentProject}
                                             </span>
                                             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-400">
                                                 {executionMode === 'orchestrate' ? `workers: ${maxWorkers}` : 'single agent turn'}

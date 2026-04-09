@@ -13,6 +13,7 @@ from src.runtime.bootstrap import bootstrap_runtime
 router = APIRouter()
 
 
+@router.get("", include_in_schema=False)
 @router.get("/")
 async def list_tasks(
     project: str = "default",

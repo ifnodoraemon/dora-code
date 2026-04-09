@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from src.webui.routes.chat import ChatRequest, chat_endpoint
 from src.webui.routes.sessions import get_session, get_session_run
 from src.webui.routes.tasks import list_tasks
+from src.webui.server import app
 
 
 class StubTaskManager:
@@ -421,6 +422,15 @@ async def test_get_session_run_returns_full_run_details(monkeypatch):
     assert payload["run"]["run_id"] == "run-1"
     assert payload["run"]["task_graph"][0]["id"] == "root"
     assert payload["run"]["worker_assignments"]["task-1"]["role"] == "inspect"
+
+
+def test_root_api_routes_accept_paths_without_trailing_slash(monkeypatch):
+    route_paths = {route.path for route in app.routes}
+
+    assert "/api/chat" in route_paths
+    assert "/api/sessions" in route_paths
+    assert "/api/tasks" in route_paths
+    assert "/api/tools" in route_paths
 
 
 async def _noop_async():

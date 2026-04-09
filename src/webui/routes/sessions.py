@@ -52,6 +52,7 @@ def _serialize_run(run: dict, *, include_details: bool) -> dict:
     return payload
 
 
+@router.get("", response_model=list[SessionResponse], include_in_schema=False)
 @router.get("/", response_model=list[SessionResponse])
 async def list_sessions(project: str = "default", limit: int = 50):
     """List recent sessions."""

@@ -11,6 +11,7 @@ from src.runtime.bootstrap import get_tool_catalog
 router = APIRouter()
 
 
+@router.get("", include_in_schema=False)
 @router.get("/")
 async def list_tools(mode: str = "build"):
     """List available tools for a mode."""

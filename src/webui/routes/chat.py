@@ -37,6 +37,7 @@ class ChatRequest(BaseModel):
         return self.message
 
 
+@router.post("", include_in_schema=False)
 @router.post("/")
 async def chat_endpoint(request: ChatRequest):
     """
